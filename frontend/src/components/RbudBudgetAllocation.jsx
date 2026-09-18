@@ -1,6 +1,7 @@
-// frontend/src/components/RbudBudgetAllocation.jsx
+﻿// frontend/src/components/RbudBudgetAllocation.jsx
 import React, { useState, useEffect } from 'react';
 import Layout from './layout/Layout';
+import { API_URL } from '../config/api';
 import Toast from './Toast';
 import {
   Wallet,
@@ -18,7 +19,6 @@ import {
   Layers,
 } from 'lucide-react';
 
-const API_URL = 'http://localhost:5000/api';
 
 // --- DUMMY DATA (used when API fails) ---
 const DUMMY_SUMMARY = {
@@ -123,8 +123,8 @@ export default function RbudBudgetAllocation({ user, onLogout, onNavigate, activ
   }, [selectedFiscalYear, selectedFundGroup]);
 
   const formatCurrency = (value) => {
-    if (value == null || isNaN(value)) return '₱0.00';
-    return `₱${Number(value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    if (value == null || isNaN(value)) return 'â‚±0.00';
+    return `â‚±${Number(value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   };
 
   const getStatusBadge = (status) => (
@@ -181,9 +181,9 @@ export default function RbudBudgetAllocation({ user, onLogout, onNavigate, activ
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <nav className="text-xs text-gray-500 flex items-center gap-1 font-medium">
             <span className="text-indigo-900">Home</span>
-            <span>›</span>
+            <span>â€º</span>
             <span>RBUD Registry</span>
-            <span>›</span>
+            <span>â€º</span>
             <span className="text-gray-800 font-semibold">Budget & Allocation</span>
           </nav>
           <div className="flex items-center gap-2 bg-white px-3 py-1.5 border border-gray-200 rounded-lg text-xs text-gray-600 font-medium self-start sm:self-auto shadow-sm">
@@ -313,7 +313,7 @@ export default function RbudBudgetAllocation({ user, onLogout, onNavigate, activ
               </div>
             </div>
             <button className="text-xs text-indigo-900 font-semibold flex items-center gap-1 hover:underline self-center mt-2">
-              View by Fund Group →
+              View by Fund Group â†’
             </button>
           </div>
 
@@ -328,9 +328,9 @@ export default function RbudBudgetAllocation({ user, onLogout, onNavigate, activ
                 <thead>
                   <tr className="border-b border-gray-100 text-gray-500 font-bold text-[11px]">
                     <th className="py-2.5 text-left">Classification</th>
-                    <th className="py-2.5 text-right">Approved Budget (₱)</th>
-                    <th className="py-2.5 text-right">Allocated (₱)</th>
-                    <th className="py-2.5 text-right">Disbursed (₱)</th>
+                    <th className="py-2.5 text-right">Approved Budget (â‚±)</th>
+                    <th className="py-2.5 text-right">Allocated (â‚±)</th>
+                    <th className="py-2.5 text-right">Disbursed (â‚±)</th>
                     <th className="py-2.5 text-right">Utilization (%)</th>
                   </tr>
                 </thead>
@@ -377,10 +377,10 @@ export default function RbudBudgetAllocation({ user, onLogout, onNavigate, activ
                 <tr>
                   <th className="px-4 py-3 text-left">Fund Group</th>
                   <th className="px-4 py-3 text-center">No. of Funds</th>
-                  <th className="px-4 py-3 text-right">Approved Budget (₱)</th>
-                  <th className="px-4 py-3 text-right">Allocated (₱)</th>
-                  <th className="px-4 py-3 text-right">Disbursed (₱)</th>
-                  <th className="px-4 py-3 text-right">Balance (₱)</th>
+                  <th className="px-4 py-3 text-right">Approved Budget (â‚±)</th>
+                  <th className="px-4 py-3 text-right">Allocated (â‚±)</th>
+                  <th className="px-4 py-3 text-right">Disbursed (â‚±)</th>
+                  <th className="px-4 py-3 text-right">Balance (â‚±)</th>
                   <th className="px-4 py-3 text-center min-w-[100px]">Utilization (%)</th>
                   <th className="px-4 py-3 text-center">Status</th>
                   <th className="px-4 py-3 text-center">Actions</th>
@@ -431,8 +431,8 @@ export default function RbudBudgetAllocation({ user, onLogout, onNavigate, activ
                   <td className="px-4 py-3 text-right">{formatCurrency(totalDisbursed)}</td>
                   <td className="px-4 py-3 text-right">{formatCurrency(totalBalance)}</td>
                   <td className="px-4 py-3 text-center font-bold">{totalUtil.toFixed(2)}%</td>
-                  <td className="px-4 py-3 text-center">—</td>
-                  <td className="px-4 py-3 text-center">—</td>
+                  <td className="px-4 py-3 text-center">â€”</td>
+                  <td className="px-4 py-3 text-center">â€”</td>
                 </tr>
               </tfoot>
             </table>
@@ -468,7 +468,7 @@ export default function RbudBudgetAllocation({ user, onLogout, onNavigate, activ
 
         {/* Footer */}
         <div className="flex justify-between items-center text-xs text-gray-400 border-t border-gray-100 pt-5 mt-4">
-          <span>© 2025 University of Abra. All rights reserved.</span>
+          <span>Â© 2025 University of Abra. All rights reserved.</span>
           <span>Budget Monitoring & Allocation System v1.0.0</span>
         </div>
       </div>

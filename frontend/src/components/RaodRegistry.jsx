@@ -1,9 +1,10 @@
-// frontend/src/components/RaodRegistry.jsx
+﻿// frontend/src/components/RaodRegistry.jsx
 // Complete RAOD Registry module.
 // The nine dashboard cards are internal views; the Layout header/sidebar remains the system navigation.
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import Layout from "./layout/Layout";
+import { API_URL } from "../config/api";
 import Toast from "./Toast";
 import {
   ArrowDownToLine,
@@ -36,17 +37,16 @@ import {
   X,
 } from "lucide-react";
 
-const API_URL = "http://localhost:5000/api";
 const FY = 2026;
 const LIMIT = 10;
 const money = (v) =>
-  `₱${Number(v || 0).toLocaleString("en-US", {
+  `â‚±${Number(v || 0).toLocaleString("en-US", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })}`;
 
 const dateText = (v) => {
-  if (!v) return "—";
+  if (!v) return "â€”";
   const d = new Date(`${String(v).slice(0, 10)}T00:00:00`);
   return Number.isNaN(d.getTime())
     ? String(v)
@@ -56,7 +56,7 @@ const dateText = (v) => {
 const pct = (a, b) => (Number(b) > 0 ? (Number(a || 0) / Number(b)) * 100 : 0);
 
 const emptyForm = {
-  // RAOD General Fund Input Data — matches the 37 Excel fields.
+  // RAOD General Fund Input Data â€” matches the 37 Excel fields.
   registry_no: "",
   entry_date: new Date().toISOString().slice(0, 10),
   fund_cluster_id: "",
@@ -192,7 +192,7 @@ function Table({ columns, rows, empty = "No records found." }) {
         <tbody className="divide-y divide-slate-100">
           {rows.length ? rows.map((r, i) => (
             <tr key={r.id ?? i} className="text-[10px] text-slate-700 hover:bg-slate-50">
-              {columns.map((c) => <td key={c.key} className="whitespace-nowrap px-3 py-3">{c.render ? c.render(r) : (r[c.key] ?? "—")}</td>)}
+              {columns.map((c) => <td key={c.key} className="whitespace-nowrap px-3 py-3">{c.render ? c.render(r) : (r[c.key] ?? "â€”")}</td>)}
             </tr>
           )) : (
             <tr><td colSpan={columns.length} className="px-4 py-10 text-center text-[11px] text-slate-400">{empty}</td></tr>
@@ -254,7 +254,7 @@ function TransactionForm({ refs, form, setForm, onSubmit, saving, onClose }) {
 
   return (
     <form onSubmit={onSubmit} className="space-y-5">
-      {/* 1–5: Registry / fund identification */}
+      {/* 1â€“5: Registry / fund identification */}
       <div className="rounded-xl border border-blue-100 bg-blue-50/50 p-4">
         <p className="mb-3 text-[10px] font-extrabold uppercase tracking-wide text-blue-700">
           RAOD Registry Identification
@@ -270,7 +270,7 @@ function TransactionForm({ refs, form, setForm, onSubmit, saving, onClose }) {
             <Select value={form.fund_cluster_id} onChange={e => set("fund_cluster_id", e.target.value)}>
               <option value="">Select</option>
               {options(refs.fund_clusters).map(x => (
-                <option key={x.id} value={x.id}>{x.code} — {x.name}</option>
+                <option key={x.id} value={x.id}>{x.code} â€” {x.name}</option>
               ))}
             </Select>
           </Field>
@@ -278,7 +278,7 @@ function TransactionForm({ refs, form, setForm, onSubmit, saving, onClose }) {
             <Select value={form.fund_source_id} onChange={e => set("fund_source_id", e.target.value)}>
               <option value="">Select</option>
               {options(refs.fund_sources).map(x => (
-                <option key={x.id} value={x.id}>{x.code} — {x.name}</option>
+                <option key={x.id} value={x.id}>{x.code} â€” {x.name}</option>
               ))}
             </Select>
           </Field>
@@ -286,7 +286,7 @@ function TransactionForm({ refs, form, setForm, onSubmit, saving, onClose }) {
             <Select value={form.campus_id} onChange={e => set("campus_id", e.target.value)}>
               <option value="">Select</option>
               {options(refs.campuses).map(x => (
-                <option key={x.id} value={x.id}>{x.code} — {x.name}</option>
+                <option key={x.id} value={x.id}>{x.code} â€” {x.name}</option>
               ))}
             </Select>
           </Field>
@@ -296,7 +296,7 @@ function TransactionForm({ refs, form, setForm, onSubmit, saving, onClose }) {
         </div>
       </div>
 
-      {/* 6–13: transaction/reference fields */}
+      {/* 6â€“13: transaction/reference fields */}
       <div className="rounded-xl border border-slate-100 bg-white p-4 shadow-sm">
         <p className="mb-3 text-[10px] font-extrabold uppercase tracking-wide text-slate-500">
           Transaction and Reference Information
@@ -315,7 +315,7 @@ function TransactionForm({ refs, form, setForm, onSubmit, saving, onClose }) {
             <Select value={form.responsibility_center_id} onChange={e => set("responsibility_center_id", e.target.value)}>
               <option value="">Select</option>
               {options(refs.responsibility_centers).map(x => (
-                <option key={x.id} value={x.id}>{x.code} — {x.name}</option>
+                <option key={x.id} value={x.id}>{x.code} â€” {x.name}</option>
               ))}
             </Select>
           </Field>
@@ -323,7 +323,7 @@ function TransactionForm({ refs, form, setForm, onSubmit, saving, onClose }) {
             <Select value={form.pap_id} onChange={e => set("pap_id", e.target.value)}>
               <option value="">Select</option>
               {options(refs.pap).map(x => (
-                <option key={x.id} value={x.id}>{x.code} — {x.name}</option>
+                <option key={x.id} value={x.id}>{x.code} â€” {x.name}</option>
               ))}
             </Select>
           </Field>
@@ -331,7 +331,7 @@ function TransactionForm({ refs, form, setForm, onSubmit, saving, onClose }) {
             <Select value={form.uacs_code_id} onChange={e => set("uacs_code_id", e.target.value)}>
               <option value="">Select</option>
               {options(refs.uacs_codes).map(x => (
-                <option key={x.id} value={x.id}>{x.code} — {x.account_title || x.revised_description || ""}</option>
+                <option key={x.id} value={x.id}>{x.code} â€” {x.account_title || x.revised_description || ""}</option>
               ))}
             </Select>
           </Field>
@@ -342,7 +342,7 @@ function TransactionForm({ refs, form, setForm, onSubmit, saving, onClose }) {
             <Select value={form.allotment_class_id} onChange={e => set("allotment_class_id", e.target.value)}>
               <option value="">Select</option>
               {options(refs.allotment_classes).map(x => (
-                <option key={x.id} value={x.id}>{x.code} — {x.name}</option>
+                <option key={x.id} value={x.id}>{x.code} â€” {x.name}</option>
               ))}
             </Select>
           </Field>
@@ -353,7 +353,7 @@ function TransactionForm({ refs, form, setForm, onSubmit, saving, onClose }) {
             <Select value={form.object_expenditure_id} onChange={e => set("object_expenditure_id", e.target.value)}>
               <option value="">Select</option>
               {options(refs.object_expenditures).map(x => (
-                <option key={x.id} value={x.id}>{x.code} — {x.name}</option>
+                <option key={x.id} value={x.id}>{x.code} â€” {x.name}</option>
               ))}
             </Select>
           </Field>
@@ -361,7 +361,7 @@ function TransactionForm({ refs, form, setForm, onSubmit, saving, onClose }) {
             <Select value={form.mfo_id} onChange={e => set("mfo_id", e.target.value)}>
               <option value="">Select</option>
               {options(refs.mfo).map(x => (
-                <option key={x.id} value={x.id}>{x.code} — {x.name}</option>
+                <option key={x.id} value={x.id}>{x.code} â€” {x.name}</option>
               ))}
             </Select>
           </Field>
@@ -369,7 +369,7 @@ function TransactionForm({ refs, form, setForm, onSubmit, saving, onClose }) {
             <Select value={form.old_uacs_code_id} onChange={e => set("old_uacs_code_id", e.target.value)}>
               <option value="">Select</option>
               {oldUacsOptions.map(x => (
-                <option key={x.id} value={x.id}>{x.old_code} — {x.account_title || x.code}</option>
+                <option key={x.id} value={x.id}>{x.old_code} â€” {x.account_title || x.code}</option>
               ))}
             </Select>
           </Field>
@@ -390,7 +390,7 @@ function TransactionForm({ refs, form, setForm, onSubmit, saving, onClose }) {
         </Field>
       </div>
 
-      {/* 16–24: period and classification */}
+      {/* 16â€“24: period and classification */}
       <div className="rounded-xl border border-slate-100 bg-white p-4 shadow-sm">
         <p className="mb-3 text-[10px] font-extrabold uppercase tracking-wide text-slate-500">
           Period and Classification
@@ -414,7 +414,7 @@ function TransactionForm({ refs, form, setForm, onSubmit, saving, onClose }) {
         </div>
       </div>
 
-      {/* 25–28: actual RAOD financial amounts */}
+      {/* 25â€“28: actual RAOD financial amounts */}
       <div className="rounded-xl border border-emerald-100 bg-emerald-50/40 p-4">
         <p className="mb-3 text-[10px] font-extrabold uppercase tracking-wide text-emerald-700">
           Obligation and Disbursement
@@ -455,7 +455,7 @@ function TransactionForm({ refs, form, setForm, onSubmit, saving, onClose }) {
         </div>
       </div>
 
-      {/* 29–37 */}
+      {/* 29â€“37 */}
       <div className="rounded-xl border border-slate-100 bg-white p-4 shadow-sm">
         <p className="mb-3 text-[10px] font-extrabold uppercase tracking-wide text-slate-500">
           WFP, Disbursement and Purchase Order Information
@@ -465,7 +465,7 @@ function TransactionForm({ refs, form, setForm, onSubmit, saving, onClose }) {
             <Select value={form.wfp_source_id} onChange={e => set("wfp_source_id", e.target.value)}>
               <option value="">Select</option>
               {options(refs.wfp_sources).map(x => (
-                <option key={x.id} value={x.id}>{x.code} — {x.name}</option>
+                <option key={x.id} value={x.id}>{x.code} â€” {x.name}</option>
               ))}
             </Select>
           </Field>
@@ -706,7 +706,7 @@ function RaodRegistry({ user, onLogout, onNavigate, activePath }) {
   const entryColumns = [
     { key: "registry_no", label: "REGISTRY NO." },
     { key: "entry_date", label: "DATE", render: r => dateText(r.entry_date) },
-    { key: "particulars", label: "PARTICULARS", render: r => <span className="max-w-[260px] truncate block">{r.particulars || "—"}</span> },
+    { key: "particulars", label: "PARTICULARS", render: r => <span className="max-w-[260px] truncate block">{r.particulars || "â€”"}</span> },
     { key: "responsibility_center_name", label: "DEPARTMENT / RC" },
     { key: "allotment_amount", label: "ALLOTMENT", render: r => money(r.allotment_amount) },
     { key: "obligation_amount", label: "OBLIGATION", render: r => money(r.obligation_amount) },
@@ -736,7 +736,7 @@ function RaodRegistry({ user, onLogout, onNavigate, activePath }) {
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
         <div className="xl:col-span-2">
-          <SectionTitle title="RAOD Financial Summary" text="FY 2026 — General Fund / Fund Cluster 101" />
+          <SectionTitle title="RAOD Financial Summary" text="FY 2026 â€” General Fund / Fund Cluster 101" />
           <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
             <Metric label="Total Allotment" value={money(allotment)} icon={WalletCards} />
             <Metric label="Total Obligations" value={money(obligation)} icon={BarChart3} className="bg-emerald-50 text-emerald-700" />
@@ -833,10 +833,10 @@ function RaodRegistry({ user, onLogout, onNavigate, activePath }) {
 
   const renderFundRegistry = () => (
     <>
-      <BackBar title="3. Fund Registries — 101 General Fund" onBack={backHome} />
+      <BackBar title="3. Fund Registries â€” 101 General Fund" onBack={backHome} />
       <div className="mb-4 rounded-xl border border-blue-100 bg-blue-50 p-4">
         <p className="text-[9px] font-bold uppercase tracking-wide text-blue-600">Fund Registry</p>
-        <p className="mt-1 text-lg font-extrabold text-[#10245b]">101 — GENERAL FUND</p>
+        <p className="mt-1 text-lg font-extrabold text-[#10245b]">101 â€” GENERAL FUND</p>
         <p className="text-[10px] text-slate-500">Centralized RAOD registry for the General Fund.</p>
       </div>
       <div className="mb-4 flex gap-1 rounded-lg border border-slate-100 bg-white p-1 shadow-sm">
@@ -893,7 +893,7 @@ function RaodRegistry({ user, onLogout, onNavigate, activePath }) {
           {["FAR 1","FAR 1A","SARONCA"].map(x => <button key={x} type="button" onClick={() => setReportType(x)} className={`mb-2 flex w-full items-center justify-between rounded-lg border px-3 py-3 text-left text-[10px] font-bold ${reportType === x ? "border-blue-200 bg-blue-50 text-blue-700" : "border-slate-100 text-slate-600"}`}>{x}<ArrowRight className="h-3.5 w-3.5"/></button>)}
         </div>
         <div className="lg:col-span-2 rounded-xl border border-slate-100 bg-white p-5 shadow-sm">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-4"><div><p className="text-[9px] font-bold uppercase text-slate-400">FY {FY} • General Fund 101</p><h3 className="mt-1 text-lg font-extrabold text-[#10245b]">{reportType}</h3></div><FileBarChart className="h-7 w-7 text-red-500"/></div>
+          <div className="flex items-center justify-between border-b border-slate-100 pb-4"><div><p className="text-[9px] font-bold uppercase text-slate-400">FY {FY} â€¢ General Fund 101</p><h3 className="mt-1 text-lg font-extrabold text-[#10245b]">{reportType}</h3></div><FileBarChart className="h-7 w-7 text-red-500"/></div>
           <p className="mt-4 text-[11px] leading-5 text-slate-500">{reportDescription(reportType)}</p>
           <div className="mt-5 grid grid-cols-3 gap-3"><Metric label="Allotment" value={money(allotment)} icon={WalletCards}/><Metric label="Obligation" value={money(obligation)} icon={BarChart3} className="bg-amber-50 text-amber-700"/><Metric label="Disbursement" value={money(disbursement)} icon={ArrowDownToLine} className="bg-violet-50 text-violet-700"/></div>
           <div className="mt-5 flex gap-2"><button type="button" onClick={() => setModal("report")} className="rounded-lg bg-[#174fd1] px-4 py-2 text-[10px] font-bold text-white"><Eye className="mr-1 inline h-3.5 w-3.5"/> Preview</button><button type="button" onClick={() => setToast({type:"success",message:`${reportType} is ready for printing/export.`})} className="rounded-lg border border-slate-200 px-4 py-2 text-[10px] font-bold text-slate-600"><Printer className="mr-1 inline h-3.5 w-3.5"/> Print</button></div>
@@ -940,7 +940,7 @@ function RaodRegistry({ user, onLogout, onNavigate, activePath }) {
 
       <div className="mb-4 grid grid-cols-1 gap-4 lg:grid-cols-3">
         <div className="rounded-xl border border-slate-100 bg-white p-5 shadow-sm">
-          <SectionTitle title="General Fund 101" text={`FY ${FY} — RAOD Financial Summary`} />
+          <SectionTitle title="General Fund 101" text={`FY ${FY} â€” RAOD Financial Summary`} />
           <div className="space-y-3">
             <div className="flex items-center justify-between border-b border-slate-100 pb-2"><span className="text-[10px] text-slate-500">Allotment</span><b className="text-[11px] text-slate-700">{money(allotment)}</b></div>
             <div className="flex items-center justify-between border-b border-slate-100 pb-2"><span className="text-[10px] text-slate-500">Obligations</span><b className="text-[11px] text-slate-700">{money(obligation)}</b></div>
@@ -984,7 +984,7 @@ function RaodRegistry({ user, onLogout, onNavigate, activePath }) {
         <div className="rounded-xl border border-slate-100 bg-white p-4 shadow-sm">
           <SectionTitle title="Report Selection" text="Use RAOD FY 2026 data." />
           <Field label="Report Type"><Select value={reportType} onChange={e => setReportType(e.target.value)}><option>RAOD Registry</option><option>FAR 1</option><option>FAR 1A</option><option>SARONCA</option><option>GAA Balance</option><option>WFP Balance</option><option>GAM</option><option>Table List</option></Select></Field>
-          <Field label="Fund" className="mt-3"><Select><option>101 — GENERAL FUND</option></Select></Field>
+          <Field label="Fund" className="mt-3"><Select><option>101 â€” GENERAL FUND</option></Select></Field>
           <Field label="Period" className="mt-3"><Select><option>FY 2026</option></Select></Field>
           <div className="mt-4 grid grid-cols-3 gap-2"><button type="button" onClick={() => setModal("report")} className="rounded-lg border border-slate-200 p-2 text-[9px] font-bold text-slate-600"><Eye className="mx-auto mb-1 h-4 w-4"/>Preview</button><button type="button" onClick={() => setToast({type:"success",message:"Excel export action prepared from RAOD records."})} className="rounded-lg border border-slate-200 p-2 text-[9px] font-bold text-slate-600"><FileSpreadsheet className="mx-auto mb-1 h-4 w-4"/>Excel</button><button type="button" onClick={() => window.print()} className="rounded-lg border border-slate-200 p-2 text-[9px] font-bold text-slate-600"><Printer className="mx-auto mb-1 h-4 w-4"/>Print</button></div>
         </div>
@@ -1020,7 +1020,7 @@ function RaodRegistry({ user, onLogout, onNavigate, activePath }) {
 
       {modal === "form" && <Modal title={editing ? "Edit RAOD Transaction" : "Add RAOD Transaction"} onClose={() => setModal(null)} wide><TransactionForm refs={refs} form={form} setForm={setForm} onSubmit={saveEntry} saving={saving} onClose={() => setModal(null)} /></Modal>}
 
-      {modal === "view" && selected && <Modal title={`RAOD Record — ${selected.registry_no || selected.id}`} onClose={() => setModal(null)} wide>
+      {modal === "view" && selected && <Modal title={`RAOD Record â€” ${selected.registry_no || selected.id}`} onClose={() => setModal(null)} wide>
         <div className="grid grid-cols-1 gap-x-5 gap-y-3 md:grid-cols-3">
           {[
             ["Registry No.", selected.registry_no],
@@ -1064,7 +1064,7 @@ function RaodRegistry({ user, onLogout, onNavigate, activePath }) {
           ].map(([a, b]) => (
             <div key={a} className="border-b border-slate-100 pb-2">
               <p className="text-[9px] font-bold uppercase text-slate-400">{a}</p>
-              <p className="mt-1 break-words text-[10px] font-semibold text-slate-700">{b || "—"}</p>
+              <p className="mt-1 break-words text-[10px] font-semibold text-slate-700">{b || "â€”"}</p>
             </div>
           ))}
         </div>
@@ -1132,14 +1132,14 @@ function ReportPreview({ title, entries }) {
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm print:shadow-none">
       <div className="border-b-2 border-[#102b67] pb-3 text-center">
-        <p className="text-[9px] font-bold uppercase tracking-widest text-slate-500">University of Abra — Main Campus</p>
+        <p className="text-[9px] font-bold uppercase tracking-widest text-slate-500">University of Abra â€” Main Campus</p>
         <h2 className="mt-1 text-lg font-extrabold text-slate-800">{title}</h2>
-        <p className="mt-1 text-[9px] text-slate-400">FY 2026 • General Fund / 101 • RAOD Registry</p>
+        <p className="mt-1 text-[9px] text-slate-400">FY 2026 â€¢ General Fund / 101 â€¢ RAOD Registry</p>
       </div>
       <div className="mt-5 overflow-x-auto">
         <table className="min-w-full text-[9px]">
           <thead><tr className="bg-slate-100 font-bold text-slate-700"><th className="px-2 py-2 text-left">RAOD No.</th><th className="px-2 py-2">Date</th><th className="px-2 py-2 text-left">Department</th><th className="px-2 py-2 text-right">Amount</th></tr></thead>
-          <tbody className="divide-y divide-slate-100">{entries.map(r => <tr key={r.id}><td className="px-2 py-2">{r.registry_no}</td><td className="px-2 py-2 text-center">{dateText(r.entry_date)}</td><td className="px-2 py-2">{r.responsibility_center_name || "—"}</td><td className="px-2 py-2 text-right">{money(r.disbursement_amount || r.obligation_amount || r.allotment_amount)}</td></tr>)}</tbody>
+          <tbody className="divide-y divide-slate-100">{entries.map(r => <tr key={r.id}><td className="px-2 py-2">{r.registry_no}</td><td className="px-2 py-2 text-center">{dateText(r.entry_date)}</td><td className="px-2 py-2">{r.responsibility_center_name || "â€”"}</td><td className="px-2 py-2 text-right">{money(r.disbursement_amount || r.obligation_amount || r.allotment_amount)}</td></tr>)}</tbody>
           <tfoot><tr className="bg-slate-50 font-extrabold"><td colSpan="3" className="px-2 py-2 text-right">TOTAL</td><td className="px-2 py-2 text-right">{money(total)}</td></tr></tfoot>
         </table>
       </div>
@@ -1148,3 +1148,6 @@ function ReportPreview({ title, entries }) {
 }
 
 export default RaodRegistry;
+
+
+

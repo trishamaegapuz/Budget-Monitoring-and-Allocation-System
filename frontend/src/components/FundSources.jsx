@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useMemo } from 'react';
+﻿import React, { useState, useEffect, useMemo } from 'react';
 import Layout from './layout/Layout';
+import { API_URL } from '../config/api';
 
 import {
   Building2,
@@ -36,7 +37,6 @@ import {
   Legend,
 } from 'recharts';
 
-const API_URL = 'http://localhost:5000/api';
 
 const COLORS = [
   '#2563eb',
@@ -212,7 +212,7 @@ export default function FundSources({
   const formatCurrency = (value) => {
     const amount = Number(value || 0);
 
-    return `₱${amount.toLocaleString('en-US', {
+    return `â‚±${amount.toLocaleString('en-US', {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     })}`;
@@ -222,14 +222,14 @@ export default function FundSources({
     const amount = Number(value || 0);
 
     if (Math.abs(amount) >= 1000000) {
-      return `₱${(amount / 1000000).toFixed(1)}M`;
+      return `â‚±${(amount / 1000000).toFixed(1)}M`;
     }
 
     if (Math.abs(amount) >= 1000) {
-      return `₱${(amount / 1000).toFixed(0)}K`;
+      return `â‚±${(amount / 1000).toFixed(0)}K`;
     }
 
-    return `₱${amount.toFixed(0)}`;
+    return `â‚±${amount.toFixed(0)}`;
   };
 
   /*
@@ -1044,7 +1044,7 @@ export default function FundSources({
       {/* ERROR */}
       {error && (
         <div className="mb-4 text-sm text-red-600 bg-red-50 p-3 rounded-lg border border-red-200">
-          ⚠️ {error}
+          âš ï¸ {error}
         </div>
       )}
 
@@ -1673,7 +1673,7 @@ export default function FundSources({
                             )
                             .filter(Boolean)
                             .join(', ')
-                        : '—';
+                        : 'â€”';
 
                     return (
 
@@ -1723,7 +1723,7 @@ export default function FundSources({
                             }
                           >
                             {source.description ||
-                              '—'}
+                              'â€”'}
                           </div>
 
                         </td>
@@ -1855,7 +1855,7 @@ export default function FundSources({
               }
               className="px-3 py-1.5 text-xs border border-slate-200 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50"
             >
-              ‹
+              â€¹
             </button>
 
             <span className="text-xs text-slate-600">
@@ -1888,7 +1888,7 @@ export default function FundSources({
               }
               className="px-3 py-1.5 text-xs border border-slate-200 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50"
             >
-              ›
+              â€º
             </button>
 
           </div>

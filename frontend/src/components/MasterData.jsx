@@ -1,4 +1,4 @@
-// frontend/src/components/MasterData.jsx
+﻿// frontend/src/components/MasterData.jsx
 
 import React, {
   useCallback,
@@ -8,6 +8,7 @@ import React, {
 } from 'react';
 
 import Layout from './layout/Layout';
+import { API_URL } from '../config/api';
 import Toast from './Toast';
 
 import {
@@ -33,7 +34,6 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 
-const API_URL = 'http://localhost:5000/api';
 
 const DEFAULT_FORM = {
   code: '',
@@ -1170,7 +1170,7 @@ export default function MasterData({
         item.name ||
         item.account_title ||
         item.full_name ||
-        '—'
+        'â€”'
       );
     };
 
@@ -1179,7 +1179,7 @@ export default function MasterData({
       return (
         item.code ||
         item.username ||
-        '—'
+        'â€”'
       );
     };
 
@@ -1189,7 +1189,7 @@ export default function MasterData({
         item.description ||
         item.account_description ||
         item.revised_description ||
-        '—'
+        'â€”'
       );
     };
 

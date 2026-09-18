@@ -1,5 +1,6 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+﻿import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import Layout from './layout/Layout';
+import { API_URL } from '../config/api';
 import Toast from './Toast';
 import {
   FileText,
@@ -18,7 +19,6 @@ import {
   FileBarChart,
 } from 'lucide-react';
 
-const API_URL = 'http://localhost:5000/api';
 const UA_LOGO = '/UA_logo.jpg';
 
 const EMPTY_REFERENCES = {
@@ -303,18 +303,18 @@ const numberValue = (value) => {
 };
 
 const money = (value) =>
-  `₱${numberValue(value).toLocaleString('en-US', {
+  `â‚±${numberValue(value).toLocaleString('en-US', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })}`;
 
 const dateText = (value) => {
-  if (!value) return '—';
+  if (!value) return 'â€”';
 
   const date = new Date(value);
 
   return Number.isNaN(date.getTime())
-    ? '—'
+    ? 'â€”'
     : date.toLocaleDateString('en-US', {
         year: 'numeric',
         month: 'short',

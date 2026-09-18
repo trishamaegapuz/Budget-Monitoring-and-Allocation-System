@@ -1,9 +1,9 @@
-// frontend/src/components/NoticesView.jsx
+﻿// frontend/src/components/NoticesView.jsx
+import { API_URL } from '../config/api';
 import React, { useState, useEffect } from 'react';
 import Layout from './layout/Layout';
 import { ChevronLeft, ChevronRight, ArrowLeft } from 'lucide-react';
 
-const API_URL = 'http://localhost:5000/api';
 
 export default function NoticesView({ user, onLogout, onNavigate, activePath }) {
   const token = localStorage.getItem('token');

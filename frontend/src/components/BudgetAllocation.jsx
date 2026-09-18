@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import Layout from './layout/Layout';
 import Toast from './Toast';
+import { API_URL } from '../config/api';
 
 import {
   Wallet,
@@ -27,7 +28,6 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 
-const API_URL = 'http://localhost:5000/api';
 
 export default function BudgetAllocation({
   user,

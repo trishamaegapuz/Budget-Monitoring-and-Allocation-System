@@ -1,3 +1,4 @@
+﻿import { API_URL } from '../config/api';
 // frontend/src/components/Settings.jsx
 
 import React, { useEffect, useState } from 'react';
@@ -24,7 +25,7 @@ import {
   Coins,
 } from 'lucide-react';
 
-const API_URL = 'http://localhost:5000/api';
+
 
 export default function Settings({
   user,
@@ -1431,7 +1432,7 @@ export default function Settings({
                   value={
                     systemInformation.institution ||
                     generalSettings.institution ||
-                    '—'
+                    'â€”'
                   }
                   icon={Building2}
                 />
@@ -1441,7 +1442,7 @@ export default function Settings({
                   value={
                     systemInformation.system_name ||
                     generalSettings.system_name ||
-                    '—'
+                    'â€”'
                   }
                   icon={SettingsIcon}
                 />
@@ -1451,7 +1452,7 @@ export default function Settings({
                   value={
                     systemInformation.system_acronym ||
                     generalSettings.system_acronym ||
-                    '—'
+                    'â€”'
                   }
                   icon={Info}
                 />
@@ -1478,7 +1479,7 @@ export default function Settings({
                   label="Node.js Version"
                   value={
                     systemInformation.node_version ||
-                    '—'
+                    'â€”'
                   }
                   icon={Info}
                 />
@@ -1487,7 +1488,7 @@ export default function Settings({
                   label="Server Time"
                   value={
                     systemInformation.current_time ||
-                    '—'
+                    'â€”'
                   }
                   icon={Clock}
                 />
@@ -1497,7 +1498,7 @@ export default function Settings({
                   value={
                     user?.full_name ||
                     user?.username ||
-                    '—'
+                    'â€”'
                   }
                   icon={User}
                 />

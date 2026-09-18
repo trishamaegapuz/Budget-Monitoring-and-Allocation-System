@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import Layout from './layout/Layout';
+import { API_URL } from '../config/api';
 
 import {
   TrendingUp,
@@ -93,7 +94,7 @@ export default function Dashboard({
         }
 
         const response = await fetch(
-          `http://localhost:5000/api/dashboard/summary?year=${selectedYear}`,
+          `${API_URL}/dashboard/summary?year=${selectedYear}`,
           {
             method: 'GET',
             headers
@@ -159,7 +160,7 @@ export default function Dashboard({
 
     const number = toNumber(value);
 
-    return `₱${number.toLocaleString(
+    return `â‚±${number.toLocaleString(
       'en-US',
       {
         minimumFractionDigits: 2,
@@ -180,7 +181,7 @@ export default function Dashboard({
 
     if (number >= 1000000000) {
 
-      return `₱${(
+      return `â‚±${(
         number / 1000000000
       ).toFixed(2)}B`;
 
@@ -188,7 +189,7 @@ export default function Dashboard({
 
     if (number >= 1000000) {
 
-      return `₱${(
+      return `â‚±${(
         number / 1000000
       ).toFixed(2)}M`;
 
@@ -196,13 +197,13 @@ export default function Dashboard({
 
     if (number >= 1000) {
 
-      return `₱${(
+      return `â‚±${(
         number / 1000
       ).toFixed(0)}K`;
 
     }
 
-    return `₱${number.toFixed(2)}`;
+    return `â‚±${number.toFixed(2)}`;
 
   };
 
@@ -307,14 +308,14 @@ export default function Dashboard({
   //
   // RBUD UTILIZATION RATE
   //
-  // Utilization = Obligations / Total Budget × 100
+  // Utilization = Obligations / Total Budget Ã— 100
   //
   // Example:
   //
   // 332,783.79
-  // ÷
+  // Ã·
   // 20,015,000,000
-  // × 100
+  // Ã— 100
   //
   // = 0.0016627%
   //
@@ -670,7 +671,7 @@ export default function Dashboard({
         <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-4 flex items-center gap-4">
 
           <div className="w-12 h-12 rounded-full bg-blue-600 flex items-center justify-center text-white text-xl font-bold flex-shrink-0">
-            ₱
+            â‚±
           </div>
 
           <div>

@@ -1,7 +1,8 @@
+﻿import { API_URL } from '../../config/api';
 import React, { useState, useEffect, useCallback } from 'react';
 import { Menu, Bell, ChevronDown, LogOut, CheckCheck } from 'lucide-react';
 
-const API_URL = 'http://localhost:5000/api';
+
 
 export default function Header({
   onToggleCollapse,
@@ -371,3 +372,4 @@ export default function Header({
     </header>
   );
 }
+

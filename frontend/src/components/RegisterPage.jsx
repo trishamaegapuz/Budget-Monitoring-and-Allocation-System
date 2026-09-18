@@ -1,10 +1,11 @@
+﻿import { API_URL } from '../config/api';
 import React, { useState } from 'react';
 import { Lock, User, Mail, Eye, EyeOff, CheckCircle, AlertCircle, ShieldCheck, Activity, PieChart, FileText } from 'lucide-react';
 
 export default function RegisterPage({ onSwitchToLogin }) {
   const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({
-    full_name: '',    // ✅ changed from 'name' to 'full_name'
+    full_name: '',    // âœ… changed from 'name' to 'full_name'
     username: '',
     email: '',
     password: '',
@@ -47,14 +48,14 @@ export default function RegisterPage({ onSwitchToLogin }) {
 
     try {
       const payload = {
-        full_name: formData.full_name,   // ✅ send correct field name
+        full_name: formData.full_name,   // âœ… send correct field name
         username: formData.username,
         email: formData.email,
         password: formData.password,
         role: formData.role,
       };
 
-      const response = await fetch('http://localhost:5000/api/auth/register', {
+      const response = await fetch(`${API_URL}/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -94,7 +95,7 @@ export default function RegisterPage({ onSwitchToLogin }) {
         <div className="flex-1 flex items-center justify-center w-full my-1">
           <div className="w-full max-w-sm bg-white/10 backdrop-blur-sm rounded-2xl p-3 border border-white/20 shadow-xl text-center">
             <img src="/hero_photo.png" alt="Budget dashboard" className="w-full h-auto rounded-lg max-h-28 object-cover" />
-            <p className="text-[10px] text-blue-100 mt-1 font-medium">Visual Insights & Analytics – Graphical overview of university budget utilization</p>
+            <p className="text-[10px] text-blue-100 mt-1 font-medium">Visual Insights & Analytics â€“ Graphical overview of university budget utilization</p>
           </div>
         </div>
         <div className="w-full grid grid-cols-2 md:grid-cols-4 gap-3 border-t border-blue-800/60 pt-4 mt-1">
@@ -121,7 +122,7 @@ export default function RegisterPage({ onSwitchToLogin }) {
         </div>
       </div>
 
-      {/* RIGHT PANEL – Registration Form */}
+      {/* RIGHT PANEL â€“ Registration Form */}
       <div className="w-full lg:w-[42%] bg-gray-50 flex items-center justify-center p-6 lg:p-10 overflow-y-auto">
         <div className="w-full max-w-md bg-white p-8 lg:p-10 rounded-3xl shadow-xl border border-gray-100">
           <div className="text-center mb-6">
@@ -202,7 +203,7 @@ export default function RegisterPage({ onSwitchToLogin }) {
                 <input
                   type={showPassword ? 'text' : 'password'}
                   className={`w-full pl-10 pr-10 py-2.5 bg-gray-50 border text-sm rounded-xl focus:ring-2 focus:ring-[#1a237e] focus:bg-white focus:outline-none transition ${errors.password ? 'border-red-500' : 'border-gray-200'}`}
-                  placeholder="••••••••"
+                  placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢"
                   value={formData.password}
                   onChange={(e) => {
                     setFormData({ ...formData, password: e.target.value });

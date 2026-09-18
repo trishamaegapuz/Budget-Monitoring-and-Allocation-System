@@ -1,3 +1,4 @@
+﻿import { API_URL } from '../config/api';
 // ============================================================
 // BMAS - FINANCIAL REPORTS
 // components/Reports.jsx
@@ -29,9 +30,6 @@ import {
   Wallet,
 } from "lucide-react";
 
-const API_URL =
-  "http://localhost:5000/api";
-
 // ============================================================
 // HELPERS
 // ============================================================
@@ -42,7 +40,7 @@ const numberValue = (value) => {
 };
 
 const money = (value) =>
-  `₱${numberValue(value).toLocaleString(
+  `â‚±${numberValue(value).toLocaleString(
     "en-US",
     {
       minimumFractionDigits: 2,
@@ -78,7 +76,7 @@ const monthName = (month) => {
   const n = numberValue(month);
 
   if (n < 1 || n > 12) {
-    return "—";
+    return "â€”";
   }
 
   return new Date(
@@ -91,7 +89,7 @@ const monthName = (month) => {
 };
 
 const dateText = (value) => {
-  if (!value) return "—";
+  if (!value) return "â€”";
 
   const date =
     new Date(
@@ -106,7 +104,7 @@ const dateText = (value) => {
       date.getTime()
     )
   ) {
-    return "—";
+    return "â€”";
   }
 
   return date.toLocaleDateString(
@@ -1890,7 +1888,7 @@ export default function Reports({
             <SectionHeader
               icon={ClipboardList}
               title="RAOD Financial Report"
-              description={`Registry of Allotment, Obligation and Disbursement — FY ${selectedYear}`}
+              description={`Registry of Allotment, Obligation and Disbursement â€” FY ${selectedYear}`}
             />
 
             {filteredRaod.length ===
@@ -1963,7 +1961,7 @@ export default function Reports({
                               {
                                 row.fund_source_code ||
                                 row.fund_cluster_code ||
-                                "—"
+                                "â€”"
                               }
                             </p>
 
@@ -1971,7 +1969,7 @@ export default function Reports({
                               {
                                 row.fund_source_name ||
                                 row.fund_cluster_name ||
-                                "—"
+                                "â€”"
                               }
                             </p>
                           </td>
@@ -1980,14 +1978,14 @@ export default function Reports({
                             <p className="truncate text-[10px] font-semibold text-slate-700">
                               {
                                 row.payee ||
-                                "—"
+                                "â€”"
                               }
                             </p>
 
                             <p className="mt-1 truncate text-[9px] text-slate-400">
                               {
                                 row.particulars ||
-                                "—"
+                                "â€”"
                               }
                             </p>
                           </td>
@@ -1996,7 +1994,7 @@ export default function Reports({
                             {
                               row.responsibility_center_name ||
                               row.responsibility_center_code ||
-                              "—"
+                              "â€”"
                             }
                           </td>
 
@@ -2043,7 +2041,7 @@ export default function Reports({
             <SectionHeader
               icon={Wallet}
               title="RBUD Financial Report"
-              description={`Registry of Budget Utilization and Disbursement — FY ${selectedYear}`}
+              description={`Registry of Budget Utilization and Disbursement â€” FY ${selectedYear}`}
             />
 
             {filteredRbud.length ===
@@ -2116,7 +2114,7 @@ export default function Reports({
                               {
                                 row.fund_source_code ||
                                 row.fund_cluster_code ||
-                                "—"
+                                "â€”"
                               }
                             </p>
 
@@ -2124,7 +2122,7 @@ export default function Reports({
                               {
                                 row.fund_source_name ||
                                 row.fund_cluster_name ||
-                                "—"
+                                "â€”"
                               }
                             </p>
                           </td>
@@ -2133,14 +2131,14 @@ export default function Reports({
                             <p className="truncate text-[10px] font-semibold text-slate-700">
                               {
                                 row.payee ||
-                                "—"
+                                "â€”"
                               }
                             </p>
 
                             <p className="mt-1 truncate text-[9px] text-slate-400">
                               {
                                 row.particulars ||
-                                "—"
+                                "â€”"
                               }
                             </p>
                           </td>
@@ -2149,7 +2147,7 @@ export default function Reports({
                             {
                               row.responsibility_center_name ||
                               row.responsibility_center_code ||
-                              "—"
+                              "â€”"
                             }
                           </td>
 
@@ -2215,3 +2213,6 @@ export default function Reports({
     </Layout>
   );
 }
+
+
+

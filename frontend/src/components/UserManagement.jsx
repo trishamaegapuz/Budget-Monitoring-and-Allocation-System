@@ -1,3 +1,4 @@
+﻿import { API_URL } from '../config/api';
 // frontend/src/components/UserManagement.jsx
 import React, { useState, useEffect } from 'react';
 import Layout from './layout/Layout';
@@ -21,7 +22,7 @@ import {
   CheckCircle,
 } from 'lucide-react';
 
-const API_URL = 'http://localhost:5000/api';
+
 
 export default function UserManagement({ user: currentUser, onLogout, onNavigate, activePath }) {
   const token = localStorage.getItem('token');
@@ -310,7 +311,7 @@ export default function UserManagement({ user: currentUser, onLogout, onNavigate
           <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex items-center justify-between">
             <div>
               <span className="text-[10px] font-bold text-gray-400 tracking-wider block uppercase">PERMISSIONS</span>
-              <span className="text-2xl font-extrabold text-gray-900 my-0.5 block">—</span>
+              <span className="text-2xl font-extrabold text-gray-900 my-0.5 block">â€”</span>
               <span className="text-[11px] text-gray-500">System permissions</span>
             </div>
             <div className="w-10 h-10 rounded-full bg-amber-600 flex items-center justify-center text-white shrink-0">
@@ -496,7 +497,7 @@ export default function UserManagement({ user: currentUser, onLogout, onNavigate
                   </button>
                 );
               })}
-              {pagination.totalPages > 5 && <span className="px-1 text-gray-400">…</span>}
+              {pagination.totalPages > 5 && <span className="px-1 text-gray-400">â€¦</span>}
               {pagination.totalPages > 5 && (
                 <button
                   onClick={() => setFilters({ ...filters, page: pagination.totalPages })}
@@ -529,7 +530,7 @@ export default function UserManagement({ user: currentUser, onLogout, onNavigate
 
       {/* ====== MODALS ====== */}
 
-      {/* ADD USER MODAL – only Admin sees it, but keep as is */}
+      {/* ADD USER MODAL â€“ only Admin sees it, but keep as is */}
       {showAddModal && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
@@ -600,7 +601,7 @@ export default function UserManagement({ user: currentUser, onLogout, onNavigate
         </div>
       )}
 
-      {/* EDIT MODAL – only Admin sees it, but keep as is */}
+      {/* EDIT MODAL â€“ only Admin sees it, but keep as is */}
       {showEditModal && selectedUser && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
@@ -643,7 +644,7 @@ export default function UserManagement({ user: currentUser, onLogout, onNavigate
         </div>
       )}
 
-      {/* DELETE CONFIRMATION MODAL – only Admin sees it */}
+      {/* DELETE CONFIRMATION MODAL â€“ only Admin sees it */}
       {showDeleteModal && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl text-center space-y-4">

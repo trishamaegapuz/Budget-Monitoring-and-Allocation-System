@@ -2,8 +2,7 @@
 -- BMAS DATABASE SCHEMA
 -- Budget Monitoring and Allocation System
 -- ============================================================
--- Based on the actual ASIST budget monitoring structure
--- including RBUD and RAOD records.
+-- Final Deployment Schema
 --
 -- Main System Modules:
 -- 1. Dashboard
@@ -16,6 +15,10 @@
 -- 8. Master Data
 -- 9. User Management
 -- 10. Settings
+-- 11. Budget Proposals
+-- 12. WFP / Fund Balances
+-- 13. Budget Adjustments / MAF
+-- 14. FHE Deficiency
 -- ============================================================
 
 
@@ -28,8 +31,6 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- ============================================================
 -- 1. USERS
--- ============================================================
--- Created early because many other tables reference users.
 -- ============================================================
 
 CREATE TABLE IF NOT EXISTS users (
@@ -65,8 +66,9 @@ CREATE TABLE IF NOT EXISTS users (
 -- 2. MASTER / REFERENCE DATA
 -- ============================================================
 
+
 -- ------------------------------------------------------------
--- 2.1 Fund Sources
+-- 2.1 FUND SOURCES
 -- ------------------------------------------------------------
 
 CREATE TABLE IF NOT EXISTS fund_sources (
@@ -87,7 +89,7 @@ CREATE TABLE IF NOT EXISTS fund_sources (
 
 
 -- ------------------------------------------------------------
--- 2.2 Fund Clusters
+-- 2.2 FUND CLUSTERS
 -- ------------------------------------------------------------
 
 CREATE TABLE IF NOT EXISTS fund_clusters (
@@ -112,7 +114,7 @@ CREATE TABLE IF NOT EXISTS fund_clusters (
 
 
 -- ------------------------------------------------------------
--- 2.3 Campuses
+-- 2.3 CAMPUSES
 -- ------------------------------------------------------------
 
 CREATE TABLE IF NOT EXISTS campuses (
@@ -133,7 +135,7 @@ CREATE TABLE IF NOT EXISTS campuses (
 
 
 -- ------------------------------------------------------------
--- 2.4 Responsibility Centers
+-- 2.4 RESPONSIBILITY CENTERS
 -- ------------------------------------------------------------
 
 CREATE TABLE IF NOT EXISTS responsibility_centers (
@@ -200,7 +202,7 @@ CREATE TABLE IF NOT EXISTS pap (
 
 
 -- ------------------------------------------------------------
--- 2.7 UACS Codes
+-- 2.7 UACS CODES
 -- ------------------------------------------------------------
 
 CREATE TABLE IF NOT EXISTS uacs_codes (
@@ -227,7 +229,7 @@ CREATE TABLE IF NOT EXISTS uacs_codes (
 
 
 -- ------------------------------------------------------------
--- 2.8 Object of Expenditures
+-- 2.8 OBJECT OF EXPENDITURES
 -- ------------------------------------------------------------
 
 CREATE TABLE IF NOT EXISTS object_expenditures (
@@ -248,7 +250,7 @@ CREATE TABLE IF NOT EXISTS object_expenditures (
 
 
 -- ------------------------------------------------------------
--- 2.9 Allotment Classes
+-- 2.9 ALLOTMENT CLASSES
 -- ------------------------------------------------------------
 
 CREATE TABLE IF NOT EXISTS allotment_classes (
@@ -269,7 +271,7 @@ CREATE TABLE IF NOT EXISTS allotment_classes (
 
 
 -- ------------------------------------------------------------
--- 2.10 WFP Sources
+-- 2.10 WFP SOURCES
 -- ------------------------------------------------------------
 
 CREATE TABLE IF NOT EXISTS wfp_sources (
@@ -355,10 +357,12 @@ CREATE TABLE IF NOT EXISTS budget_items (
         REFERENCES wfp_sources(id)
         ON DELETE SET NULL,
 
-    -- Excel reference fields
     fund_code VARCHAR(150),
+
     wfp_description TEXT,
+
     wfp_source_code VARCHAR(100),
+
     uacs_funding_source_code VARCHAR(100),
 
     approved_budget NUMERIC(18,2)
@@ -454,46 +458,120 @@ CREATE TABLE IF NOT EXISTS fund_allocations (
 
 CREATE TABLE IF NOT EXISTS rbud_entries (
     id SERIAL PRIMARY KEY,
+
     registry_no VARCHAR(100) UNIQUE NOT NULL,
+
     entry_date DATE,
-    fund_cluster_id INTEGER REFERENCES fund_clusters(id) ON DELETE SET NULL,
-    fund_source_id INTEGER REFERENCES fund_sources(id) ON DELETE SET NULL,
-    campus_id INTEGER REFERENCES campuses(id) ON DELETE SET NULL,
+
+    fund_cluster_id INTEGER
+        REFERENCES fund_clusters(id)
+        ON DELETE SET NULL,
+
+    fund_source_id INTEGER
+        REFERENCES fund_sources(id)
+        ON DELETE SET NULL,
+
+    campus_id INTEGER
+        REFERENCES campuses(id)
+        ON DELETE SET NULL,
+
     burs_serial_no VARCHAR(100),
+
     serial_no_transferred VARCHAR(100),
+
     payee VARCHAR(250),
+
     particulars TEXT,
-    responsibility_center_id INTEGER REFERENCES responsibility_centers(id) ON DELETE SET NULL,
-    pap_id INTEGER REFERENCES pap(id) ON DELETE SET NULL,
-    uacs_code_id INTEGER REFERENCES uacs_codes(id) ON DELETE SET NULL,
+
+    responsibility_center_id INTEGER
+        REFERENCES responsibility_centers(id)
+        ON DELETE SET NULL,
+
+    pap_id INTEGER
+        REFERENCES pap(id)
+        ON DELETE SET NULL,
+
+    uacs_code_id INTEGER
+        REFERENCES uacs_codes(id)
+        ON DELETE SET NULL,
+
     ref_no VARCHAR(100),
-    allotment_class_id INTEGER REFERENCES allotment_classes(id) ON DELETE SET NULL,
+
+    allotment_class_id INTEGER
+        REFERENCES allotment_classes(id)
+        ON DELETE SET NULL,
+
     uacs_funding_source_code VARCHAR(100),
+
     fiscal_year INTEGER NOT NULL,
-    month INTEGER CHECK (month BETWEEN 1 AND 12),
+
+    month INTEGER
+        CHECK (month BETWEEN 1 AND 12),
+
     series VARCHAR(50),
+
     series2 VARCHAR(50),
-    quarter INTEGER CHECK (quarter BETWEEN 1 AND 4),
-    object_expenditure_id INTEGER REFERENCES object_expenditures(id) ON DELETE SET NULL,
-    mfo_id INTEGER REFERENCES mfo(id) ON DELETE SET NULL,
-    old_uacs_code_id INTEGER REFERENCES uacs_codes(id) ON DELETE SET NULL,
+
+    quarter INTEGER
+        CHECK (quarter BETWEEN 1 AND 4),
+
+    object_expenditure_id INTEGER
+        REFERENCES object_expenditures(id)
+        ON DELETE SET NULL,
+
+    mfo_id INTEGER
+        REFERENCES mfo(id)
+        ON DELETE SET NULL,
+
+    old_uacs_code_id INTEGER
+        REFERENCES uacs_codes(id)
+        ON DELETE SET NULL,
+
     account_title VARCHAR(250),
-    utilization_amount NUMERIC(18,2) NOT NULL DEFAULT 0,
-    ps_utilization NUMERIC(18,2) NOT NULL DEFAULT 0,
-    mooe_utilization NUMERIC(18,2) NOT NULL DEFAULT 0,
-    co_utilization NUMERIC(18,2) NOT NULL DEFAULT 0,
+
+    utilization_amount NUMERIC(18,2)
+        NOT NULL DEFAULT 0,
+
+    ps_utilization NUMERIC(18,2)
+        NOT NULL DEFAULT 0,
+
+    mooe_utilization NUMERIC(18,2)
+        NOT NULL DEFAULT 0,
+
+    co_utilization NUMERIC(18,2)
+        NOT NULL DEFAULT 0,
+
     wfp_source VARCHAR(250),
+
     wfp_source_code VARCHAR(100),
+
     dv_payroll_no VARCHAR(100),
-    disbursement_amount NUMERIC(18,2) NOT NULL DEFAULT 0,
-    running_balance NUMERIC(18,2) NOT NULL DEFAULT 0,
+
+    disbursement_amount NUMERIC(18,2)
+        NOT NULL DEFAULT 0,
+
+    running_balance NUMERIC(18,2)
+        NOT NULL DEFAULT 0,
+
     remarks TEXT,
-    unpaid_utilization NUMERIC(18,2) NOT NULL DEFAULT 0,
+
+    unpaid_utilization NUMERIC(18,2)
+        NOT NULL DEFAULT 0,
+
     po_no VARCHAR(100),
+
     po_status VARCHAR(50),
-    created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
-    updated_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+
+    created_by INTEGER
+        REFERENCES users(id)
+        ON DELETE SET NULL,
+
+    updated_by INTEGER
+        REFERENCES users(id)
+        ON DELETE SET NULL,
+
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -505,46 +583,120 @@ CREATE TABLE IF NOT EXISTS rbud_entries (
 
 CREATE TABLE IF NOT EXISTS raod_entries (
     id SERIAL PRIMARY KEY,
+
     registry_no VARCHAR(100) UNIQUE NOT NULL,
+
     entry_date DATE,
-    fund_cluster_id INTEGER REFERENCES fund_clusters(id) ON DELETE SET NULL,
-    fund_source_id INTEGER REFERENCES fund_sources(id) ON DELETE SET NULL,
-    campus_id INTEGER REFERENCES campuses(id) ON DELETE SET NULL,
+
+    fund_cluster_id INTEGER
+        REFERENCES fund_clusters(id)
+        ON DELETE SET NULL,
+
+    fund_source_id INTEGER
+        REFERENCES fund_sources(id)
+        ON DELETE SET NULL,
+
+    campus_id INTEGER
+        REFERENCES campuses(id)
+        ON DELETE SET NULL,
+
     ors_serial_no VARCHAR(100),
+
     serial_no_transferred VARCHAR(100),
+
     payee VARCHAR(250),
+
     particulars TEXT,
-    responsibility_center_id INTEGER REFERENCES responsibility_centers(id) ON DELETE SET NULL,
-    pap_id INTEGER REFERENCES pap(id) ON DELETE SET NULL,
-    uacs_code_id INTEGER REFERENCES uacs_codes(id) ON DELETE SET NULL,
+
+    responsibility_center_id INTEGER
+        REFERENCES responsibility_centers(id)
+        ON DELETE SET NULL,
+
+    pap_id INTEGER
+        REFERENCES pap(id)
+        ON DELETE SET NULL,
+
+    uacs_code_id INTEGER
+        REFERENCES uacs_codes(id)
+        ON DELETE SET NULL,
+
     ref_no VARCHAR(100),
-    allotment_class_id INTEGER REFERENCES allotment_classes(id) ON DELETE SET NULL,
+
+    allotment_class_id INTEGER
+        REFERENCES allotment_classes(id)
+        ON DELETE SET NULL,
+
     uacs_funding_source_code VARCHAR(100),
+
     fiscal_year INTEGER NOT NULL,
-    month INTEGER CHECK (month BETWEEN 1 AND 12),
+
+    month INTEGER
+        CHECK (month BETWEEN 1 AND 12),
+
     series VARCHAR(50),
+
     series2 VARCHAR(50),
-    quarter INTEGER CHECK (quarter BETWEEN 1 AND 4),
-    object_expenditure_id INTEGER REFERENCES object_expenditures(id) ON DELETE SET NULL,
-    mfo_id INTEGER REFERENCES mfo(id) ON DELETE SET NULL,
-    old_uacs_code_id INTEGER REFERENCES uacs_codes(id) ON DELETE SET NULL,
+
+    quarter INTEGER
+        CHECK (quarter BETWEEN 1 AND 4),
+
+    object_expenditure_id INTEGER
+        REFERENCES object_expenditures(id)
+        ON DELETE SET NULL,
+
+    mfo_id INTEGER
+        REFERENCES mfo(id)
+        ON DELETE SET NULL,
+
+    old_uacs_code_id INTEGER
+        REFERENCES uacs_codes(id)
+        ON DELETE SET NULL,
+
     account_title VARCHAR(250),
-    obligation_amount NUMERIC(18,2) NOT NULL DEFAULT 0,
-    ps_obligation NUMERIC(18,2) NOT NULL DEFAULT 0,
-    mooe_obligation NUMERIC(18,2) NOT NULL DEFAULT 0,
-    co_obligation NUMERIC(18,2) NOT NULL DEFAULT 0,
+
+    obligation_amount NUMERIC(18,2)
+        NOT NULL DEFAULT 0,
+
+    ps_obligation NUMERIC(18,2)
+        NOT NULL DEFAULT 0,
+
+    mooe_obligation NUMERIC(18,2)
+        NOT NULL DEFAULT 0,
+
+    co_obligation NUMERIC(18,2)
+        NOT NULL DEFAULT 0,
+
     wfp_source VARCHAR(250),
+
     wfp_source_code VARCHAR(100),
+
     dv_payroll_no VARCHAR(100),
-    disbursement_amount NUMERIC(18,2) NOT NULL DEFAULT 0,
-    running_balance NUMERIC(18,2) NOT NULL DEFAULT 0,
+
+    disbursement_amount NUMERIC(18,2)
+        NOT NULL DEFAULT 0,
+
+    running_balance NUMERIC(18,2)
+        NOT NULL DEFAULT 0,
+
     remarks TEXT,
-    unpaid_obligation NUMERIC(18,2) NOT NULL DEFAULT 0,
+
+    unpaid_obligation NUMERIC(18,2)
+        NOT NULL DEFAULT 0,
+
     po_no VARCHAR(100),
+
     po_status VARCHAR(50),
-    created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
-    updated_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+
+    created_by INTEGER
+        REFERENCES users(id)
+        ON DELETE SET NULL,
+
+    updated_by INTEGER
+        REFERENCES users(id)
+        ON DELETE SET NULL,
+
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -555,51 +707,127 @@ CREATE TABLE IF NOT EXISTS raod_entries (
 
 CREATE TABLE IF NOT EXISTS wfp_balances (
     id SERIAL PRIMARY KEY,
+
     fiscal_year INTEGER NOT NULL,
-    fund_cluster_id INTEGER REFERENCES fund_clusters(id) ON DELETE SET NULL,
-    fund_source_id INTEGER REFERENCES fund_sources(id) ON DELETE SET NULL,
-    campus_id INTEGER REFERENCES campuses(id) ON DELETE SET NULL,
+
+    fund_cluster_id INTEGER
+        REFERENCES fund_clusters(id)
+        ON DELETE SET NULL,
+
+    fund_source_id INTEGER
+        REFERENCES fund_sources(id)
+        ON DELETE SET NULL,
+
+    campus_id INTEGER
+        REFERENCES campuses(id)
+        ON DELETE SET NULL,
+
     fund_code VARCHAR(150),
-    responsibility_center_id INTEGER REFERENCES responsibility_centers(id) ON DELETE SET NULL,
+
+    responsibility_center_id INTEGER
+        REFERENCES responsibility_centers(id)
+        ON DELETE SET NULL,
+
     rc VARCHAR(100),
-    wfp_source_id INTEGER REFERENCES wfp_sources(id) ON DELETE SET NULL,
+
+    wfp_source_id INTEGER
+        REFERENCES wfp_sources(id)
+        ON DELETE SET NULL,
+
     wfp_source VARCHAR(250),
+
     wfp_description TEXT,
+
     source_code VARCHAR(100),
 
-    beginning_balance NUMERIC(18,2) NOT NULL DEFAULT 0,
-    approved_budget NUMERIC(18,2) NOT NULL DEFAULT 0,
-    actual_2nd_sem_2024_2025 NUMERIC(18,2) NOT NULL DEFAULT 0,
-    actual_1st_sem_2025_2026 NUMERIC(18,2) NOT NULL DEFAULT 0,
-    actual_unifast NUMERIC(18,2) NOT NULL DEFAULT 0,
+    beginning_balance NUMERIC(18,2)
+        NOT NULL DEFAULT 0,
 
-    beg_bal_year1 NUMERIC(18,2) NOT NULL DEFAULT 0,
-    year1_amount NUMERIC(18,2) NOT NULL DEFAULT 0,
-    utilization_year1 NUMERIC(18,2) NOT NULL DEFAULT 0,
-    unutilized_year1 NUMERIC(18,2) NOT NULL DEFAULT 0,
-    year2_amount NUMERIC(18,2) NOT NULL DEFAULT 0,
-    total_amount NUMERIC(18,2) NOT NULL DEFAULT 0,
-    utilization_year2 NUMERIC(18,2) NOT NULL DEFAULT 0,
-    unutilized_year2 NUMERIC(18,2) NOT NULL DEFAULT 0,
-    disbursement_year1 NUMERIC(18,2) NOT NULL DEFAULT 0,
-    unpaid_utilization_year1 NUMERIC(18,2) NOT NULL DEFAULT 0,
+    approved_budget NUMERIC(18,2)
+        NOT NULL DEFAULT 0,
 
-    gaa NUMERIC(18,2) NOT NULL DEFAULT 0,
-    adjustments NUMERIC(18,2) NOT NULL DEFAULT 0,
-    adjusted_appropriation NUMERIC(18,2) NOT NULL DEFAULT 0,
-    nca_received NUMERIC(18,2) NOT NULL DEFAULT 0,
-    allotment_received NUMERIC(18,2) NOT NULL DEFAULT 0,
-    obligation NUMERIC(18,2) NOT NULL DEFAULT 0,
-    unobligated_appropriation NUMERIC(18,2) NOT NULL DEFAULT 0,
-    unobligated_allotment NUMERIC(18,2) NOT NULL DEFAULT 0,
-    disbursement NUMERIC(18,2) NOT NULL DEFAULT 0,
-    unpaid_obligation NUMERIC(18,2) NOT NULL DEFAULT 0,
+    actual_2nd_sem_2024_2025 NUMERIC(18,2)
+        NOT NULL DEFAULT 0,
 
-    utilization NUMERIC(18,2) NOT NULL DEFAULT 0,
-    unutilized_balance NUMERIC(18,2) NOT NULL DEFAULT 0,
-    unpaid_utilization NUMERIC(18,2) NOT NULL DEFAULT 0,
+    actual_1st_sem_2025_2026 NUMERIC(18,2)
+        NOT NULL DEFAULT 0,
+
+    actual_unifast NUMERIC(18,2)
+        NOT NULL DEFAULT 0,
+
+    beg_bal_year1 NUMERIC(18,2)
+        NOT NULL DEFAULT 0,
+
+    year1_amount NUMERIC(18,2)
+        NOT NULL DEFAULT 0,
+
+    utilization_year1 NUMERIC(18,2)
+        NOT NULL DEFAULT 0,
+
+    unutilized_year1 NUMERIC(18,2)
+        NOT NULL DEFAULT 0,
+
+    year2_amount NUMERIC(18,2)
+        NOT NULL DEFAULT 0,
+
+    total_amount NUMERIC(18,2)
+        NOT NULL DEFAULT 0,
+
+    utilization_year2 NUMERIC(18,2)
+        NOT NULL DEFAULT 0,
+
+    unutilized_year2 NUMERIC(18,2)
+        NOT NULL DEFAULT 0,
+
+    disbursement_year1 NUMERIC(18,2)
+        NOT NULL DEFAULT 0,
+
+    unpaid_utilization_year1 NUMERIC(18,2)
+        NOT NULL DEFAULT 0,
+
+    gaa NUMERIC(18,2)
+        NOT NULL DEFAULT 0,
+
+    adjustments NUMERIC(18,2)
+        NOT NULL DEFAULT 0,
+
+    adjusted_appropriation NUMERIC(18,2)
+        NOT NULL DEFAULT 0,
+
+    nca_received NUMERIC(18,2)
+        NOT NULL DEFAULT 0,
+
+    allotment_received NUMERIC(18,2)
+        NOT NULL DEFAULT 0,
+
+    obligation NUMERIC(18,2)
+        NOT NULL DEFAULT 0,
+
+    unobligated_appropriation NUMERIC(18,2)
+        NOT NULL DEFAULT 0,
+
+    unobligated_allotment NUMERIC(18,2)
+        NOT NULL DEFAULT 0,
+
+    disbursement NUMERIC(18,2)
+        NOT NULL DEFAULT 0,
+
+    unpaid_obligation NUMERIC(18,2)
+        NOT NULL DEFAULT 0,
+
+    utilization NUMERIC(18,2)
+        NOT NULL DEFAULT 0,
+
+    unutilized_balance NUMERIC(18,2)
+        NOT NULL DEFAULT 0,
+
+    unpaid_utilization NUMERIC(18,2)
+        NOT NULL DEFAULT 0,
+
     remarks TEXT,
+
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -933,21 +1161,131 @@ CREATE TABLE IF NOT EXISTS allocation_activities (
 
 
 -- ============================================================
--- 18. INDEXES
+-- 18. BUDGET PROPOSALS
 -- ============================================================
 
--- Fund Sources
+CREATE TABLE IF NOT EXISTS budget_proposals (
+    proposal_id SERIAL PRIMARY KEY,
+
+    proposal_no VARCHAR(50) UNIQUE,
+
+    fiscal_year INTEGER NOT NULL,
+
+    proposal_title VARCHAR(255) NOT NULL,
+
+    department_unit VARCHAR(255) NOT NULL,
+
+    fund_source VARCHAR(255),
+
+    category VARCHAR(100),
+
+    program_project_activity TEXT,
+
+    requested_amount NUMERIC(18,2)
+        NOT NULL DEFAULT 0,
+
+    justification TEXT,
+
+    expected_outputs TEXT,
+
+    supporting_documents TEXT,
+
+    status VARCHAR(30)
+        NOT NULL DEFAULT 'Draft',
+
+    submitted_at TIMESTAMP WITHOUT TIME ZONE,
+
+    reviewed_at TIMESTAMP WITHOUT TIME ZONE,
+
+    endorsed_at TIMESTAMP WITHOUT TIME ZONE,
+
+    approved_at TIMESTAMP WITHOUT TIME ZONE,
+
+    returned_at TIMESTAMP WITHOUT TIME ZONE,
+
+    rejection_reason TEXT,
+
+    remarks TEXT,
+
+    created_by INTEGER
+        REFERENCES users(id)
+        ON DELETE SET NULL,
+
+    reviewed_by INTEGER
+        REFERENCES users(id)
+        ON DELETE SET NULL,
+
+    endorsed_by INTEGER
+        REFERENCES users(id)
+        ON DELETE SET NULL,
+
+    approved_by INTEGER
+        REFERENCES users(id)
+        ON DELETE SET NULL,
+
+    created_at TIMESTAMP WITHOUT TIME ZONE
+        DEFAULT CURRENT_TIMESTAMP,
+
+    updated_at TIMESTAMP WITHOUT TIME ZONE
+        DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT budget_proposals_status_check
+        CHECK (
+            status IN (
+                'Draft',
+                'Submitted',
+                'Under Review',
+                'For Revision',
+                'Endorsed',
+                'Approved',
+                'Rejected'
+            )
+        ),
+
+    CONSTRAINT budget_proposals_amount_check
+        CHECK (requested_amount >= 0)
+);
+
+
+-- ============================================================
+-- 19. INDEXES
+-- ============================================================
+
+
+-- ------------------------------------------------------------
+-- USERS
+-- ------------------------------------------------------------
+
+CREATE INDEX IF NOT EXISTS idx_users_role
+ON users(role);
+
+CREATE INDEX IF NOT EXISTS idx_users_status
+ON users(status);
+
+
+-- ------------------------------------------------------------
+-- FUND SOURCES
+-- ------------------------------------------------------------
+
 CREATE INDEX IF NOT EXISTS idx_fund_sources_code
 ON fund_sources(code);
 
--- Fund Clusters
+
+-- ------------------------------------------------------------
+-- FUND CLUSTERS
+-- ------------------------------------------------------------
+
 CREATE INDEX IF NOT EXISTS idx_fund_clusters_code
 ON fund_clusters(code);
 
 CREATE INDEX IF NOT EXISTS idx_fund_clusters_source
 ON fund_clusters(fund_source_id);
 
--- Budget
+
+-- ------------------------------------------------------------
+-- BUDGET ITEMS
+-- ------------------------------------------------------------
+
 CREATE INDEX IF NOT EXISTS idx_budget_items_year
 ON budget_items(fiscal_year);
 
@@ -960,7 +1298,11 @@ ON budget_items(fund_source_id);
 CREATE INDEX IF NOT EXISTS idx_budget_items_campus
 ON budget_items(campus_id);
 
--- Fund Allocations
+
+-- ------------------------------------------------------------
+-- FUND ALLOCATIONS
+-- ------------------------------------------------------------
+
 CREATE INDEX IF NOT EXISTS idx_fund_allocations_year
 ON fund_allocations(fiscal_year);
 
@@ -970,7 +1312,11 @@ ON fund_allocations(fund_source_id);
 CREATE INDEX IF NOT EXISTS idx_fund_allocations_fund_cluster
 ON fund_allocations(fund_cluster_id);
 
+
+-- ------------------------------------------------------------
 -- RBUD
+-- ------------------------------------------------------------
+
 CREATE INDEX IF NOT EXISTS idx_rbud_year
 ON rbud_entries(fiscal_year);
 
@@ -992,7 +1338,14 @@ ON rbud_entries(burs_serial_no);
 CREATE INDEX IF NOT EXISTS idx_rbud_uacs
 ON rbud_entries(uacs_code_id);
 
+CREATE INDEX IF NOT EXISTS idx_rbud_fund_code
+ON rbud_entries(fund_source_id);
+
+
+-- ------------------------------------------------------------
 -- RAOD
+-- ------------------------------------------------------------
+
 CREATE INDEX IF NOT EXISTS idx_raod_year
 ON raod_entries(fiscal_year);
 
@@ -1014,7 +1367,14 @@ ON raod_entries(ors_serial_no);
 CREATE INDEX IF NOT EXISTS idx_raod_uacs
 ON raod_entries(uacs_code_id);
 
+CREATE INDEX IF NOT EXISTS idx_raod_fund_code
+ON raod_entries(fund_source_id);
+
+
+-- ------------------------------------------------------------
 -- WFP
+-- ------------------------------------------------------------
+
 CREATE INDEX IF NOT EXISTS idx_wfp_year
 ON wfp_balances(fiscal_year);
 
@@ -1024,52 +1384,74 @@ ON wfp_balances(fund_cluster_id);
 CREATE INDEX IF NOT EXISTS idx_wfp_fund_source
 ON wfp_balances(fund_source_id);
 
--- Notifications
+CREATE INDEX IF NOT EXISTS idx_wfp_fiscal_year
+ON wfp_balances(fiscal_year);
+
+CREATE INDEX IF NOT EXISTS idx_wfp_fund_code
+ON wfp_balances(fund_code);
+
+CREATE INDEX IF NOT EXISTS idx_wfp_rc
+ON wfp_balances(rc);
+
+
+-- ------------------------------------------------------------
+-- NOTIFICATIONS
+-- ------------------------------------------------------------
+
 CREATE INDEX IF NOT EXISTS idx_notifications_user
 ON notifications(user_id);
 
 CREATE INDEX IF NOT EXISTS idx_notifications_read
 ON notifications(is_read);
 
--- Audit
+
+-- ------------------------------------------------------------
+-- AUDIT
+-- ------------------------------------------------------------
+
 CREATE INDEX IF NOT EXISTS idx_audit_user
 ON audit_log(user_id);
 
 CREATE INDEX IF NOT EXISTS idx_audit_table
 ON audit_log(table_name);
 
--- Users
-CREATE INDEX IF NOT EXISTS idx_users_role
-ON users(role);
 
-CREATE INDEX IF NOT EXISTS idx_users_status
-ON users(status);
+-- ------------------------------------------------------------
+-- BUDGET PROPOSALS
+-- ------------------------------------------------------------
 
+CREATE INDEX IF NOT EXISTS idx_budget_proposals_fiscal_year
+ON budget_proposals(fiscal_year);
 
+CREATE INDEX IF NOT EXISTS idx_budget_proposals_status
+ON budget_proposals(status);
 
--- Excel-aligned WFP / registry indexes
-CREATE INDEX IF NOT EXISTS idx_rbud_fund_code ON rbud_entries(fund_source_id);
-CREATE INDEX IF NOT EXISTS idx_raod_fund_code ON raod_entries(fund_source_id);
-CREATE INDEX IF NOT EXISTS idx_wfp_fiscal_year ON wfp_balances(fiscal_year);
-CREATE INDEX IF NOT EXISTS idx_wfp_fund_code ON wfp_balances(fund_code);
-CREATE INDEX IF NOT EXISTS idx_wfp_rc ON wfp_balances(rc);
+CREATE INDEX IF NOT EXISTS idx_budget_proposals_department
+ON budget_proposals(department_unit);
+
+CREATE INDEX IF NOT EXISTS idx_budget_proposals_created_at
+ON budget_proposals(created_at DESC);
+
 
 -- ============================================================
--- 19. UPDATED_AT TRIGGER FUNCTION
+-- 20. UPDATED_AT TRIGGER FUNCTION
 -- ============================================================
 
 CREATE OR REPLACE FUNCTION update_updated_at_column()
-RETURNS TRIGGER AS $$
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
 BEGIN
     NEW.updated_at = CURRENT_TIMESTAMP;
     RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
 
 -- ============================================================
--- 20. UPDATED_AT TRIGGERS
+-- 21. UPDATED_AT TRIGGERS
 -- ============================================================
+
 
 DROP TRIGGER IF EXISTS trigger_update_users
 ON users;
@@ -1234,7 +1616,83 @@ EXECUTE FUNCTION update_updated_at_column();
 
 
 -- ============================================================
--- 21. DASHBOARD VIEW - RBUD SUMMARY
+-- 22. BUDGET PROPOSAL NUMBER FUNCTION
+-- Example:
+-- BP-2026-00001
+-- ============================================================
+
+CREATE OR REPLACE FUNCTION generate_budget_proposal_no()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    next_number INTEGER;
+BEGIN
+
+    IF NEW.proposal_no IS NULL
+       OR TRIM(NEW.proposal_no) = '' THEN
+
+        SELECT COUNT(*) + 1
+        INTO next_number
+        FROM budget_proposals
+        WHERE fiscal_year = NEW.fiscal_year;
+
+        NEW.proposal_no :=
+            'BP-' ||
+            NEW.fiscal_year ||
+            '-' ||
+            LPAD(next_number::TEXT, 5, '0');
+
+    END IF;
+
+    RETURN NEW;
+
+END;
+$$;
+
+
+DROP TRIGGER IF EXISTS trg_generate_budget_proposal_no
+ON budget_proposals;
+
+
+CREATE TRIGGER trg_generate_budget_proposal_no
+BEFORE INSERT
+ON budget_proposals
+FOR EACH ROW
+EXECUTE FUNCTION generate_budget_proposal_no();
+
+
+-- ============================================================
+-- 23. BUDGET PROPOSAL UPDATED_AT
+-- ============================================================
+
+CREATE OR REPLACE FUNCTION update_budget_proposal_timestamp()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+BEGIN
+
+    NEW.updated_at = CURRENT_TIMESTAMP;
+
+    RETURN NEW;
+
+END;
+$$;
+
+
+DROP TRIGGER IF EXISTS trg_budget_proposals_updated_at
+ON budget_proposals;
+
+
+CREATE TRIGGER trg_budget_proposals_updated_at
+BEFORE UPDATE
+ON budget_proposals
+FOR EACH ROW
+EXECUTE FUNCTION update_budget_proposal_timestamp();
+
+
+-- ============================================================
+-- 24. DASHBOARD VIEW - RBUD SUMMARY
 -- ============================================================
 
 CREATE OR REPLACE VIEW v_rbud_summary AS
@@ -1282,7 +1740,12 @@ GROUP BY
 
 
 -- ============================================================
--- 22. DASHBOARD VIEW - RAOD SUMMARY
+-- 25. DASHBOARD VIEW - RAOD SUMMARY
+-- ============================================================
+-- NOTE:
+-- raod_entries does NOT contain allotment_amount.
+-- Therefore this view summarizes the actual RAOD fields:
+-- obligation_amount and disbursement_amount.
 -- ============================================================
 
 CREATE OR REPLACE VIEW v_raod_summary AS
@@ -1298,11 +1761,6 @@ SELECT
     COUNT(r.id) AS total_records,
 
     COALESCE(
-        SUM(r.allotment_amount),
-        0
-    ) AS total_allotment,
-
-    COALESCE(
         SUM(r.obligation_amount),
         0
     ) AS total_obligation,
@@ -1313,16 +1771,14 @@ SELECT
     ) AS total_disbursement,
 
     COALESCE(
-        SUM(r.allotment_amount)
-        - SUM(r.obligation_amount),
+        SUM(r.unpaid_obligation),
         0
-    ) AS unobligated_balance,
+    ) AS total_unpaid_obligation,
 
     COALESCE(
-        SUM(r.obligation_amount)
-        - SUM(r.disbursement_amount),
+        SUM(r.running_balance),
         0
-    ) AS undisbursed_balance
+    ) AS total_balance
 
 FROM raod_entries r
 
@@ -1337,7 +1793,7 @@ GROUP BY
 
 
 -- ============================================================
--- 23. DASHBOARD VIEW - BUDGET SUMMARY
+-- 26. DASHBOARD VIEW - BUDGET SUMMARY
 -- ============================================================
 
 CREATE OR REPLACE VIEW v_budget_summary AS
@@ -1372,10 +1828,10 @@ GROUP BY fiscal_year;
 
 
 -- ============================================================
--- 24. DEPARTMENT COMPATIBILITY VIEW
+-- 27. DEPARTMENT COMPATIBILITY VIEW
 -- ============================================================
--- Allows the frontend to retrieve departments while the
--- actual master data is stored in responsibility_centers.
+-- Allows frontend to retrieve departments while the actual
+-- master data is stored in responsibility_centers.
 -- ============================================================
 
 CREATE OR REPLACE VIEW departments AS
@@ -1392,7 +1848,7 @@ WHERE is_active = TRUE;
 
 
 -- ============================================================
--- 25. INITIAL SYSTEM SETTINGS
+-- 28. INITIAL SYSTEM SETTINGS
 -- ============================================================
 
 INSERT INTO settings (
@@ -1421,7 +1877,7 @@ WHERE NOT EXISTS (
 
 
 -- ============================================================
--- 26. INITIAL FISCAL YEAR
+-- 29. INITIAL FISCAL YEAR
 -- ============================================================
 
 INSERT INTO fiscal_years (
@@ -1441,177 +1897,5 @@ WHERE NOT EXISTS (
 
 
 -- ============================================================
--- BMAS - BUDGET PROPOSALS
--- ============================================================
-
-CREATE TABLE IF NOT EXISTS budget_proposals (
-    proposal_id SERIAL PRIMARY KEY,
-
-    proposal_no VARCHAR(50) UNIQUE,
-
-    fiscal_year INTEGER NOT NULL,
-
-    proposal_title VARCHAR(255) NOT NULL,
-
-    department_unit VARCHAR(255) NOT NULL,
-
-    fund_source VARCHAR(255),
-
-    category VARCHAR(100),
-
-    program_project_activity TEXT,
-
-    requested_amount NUMERIC(18,2) NOT NULL DEFAULT 0,
-
-    justification TEXT,
-
-    expected_outputs TEXT,
-
-    supporting_documents TEXT,
-
-    status VARCHAR(30) NOT NULL DEFAULT 'Draft',
-
-    submitted_at TIMESTAMP WITHOUT TIME ZONE,
-
-    reviewed_at TIMESTAMP WITHOUT TIME ZONE,
-
-    endorsed_at TIMESTAMP WITHOUT TIME ZONE,
-
-    approved_at TIMESTAMP WITHOUT TIME ZONE,
-
-    returned_at TIMESTAMP WITHOUT TIME ZONE,
-
-    rejection_reason TEXT,
-
-    remarks TEXT,
-
-    created_by INTEGER,
-
-    reviewed_by INTEGER,
-
-    endorsed_by INTEGER,
-
-    approved_by INTEGER,
-
-    created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-
-    updated_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT budget_proposals_status_check
-        CHECK (
-            status IN (
-                'Draft',
-                'Submitted',
-                'Under Review',
-                'For Revision',
-                'Endorsed',
-                'Approved',
-                'Rejected'
-            )
-        ),
-
-    CONSTRAINT budget_proposals_amount_check
-        CHECK (requested_amount >= 0)
-);
-
-
--- ============================================================
--- INDEXES
--- ============================================================
-
-CREATE INDEX IF NOT EXISTS idx_budget_proposals_fiscal_year
-    ON budget_proposals(fiscal_year);
-
-CREATE INDEX IF NOT EXISTS idx_budget_proposals_status
-    ON budget_proposals(status);
-
-CREATE INDEX IF NOT EXISTS idx_budget_proposals_department
-    ON budget_proposals(department_unit);
-
-CREATE INDEX IF NOT EXISTS idx_budget_proposals_created_at
-    ON budget_proposals(created_at DESC);
-
-
--- ============================================================
--- AUTO PROPOSAL NUMBER
--- Example:
--- BP-2026-00001
--- ============================================================
-
-CREATE OR REPLACE FUNCTION generate_budget_proposal_no()
-RETURNS TRIGGER
-LANGUAGE plpgsql
-AS $$
-DECLARE
-    next_number INTEGER;
-BEGIN
-
-    IF NEW.proposal_no IS NULL OR TRIM(NEW.proposal_no) = '' THEN
-
-        SELECT COUNT(*) + 1
-        INTO next_number
-        FROM budget_proposals
-        WHERE fiscal_year = NEW.fiscal_year;
-
-        NEW.proposal_no :=
-            'BP-' ||
-            NEW.fiscal_year ||
-            '-' ||
-            LPAD(next_number::TEXT, 5, '0');
-
-    END IF;
-
-    RETURN NEW;
-
-END;
-$$;
-
-
-DROP TRIGGER IF EXISTS trg_generate_budget_proposal_no
-ON budget_proposals;
-
-
-CREATE TRIGGER trg_generate_budget_proposal_no
-
-BEFORE INSERT
-ON budget_proposals
-
-FOR EACH ROW
-
-EXECUTE FUNCTION generate_budget_proposal_no();
-
-
--- ============================================================
--- UPDATED_AT
--- ============================================================
-
-CREATE OR REPLACE FUNCTION update_budget_proposal_timestamp()
-RETURNS TRIGGER
-LANGUAGE plpgsql
-AS $$
-BEGIN
-
-    NEW.updated_at = CURRENT_TIMESTAMP;
-
-    RETURN NEW;
-
-END;
-$$;
-
-
-DROP TRIGGER IF EXISTS trg_budget_proposals_updated_at
-ON budget_proposals;
-
-
-CREATE TRIGGER trg_budget_proposals_updated_at
-
-BEFORE UPDATE
-ON budget_proposals
-
-FOR EACH ROW
-
-EXECUTE FUNCTION update_budget_proposal_timestamp();
-
--- ============================================================
--- END OF BMAS DATABASE SCHEMA
+-- END OF FINAL BMAS DATABASE SCHEMA
 -- ============================================================

@@ -1,4 +1,5 @@
-// frontend/src/components/LoginPage.jsx
+﻿// frontend/src/components/LoginPage.jsx
+import { API_URL } from '../config/api';
 import React, { useState } from 'react';
 import { Lock, User, Eye, EyeOff, ShieldCheck, Activity, PieChart, FileText, Mail, AlertCircle } from 'lucide-react';
 
@@ -29,7 +30,7 @@ export default function LoginPage({ onSwitchToRegister, onLoginSuccess }) {
     setMessage('');
 
     try {
-      const response = await fetch('http://localhost:5000/api/auth/login', {
+      const response = await fetch('${API_URL}/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -80,7 +81,7 @@ export default function LoginPage({ onSwitchToRegister, onLoginSuccess }) {
   return (
     <>
       <div className="h-screen overflow-hidden flex flex-col lg:flex-row bg-gray-100 font-sans">
-        {/* LEFT PANEL – Branding */}
+        {/* LEFT PANEL â€“ Branding */}
         <div 
           className="w-full lg:w-[58%] bg-[#1a237e] text-white p-6 lg:p-10 flex flex-col justify-between items-center relative"
           style={{ backgroundColor: '#1a237e' }}
@@ -103,7 +104,7 @@ export default function LoginPage({ onSwitchToRegister, onLoginSuccess }) {
                 className="w-full h-auto rounded-lg max-h-28 object-cover"
               />
               <p className="text-[10px] text-blue-100 mt-1 font-medium">
-                Visual Insights & Analytics – Graphical overview of university budget utilization
+                Visual Insights & Analytics â€“ Graphical overview of university budget utilization
               </p>
             </div>
           </div>
@@ -140,7 +141,7 @@ export default function LoginPage({ onSwitchToRegister, onLoginSuccess }) {
           </div>
         </div>
 
-        {/* RIGHT PANEL – Login Form */}
+        {/* RIGHT PANEL â€“ Login Form */}
         <div className="w-full lg:w-[42%] bg-gray-50 flex items-center justify-center p-6 lg:p-10 overflow-y-auto">
           <div className="w-full max-w-md bg-white p-8 lg:p-10 rounded-3xl shadow-xl border border-gray-100">
             <div className="text-center mb-8">

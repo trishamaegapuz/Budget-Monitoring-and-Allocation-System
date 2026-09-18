@@ -1,9 +1,10 @@
+﻿import { API_URL } from '../config/api';
 // frontend/src/components/TransactionsView.jsx
 import React, { useState, useEffect } from 'react';
 import Layout from './layout/Layout';
 import { ChevronLeft, ChevronRight, ArrowLeft } from 'lucide-react';
 
-const API_URL = 'http://localhost:5000/api';
+
 
 export default function TransactionsView({ user, onLogout, onNavigate, activePath }) {
   const token = localStorage.getItem('token');
@@ -75,7 +76,7 @@ export default function TransactionsView({ user, onLogout, onNavigate, activePat
                         {tx.type}
                       </span>
                     </td>
-                    <td className="px-5 py-4 text-right font-medium text-gray-800">₱{Number(tx.amount).toLocaleString()}</td>
+                    <td className="px-5 py-4 text-right font-medium text-gray-800">â‚±{Number(tx.amount).toLocaleString()}</td>
                     <td className="px-5 py-4 text-center">
                       <span className={`px-3 py-1 rounded-full text-xs font-medium ${
                         tx.status === 'Approved' ? 'bg-green-100 text-green-700' : 
