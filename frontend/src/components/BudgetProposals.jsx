@@ -2945,7 +2945,7 @@ export default function BudgetProposals({
                   PS
                 </div>
                 <div className="bp-info-value">
-                  ?0.00
+                  ₱0.00
                 </div>
               </div>
 
@@ -2954,7 +2954,7 @@ export default function BudgetProposals({
                   MOOE
                 </div>
                 <div className="bp-info-value">
-                  ?0.00
+                  ₱0.00
                 </div>
               </div>
 
@@ -2963,7 +2963,7 @@ export default function BudgetProposals({
                   CO
                 </div>
                 <div className="bp-info-value">
-                  ?0.00
+                  ₱0.00
                 </div>
               </div>
 
@@ -2972,7 +2972,7 @@ export default function BudgetProposals({
                   Total
                 </div>
                 <div className="bp-info-value">
-                  ?0.00
+                  ₱0.00
                 </div>
               </div>
 

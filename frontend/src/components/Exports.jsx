@@ -303,7 +303,7 @@ const numberValue = (value) => {
 };
 
 const money = (value) =>
-  `?${numberValue(value).toLocaleString('en-US', {
+  `₱${numberValue(value).toLocaleString('en-US', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })}`;

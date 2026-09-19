@@ -311,7 +311,7 @@ export default function UserManagement({ user: currentUser, onLogout, onNavigate
           <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex items-center justify-between">
             <div>
               <span className="text-[10px] font-bold text-gray-400 tracking-wider block uppercase">PERMISSIONS</span>
-              <span className="text-2xl font-extrabold text-gray-900 my-0.5 block">â€”</span>
+              <span className="text-2xl font-extrabold text-gray-900 my-0.5 block">—</span>
               <span className="text-[11px] text-gray-500">System permissions</span>
             </div>
             <div className="w-10 h-10 rounded-full bg-amber-600 flex items-center justify-center text-white shrink-0">

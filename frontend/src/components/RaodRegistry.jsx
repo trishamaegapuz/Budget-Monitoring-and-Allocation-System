@@ -40,7 +40,7 @@ import {
 const FY = 2026;
 const LIMIT = 10;
 const money = (v) =>
-  `?${Number(v || 0).toLocaleString("en-US", {
+  `₱${Number(v || 0).toLocaleString("en-US", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })}`;

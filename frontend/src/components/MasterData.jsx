@@ -1170,7 +1170,7 @@ export default function MasterData({
         item.name ||
         item.account_title ||
         item.full_name ||
-        'â€”'
+        '-'
       );
     };
 
@@ -1179,7 +1179,7 @@ export default function MasterData({
       return (
         item.code ||
         item.username ||
-        'â€”'
+        '-'
       );
     };
 
@@ -1189,7 +1189,7 @@ export default function MasterData({
         item.description ||
         item.account_description ||
         item.revised_description ||
-        'â€”'
+        '-'
       );
     };
 

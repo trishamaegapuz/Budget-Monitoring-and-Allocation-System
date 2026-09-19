@@ -212,7 +212,7 @@ export default function FundSources({
   const formatCurrency = (value) => {
     const amount = Number(value || 0);
 
-    return `?${amount.toLocaleString('en-US', {
+    return `₱${amount.toLocaleString('en-US', {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     })}`;
@@ -222,14 +222,14 @@ export default function FundSources({
     const amount = Number(value || 0);
 
     if (Math.abs(amount) >= 1000000) {
-      return `?${(amount / 1000000).toFixed(1)}M`;
+      return `₱${(amount / 1000000).toFixed(1)}M`;
     }
 
     if (Math.abs(amount) >= 1000) {
-      return `?${(amount / 1000).toFixed(0)}K`;
+      return `₱${(amount / 1000).toFixed(0)}K`;
     }
 
-    return `?${amount.toFixed(0)}`;
+    return `₱${amount.toFixed(0)}`;
   };
 
   /*

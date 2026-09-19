@@ -124,7 +124,7 @@ export default function RbudBudgetAllocation({ user, onLogout, onNavigate, activ
 
   const formatCurrency = (value) => {
     if (value == null || isNaN(value)) return '?0.00';
-    return `?${Number(value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    return `₱${Number(value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   };
 
   const getStatusBadge = (status) => (
