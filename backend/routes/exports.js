@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { Pool } = require('pg');
+
 const PDFDocument = require('pdfkit');
 const ExcelJS = require('exceljs');
 const fs = require('fs');
@@ -11,13 +11,7 @@ const path = require('path');
 const UA_LOGO_PATH = path.resolve(__dirname, '../../frontend/public/UA_logo.jpg');
 const hasUALogo = () => fs.existsSync(UA_LOGO_PATH);
 
-const pool = new Pool({
-  user: process.env.PGUSER || 'postgres',
-  host: process.env.PGHOST || 'localhost',
-  database: process.env.PGDATABASE || 'bmas_db',
-  password: process.env.PGPASSWORD || '12345678',
-  port: Number(process.env.PGPORT || 5432),
-});
+const pool = require("../db");
 
 const REPORTS = [
   { key: 'far-1', name: 'FAR 1', category: 'FAR', type: 'FAR', registry: 'RAOD', description: 'Status of Allotments, Obligations and Balances', sheetName: 'FAR 1 worksheet', formats: ['Excel', 'PDF', 'Print'] },
@@ -465,3 +459,4 @@ router.delete('/:id', async (req, res) => {
 });
 
 module.exports = router;
+

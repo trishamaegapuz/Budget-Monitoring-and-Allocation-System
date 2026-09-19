@@ -4,7 +4,7 @@
 // ============================================================
 
 const express = require("express");
-const { Pool } = require("pg");
+
 const PDFDocument = require("pdfkit");
 const ExcelJS = require("exceljs");
 
@@ -14,13 +14,7 @@ const router = express.Router();
 // DATABASE
 // ============================================================
 
-const pool = new Pool({
-  user: process.env.DB_USER || "postgres",
-  host: process.env.DB_HOST || "localhost",
-  database: process.env.DB_NAME || "bmas_db",
-  password: process.env.DB_PASSWORD || "12345678",
-  port: Number(process.env.DB_PORT || 5432),
-});
+const pool = require("../db");
 
 // ============================================================
 // HELPERS
@@ -2648,3 +2642,4 @@ router.get(
 // ============================================================
 
 module.exports = router;
+
