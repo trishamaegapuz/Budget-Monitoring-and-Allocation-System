@@ -4,17 +4,8 @@
 // RAOD is centered on General Fund / Fund Cluster 101.
 
 const express = require("express");
-const { Pool } = require("pg");
-
 const router = express.Router();
-
-const pool = new Pool({
-  user: process.env.DB_USER || "postgres",
-  host: process.env.DB_HOST || "localhost",
-  database: process.env.DB_NAME || "bmas_db",
-  password: process.env.DB_PASSWORD || "12345678",
-  port: Number(process.env.DB_PORT || 5432),
-});
+const pool = require("../db");
 
 const FY = 2026;
 const GENERAL_FUND_CODE = "101";
@@ -100,7 +91,7 @@ function buildFilters(req, startIndex = 1) {
        OR COALESCE(r.dv_payroll_no,'') ILIKE $${i}
        OR COALESCE(r.account_title,'') ILIKE $${i}
        OR COALESCE(r.po_no,'') ILIKE $${i}
-       OR COALESCE(r.status_of_po,'') ILIKE $${i}
+       OR COALESCE(r.po_status,'') ILIKE $${i}
       OR COALESCE(r.payee,'') ILIKE $${i}
       OR COALESCE(r.particulars,'') ILIKE $${i}
       OR COALESCE(r.ref_no,'') ILIKE $${i}
@@ -150,7 +141,9 @@ function buildFilters(req, startIndex = 1) {
   } else if (type === "disbursements") {
     w.push(`COALESCE(r.disbursement_amount,0) > 0`);
   } else if (type === "balance") {
-    w.push(`COALESCE(r.allotment_amount,0) - COALESCE(r.obligation_amount,0) > 0`);
+    // RAOD entries do not have an allotment_amount column in the actual FY2026 schema.
+    // Balance is therefore not filtered at the entry level here.
+    w.push(`COALESCE(r.unpaid_obligation,0) > 0`);
   }
 
   return { where: w.join(" AND "), params: p, next: i };
@@ -190,8 +183,8 @@ function entrySelect() {
       mfo.code AS mfo_code,
       mfo.name AS mfo_name,
 
-      ws.code AS wfp_source_code,
-      ws.name AS wfp_source_name
+      r.wfp_source AS wfp_source,
+      r.wfp_source_code AS wfp_source_code
     FROM raod_entries r
     LEFT JOIN fund_clusters fc ON fc.id = r.fund_cluster_id
     LEFT JOIN fund_sources fs ON fs.id = r.fund_source_id
@@ -202,7 +195,7 @@ function entrySelect() {
     LEFT JOIN object_expenditures oe ON oe.id = r.object_expenditure_id
     LEFT JOIN allotment_classes ac ON ac.id = r.allotment_class_id
     LEFT JOIN mfo ON mfo.id = r.mfo_id
-    LEFT JOIN wfp_sources ws ON ws.id = r.wfp_source_id
+    
   `;
 }
 
@@ -309,12 +302,8 @@ router.get("/overview", async (req, res) => {
         COUNT(*)::int records,
         COUNT(*) FILTER (WHERE COALESCE(r.obligation_amount,0)>0)::int obligation_count,
         COUNT(*) FILTER (WHERE COALESCE(r.disbursement_amount,0)>0)::int disbursement_count,
-        COALESCE(SUM(r.allotment_amount),0) allotment,
         COALESCE(SUM(r.obligation_amount),0) obligation,
-        COALESCE(SUM(r.disbursement_amount),0) disbursement,
-        COALESCE(SUM(r.ps_amount),0) ps,
-        COALESCE(SUM(r.mooe_amount),0) mooe,
-        COALESCE(SUM(r.co_amount),0) co
+        COALESCE(SUM(r.disbursement_amount),0) disbursement
        FROM raod_entries r
        LEFT JOIN responsibility_centers rc ON rc.id=r.responsibility_center_id
        JOIN fund_clusters fc ON fc.id=r.fund_cluster_id
@@ -389,9 +378,9 @@ router.get("/overview", async (req, res) => {
       total_disbursements: disbursement,
       with_balance: undisbursed > 0 ? 1 : 0,
       general_fund_summary: {
-        ps: n(a.ps) || n(b.ps),
-        mooe: n(a.mooe) || n(b.mooe),
-        co: n(a.co) || n(b.co),
+        ps: n(b.ps),
+        mooe: n(b.mooe),
+        co: n(b.co),
         allotment,
         obligation,
         disbursement,
@@ -443,7 +432,6 @@ router.get("/department-budget", async (req, res) => {
 
     const actual = await pool.query(
       `SELECT COUNT(*)::int records,
-              COALESCE(SUM(allotment_amount),0) allotment,
               COALESCE(SUM(obligation_amount),0) obligation,
               COALESCE(SUM(disbursement_amount),0) disbursement
        FROM raod_entries r
@@ -542,12 +530,8 @@ router.get("/module/:view", async (req, res) => {
     if (view === "overview") {
       const overview = await pool.query(
         `SELECT
-          COALESCE(SUM(r.allotment_amount),0) allotment,
           COALESCE(SUM(r.obligation_amount),0) obligation,
           COALESCE(SUM(r.disbursement_amount),0) disbursement,
-          COALESCE(SUM(r.ps_amount),0) ps,
-          COALESCE(SUM(r.mooe_amount),0) mooe,
-          COALESCE(SUM(r.co_amount),0) co,
           COUNT(*)::int records
          FROM raod_entries r
          WHERE r.fiscal_year=$1 AND r.fund_cluster_id=$2`,
@@ -559,12 +543,8 @@ router.get("/module/:view", async (req, res) => {
     if (view === "allotment-obligation" || view === "monitoring") {
       const result = await pool.query(
         `SELECT
-          COALESCE(SUM(allotment_amount),0) allotment,
           COALESCE(SUM(obligation_amount),0) obligation,
           COALESCE(SUM(disbursement_amount),0) disbursement,
-          COALESCE(SUM(ps_amount),0) ps,
-          COALESCE(SUM(mooe_amount),0) mooe,
-          COALESCE(SUM(co_amount),0) co,
           COUNT(*)::int records
          FROM raod_entries
          WHERE fiscal_year=$1 AND fund_cluster_id=$2`,
@@ -586,12 +566,8 @@ router.get("/module/:view", async (req, res) => {
     if (view === "fund-rc-breakdown") {
       const result = await pool.query(
         `SELECT rc.id,rc.code,rc.name,
-                COALESCE(SUM(r.allotment_amount),0) allotment,
                 COALESCE(SUM(r.obligation_amount),0) obligation,
-                COALESCE(SUM(r.disbursement_amount),0) disbursement,
-                COALESCE(SUM(r.ps_amount),0) ps,
-                COALESCE(SUM(r.mooe_amount),0) mooe,
-                COALESCE(SUM(r.co_amount),0) co
+                COALESCE(SUM(r.disbursement_amount),0) disbursement
          FROM responsibility_centers rc
          LEFT JOIN raod_entries r ON r.responsibility_center_id=rc.id
            AND r.fiscal_year=$1 AND r.fund_cluster_id=$2
@@ -702,8 +678,8 @@ router.post("/departments", async (req, res) => {
  * Obligation, DV/Payroll No., Disbursement, Balances,
  * Unpaid Obligation, PO No., and Status of PO.
  *
- * Legacy columns are retained where the existing application/schema still
- * uses them, but the Excel field names are now first-class API fields.
+ * Only columns that exist in the actual FY2026 raod_entries table are written.
+ * Budget/allotment values are sourced from budget_items in summary endpoints.
  */
 const columns = [
   "registry_no","entry_date","fund_cluster_id","fund_source_id","campus_id",
@@ -712,24 +688,19 @@ const columns = [
   "allotment_class_id","uacs_funding_source_code","fiscal_year","month",
   "series","series2","quarter","object_expenditure_id","mfo_id",
   "old_uacs_code_id","account_title",
-  "obligation_amount","ps_amount","mooe_amount","co_amount",
-  "wfp_source_id","wfp_source_code","dv_payroll_no",
-  "disbursement_amount","unpaid_obligation",
-  "po_no","status_of_po","remarks",
-  "created_by","updated_by",
-  /* legacy compatibility fields */
-  "allotment_amount","dv_no","burs_serial_no"
+  "obligation_amount","wfp_source","wfp_source_code","dv_payroll_no",
+  "disbursement_amount","running_balance","remarks","unpaid_obligation",
+  "po_no","po_status","created_by","updated_by"
 ];
 
 const idFields = [
   "fund_cluster_id","fund_source_id","campus_id","responsibility_center_id",
-  "pap_id","uacs_code_id","allotment_class_id","wfp_source_id",
+  "pap_id","uacs_code_id","allotment_class_id",
   "object_expenditure_id","mfo_id","old_uacs_code_id","quarter","month"
 ];
 
 const moneyFields = [
-  "allotment_amount","obligation_amount","disbursement_amount",
-  "ps_amount","mooe_amount","co_amount","unpaid_obligation"
+  "obligation_amount","disbursement_amount","running_balance","unpaid_obligation"
 ];
 
 function payload(body, userId) {
@@ -750,11 +721,6 @@ function payload(body, userId) {
     );
   }
 
-  // Keep the legacy columns synchronized when callers still send them.
-  if (p.allotment_amount === null) {
-    p.allotment_amount = n(body.allotment_amount, 0);
-  }
-  p.dv_no = p.dv_no ?? p.dv_payroll_no;
   p.created_by = nullableInt(userId ?? body.created_by);
   p.updated_by = nullableInt(userId ?? body.updated_by ?? body.created_by);
   return p;

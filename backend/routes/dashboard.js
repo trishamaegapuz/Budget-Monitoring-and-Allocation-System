@@ -1,14 +1,7 @@
 const express = require('express');
 const router = express.Router();
-const { Pool } = require('pg');
 
-const pool = new Pool({
-  user: 'postgres',
-  host: 'localhost',
-  database: 'bmas_db',
-  password: '12345678',
-  port: 5432,
-});
+const pool = require('../db');
 
 /*
 ============================================================
@@ -22,14 +15,9 @@ RBUD:
 - Balance            -> Budget - Obligations
 
 RAOD:
-- Allotment          -> raod_entries.allotment_amount
 - Obligations        -> raod_entries.obligation_amount
 - Disbursements      -> raod_entries.disbursement_amount
-
-IMPORTANT:
-RBUD and RAOD remain completely separate.
-This dashboard does NOT depend on a "status" column in
-rbud_entries or raod_entries.
+- Allotment          -> not stored in raod_entries
 ============================================================
 */
 
@@ -99,8 +87,6 @@ router.get('/summary', async (req, res) => {
     ============================================================
     4. RBUD BALANCE
     ============================================================
-
-    Balance = Budget - Obligations
     */
 
     const remainingBalance = Math.max(
@@ -253,11 +239,6 @@ router.get('/summary', async (req, res) => {
       SELECT
 
         COALESCE(
-          SUM(allotment_amount),
-          0
-        ) AS total_allotment,
-
-        COALESCE(
           SUM(obligation_amount),
           0
         ) AS total_obligations,
@@ -274,11 +255,6 @@ router.get('/summary', async (req, res) => {
       [selectedYear]
     );
 
-    const raodAllotment =
-      Number(
-        raodSummaryRes.rows[0]?.total_allotment
-      ) || 0;
-
     const raodObligation =
       Number(
         raodSummaryRes.rows[0]?.total_obligations
@@ -290,25 +266,20 @@ router.get('/summary', async (req, res) => {
       ) || 0;
 
     /*
-    RAOD balance
+    RAOD allotment is not currently stored
+    as a column in raod_entries.
 
-    Allotment - Obligation
+    We return zero rather than using a nonexistent
+    database column or inventing an allotment value.
     */
 
-    const raodUnobligated = Math.max(
-      0,
-      raodAllotment - raodObligation
-    );
+    const raodAllotment = 0;
 
-    const raodObligationRate =
-      raodAllotment > 0
-        ? (raodObligation / raodAllotment) * 100
-        : 0;
+    const raodUnobligated = 0;
 
-    const raodDisbursementRate =
-      raodAllotment > 0
-        ? (raodDisbursement / raodAllotment) * 100
-        : 0;
+    const raodObligationRate = 0;
+
+    const raodDisbursementRate = 0;
 
     /*
     ============================================================
