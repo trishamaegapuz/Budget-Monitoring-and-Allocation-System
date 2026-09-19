@@ -125,8 +125,8 @@ END
 
 const STATUS_CASE = `
 CASE
-  WHEN NULLIF(TRIM(COALESCE(r.status, '')), '') IS NOT NULL
-    THEN TRIM(r.status)
+  WHEN NULLIF(TRIM(COALESCE(r.po_status, '')), '') IS NOT NULL
+    THEN TRIM(r.po_status)
 
   WHEN COALESCE(r.disbursement_amount, 0) > 0
     THEN 'Disbursed'
@@ -475,7 +475,7 @@ router.get("/", async (req, res) => {
         r.running_balance,
         r.unpaid_utilization,
         r.po_no,
-        r.status,
+        r.po_status,
 
         r.burs_serial_no,
         r.dv_payroll_no,
@@ -3508,7 +3508,7 @@ router.get(
             r.running_balance,
             r.unpaid_utilization,
             r.po_no,
-            r.status,
+            r.po_status,
 
             (${STATUS_CASE})
               AS status
