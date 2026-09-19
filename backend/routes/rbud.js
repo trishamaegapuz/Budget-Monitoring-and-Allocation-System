@@ -475,7 +475,7 @@ router.get("/", async (req, res) => {
         r.running_balance,
         r.unpaid_utilization,
         r.po_no,
-        r.status_of_po,
+        r.status,
 
         r.burs_serial_no,
         r.dv_payroll_no,
@@ -2943,7 +2943,7 @@ const RBUD_FIELDS = [
   "remarks",
   "unpaid_utilization",
   "po_no",
-  "status_of_po",
+  "status",
 ];
 
 const ID_FIELDS = [
@@ -3508,7 +3508,7 @@ router.get(
             r.running_balance,
             r.unpaid_utilization,
             r.po_no,
-            r.status_of_po,
+            r.status,
 
             (${STATUS_CASE})
               AS status
@@ -3570,4 +3570,5 @@ router.get(
 */
 
 module.exports = router;
+
 
