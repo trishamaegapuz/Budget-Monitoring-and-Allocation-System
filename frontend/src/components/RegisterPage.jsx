@@ -203,7 +203,7 @@ export default function RegisterPage({ onSwitchToLogin }) {
                 <input
                   type={showPassword ? 'text' : 'password'}
                   className={`w-full pl-10 pr-10 py-2.5 bg-gray-50 border text-sm rounded-xl focus:ring-2 focus:ring-[#1a237e] focus:bg-white focus:outline-none transition ${errors.password ? 'border-red-500' : 'border-gray-200'}`}
-                  placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢"
+                  placeholder="••••••••"
                   value={formData.password}
                   onChange={(e) => {
                     setFormData({ ...formData, password: e.target.value });

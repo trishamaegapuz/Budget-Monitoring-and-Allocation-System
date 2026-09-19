@@ -497,7 +497,7 @@ export default function UserManagement({ user: currentUser, onLogout, onNavigate
                   </button>
                 );
               })}
-              {pagination.totalPages > 5 && <span className="px-1 text-gray-400">â€¦</span>}
+              {pagination.totalPages > 5 && <span className="px-1 text-gray-400">…</span>}
               {pagination.totalPages > 5 && (
                 <button
                   onClick={() => setFilters({ ...filters, page: pagination.totalPages })}
