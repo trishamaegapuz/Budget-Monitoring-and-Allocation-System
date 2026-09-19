@@ -12,7 +12,8 @@ import {
   FileText,
   BarChart2,
   Folder,
-  HelpCircle
+  HelpCircle,
+  Wallet
 } from 'lucide-react';
 
 import {
@@ -304,22 +305,7 @@ export default function Dashboard({
 
 
   // ============================================================
-  // IMPORTANT:
-  //
   // RBUD UTILIZATION RATE
-  //
-  // Utilization = Obligations / Total Budget Ã— 100
-  //
-  // Example:
-  //
-  // 332,783.79
-  // Ã·
-  // 20,015,000,000
-  // Ã— 100
-  //
-  // = 0.0016627%
-  //
-  // Displayed as 0.0017%
   // ============================================================
 
   const utilizationRate =
@@ -523,19 +509,6 @@ export default function Dashboard({
 
   // ============================================================
   // RBUD UTILIZATION DONUT
-  //
-  // IMPORTANT:
-  //
-  // Do NOT put both obligations and disbursements
-  // plus balance together because that can double-count.
-  //
-  // The donut represents:
-  //
-  // Obligations
-  // +
-  // Unobligated Balance
-  //
-  // = Total Budget
   // ============================================================
 
   const utilizationData = [
@@ -670,8 +643,8 @@ export default function Dashboard({
 
         <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-4 flex items-center gap-4">
 
-          <div className="w-12 h-12 rounded-full bg-blue-600 flex items-center justify-center text-white text-xl font-bold flex-shrink-0">
-            \u20B1
+          <div className="w-12 h-12 rounded-full bg-blue-600 flex items-center justify-center text-white flex-shrink-0">
+            <Wallet className="w-6 h-6" />
           </div>
 
           <div>
@@ -1917,6 +1890,4 @@ export default function Dashboard({
     </Layout>
 
   );
-
 }
-
