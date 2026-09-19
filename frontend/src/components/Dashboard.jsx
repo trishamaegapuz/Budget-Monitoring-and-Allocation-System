@@ -160,7 +160,7 @@ export default function Dashboard({
 
     const number = toNumber(value);
 
-    return `â‚±${number.toLocaleString(
+    return `\u20B1${number.toLocaleString(
       'en-US',
       {
         minimumFractionDigits: 2,
@@ -181,7 +181,7 @@ export default function Dashboard({
 
     if (number >= 1000000000) {
 
-      return `â‚±${(
+      return `\u20B1${(
         number / 1000000000
       ).toFixed(2)}B`;
 
@@ -189,7 +189,7 @@ export default function Dashboard({
 
     if (number >= 1000000) {
 
-      return `â‚±${(
+      return `\u20B1${(
         number / 1000000
       ).toFixed(2)}M`;
 
@@ -197,13 +197,13 @@ export default function Dashboard({
 
     if (number >= 1000) {
 
-      return `â‚±${(
+      return `\u20B1${(
         number / 1000
       ).toFixed(0)}K`;
 
     }
 
-    return `â‚±${number.toFixed(2)}`;
+    return `\u20B1${number.toFixed(2)}`;
 
   };
 
@@ -671,7 +671,7 @@ export default function Dashboard({
         <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-4 flex items-center gap-4">
 
           <div className="w-12 h-12 rounded-full bg-blue-600 flex items-center justify-center text-white text-xl font-bold flex-shrink-0">
-            â‚±
+            \u20B1
           </div>
 
           <div>
@@ -1919,3 +1919,4 @@ export default function Dashboard({
   );
 
 }
+

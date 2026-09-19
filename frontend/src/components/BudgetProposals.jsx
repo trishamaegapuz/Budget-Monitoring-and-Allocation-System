@@ -1,4 +1,4 @@
-﻿// frontend/src/components/BudgetProposals.jsx
+// frontend/src/components/BudgetProposals.jsx
 
 import React, { useEffect, useMemo, useState } from 'react';
 import Layout from './layout/Layout';
@@ -422,7 +422,7 @@ export default function BudgetProposals({
     if (amount >= 1000000) {
 
       return (
-        'â‚±' +
+        '?' +
         (
           amount / 1000000
         ).toFixed(2) +
@@ -434,7 +434,7 @@ export default function BudgetProposals({
     if (amount >= 1000) {
 
       return (
-        'â‚±' +
+        '?' +
         (
           amount / 1000
         ).toFixed(1) +
@@ -443,7 +443,7 @@ export default function BudgetProposals({
 
     }
 
-    return 'â‚±' + amount;
+    return '?' + amount;
 
   };
 
@@ -2945,7 +2945,7 @@ export default function BudgetProposals({
                   PS
                 </div>
                 <div className="bp-info-value">
-                  â‚±0.00
+                  ?0.00
                 </div>
               </div>
 
@@ -2954,7 +2954,7 @@ export default function BudgetProposals({
                   MOOE
                 </div>
                 <div className="bp-info-value">
-                  â‚±0.00
+                  ?0.00
                 </div>
               </div>
 
@@ -2963,7 +2963,7 @@ export default function BudgetProposals({
                   CO
                 </div>
                 <div className="bp-info-value">
-                  â‚±0.00
+                  ?0.00
                 </div>
               </div>
 
@@ -2972,7 +2972,7 @@ export default function BudgetProposals({
                   Total
                 </div>
                 <div className="bp-info-value">
-                  â‚±0.00
+                  ?0.00
                 </div>
               </div>
 
@@ -3705,7 +3705,7 @@ export default function BudgetProposals({
           <div>
 
             <h3 className="bp-panel-title">
-              Proposal Registry â€” FY {selectedYear}
+              Proposal Registry — FY {selectedYear}
             </h3>
 
             <p className="bp-panel-subtitle">
@@ -4720,7 +4720,7 @@ export default function BudgetProposals({
             <div className="bp-history-dot" />
 
             <div className="bp-history-date">
-              January 11, 2026 Â· 10:30 AM
+              January 11, 2026 · 10:30 AM
             </div>
 
             <div className="bp-history-title">
@@ -4744,7 +4744,7 @@ export default function BudgetProposals({
             <div className="bp-history-dot" />
 
             <div className="bp-history-date">
-              January 11, 2026 Â· 11:05 AM
+              January 11, 2026 · 11:05 AM
             </div>
 
             <div className="bp-history-title">
@@ -4768,7 +4768,7 @@ export default function BudgetProposals({
             <div className="bp-history-dot" />
 
             <div className="bp-history-date">
-              January 12, 2026 Â· 09:15 AM
+              January 12, 2026 · 09:15 AM
             </div>
 
             <div className="bp-history-title">
@@ -4793,7 +4793,7 @@ export default function BudgetProposals({
             <div className="bp-history-dot" />
 
             <div className="bp-history-date">
-              January 12, 2026 Â· 02:20 PM
+              January 12, 2026 · 02:20 PM
             </div>
 
             <div className="bp-history-title">
@@ -4966,7 +4966,7 @@ export default function BudgetProposals({
         th{background:#f1f5f9}
       </style></head><body>
       <h1>ABRA STATE INSTITUTE OF SCIENCES AND TECHNOLOGY</h1>
-      <p>${reportType} â€” FY ${selectedYear}</p>
+      <p>${reportType} — FY ${selectedYear}</p>
       <table><thead><tr>
         <th>Reference</th><th>Fund Group</th><th>Campus</th><th>RC</th>
         <th>PAP / Department</th><th>Proposed Amount</th><th>Status</th>
@@ -5251,7 +5251,7 @@ export default function BudgetProposals({
               </strong>
 
               <span>
-                {reportType} â€” FY {selectedYear}
+                {reportType} — FY {selectedYear}
               </span>
 
               <span>
@@ -6813,7 +6813,7 @@ export default function BudgetProposals({
           <div>
 
             <h3 className="bp-panel-title">
-              Proposal Module Summary â€” FY {selectedYear}
+              Proposal Module Summary — FY {selectedYear}
             </h3>
 
             <p className="bp-panel-subtitle">
@@ -6951,3 +6951,4 @@ export default function BudgetProposals({
   );
 
 }
+

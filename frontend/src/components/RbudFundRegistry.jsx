@@ -1,4 +1,4 @@
-﻿import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import Layout from "./layout/Layout";
 import { API_URL } from "../config/api";
 import {
@@ -137,7 +137,7 @@ const MODULES = [
 ];
 
 const money = (value) =>
-  `â‚±${Number(value || 0).toLocaleString("en-US", {
+  `?${Number(value || 0).toLocaleString("en-US", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })}`;
@@ -151,10 +151,10 @@ const percent = (value, total) => {
 };
 
 const dateLabel = (value) => {
-  if (!value) return "â€”";
+  if (!value) return "—";
   const d = new Date(value);
   return Number.isNaN(d.getTime())
-    ? "â€”"
+    ? "—"
     : d.toLocaleDateString("en-US", {
         month: "short",
         day: "numeric",
@@ -894,7 +894,7 @@ function ModuleHome({ fiscalYear, setFiscalYear, modules, onOpen }) {
       </div>
 
       <div className="mt-4 text-[10px] text-gray-400">
-        FY {fiscalYear} â€¢ RBUD Module
+        FY {fiscalYear} • RBUD Module
       </div>
     </div>
   );
@@ -1220,11 +1220,11 @@ function BudgetAllocationView({ allocation, tab, setTab, searchTerm, setSearchTe
                 {rows.map((row) => (
                   <tr key={row.id} className="border-b border-gray-50">
                     <td className="p-3">
-                      <b>{row.fund_cluster_code || "â€”"}</b>
-                      <div className="text-gray-400">{row.fund_cluster_name || "â€”"}</div>
+                      <b>{row.fund_cluster_code || "—"}</b>
+                      <div className="text-gray-400">{row.fund_cluster_name || "—"}</div>
                     </td>
-                    <td className="p-3">{row.responsibility_center_name || "â€”"}</td>
-                    <td className="p-3">{row.pap_name || row.mfo_name || row.object_expenditure_name || "â€”"}</td>
+                    <td className="p-3">{row.responsibility_center_name || "—"}</td>
+                    <td className="p-3">{row.pap_name || row.mfo_name || row.object_expenditure_name || "—"}</td>
                     <td className="p-3 text-right font-semibold">{money(row.approved_budget)}</td>
                     <td className="p-3 text-right">{money(row.ps_amount)}</td>
                     <td className="p-3 text-right">{money(row.mooe_amount)}</td>
@@ -1308,7 +1308,7 @@ function FundRegistriesView({
               </div>
 
               <p className="text-xs font-bold text-[#17135f] mt-3">
-                {fund.code || "â€”"}
+                {fund.code || "—"}
               </p>
               <p className="text-[11px] text-gray-600 mt-1 min-h-8">
                 {fund.name || "Unnamed Fund"}
@@ -1473,15 +1473,15 @@ function TransactionTable({
           {!loading &&
             entries.map((row) => (
               <tr key={row.id} className="border-b border-gray-50 hover:bg-gray-50/70">
-                <td className="p-3 font-semibold text-[#17135f]">{row.registry_no || "â€”"}</td>
+                <td className="p-3 font-semibold text-[#17135f]">{row.registry_no || "—"}</td>
                 <td className="p-3">{dateLabel(row.entry_date)}</td>
                 <td className="p-3">
-                  <b>{row.fund_cluster_code || "â€”"}</b>
-                  <div className="text-gray-400">{row.fund_cluster_name || "â€”"}</div>
+                  <b>{row.fund_cluster_code || "—"}</b>
+                  <div className="text-gray-400">{row.fund_cluster_name || "—"}</div>
                 </td>
-                <td className="p-3">{row.burs_serial_no || row.ref_no || "â€”"}</td>
-                <td className="p-3">{row.payee || "â€”"}</td>
-                <td className="p-3 max-w-[230px] truncate">{row.particulars || "â€”"}</td>
+                <td className="p-3">{row.burs_serial_no || row.ref_no || "—"}</td>
+                <td className="p-3">{row.payee || "—"}</td>
+                <td className="p-3 max-w-[230px] truncate">{row.particulars || "—"}</td>
                 <td className="p-3 text-right">{money(row.utilization_amount || row.total_utilized)}</td>
                 <td className="p-3 text-right">{money(row.disbursement_amount || row.disbursed)}</td>
                 {!compact && (
@@ -1599,10 +1599,10 @@ function UtilizationView({
                 {(data.fund_balances || []).map((row) => (
                   <tr key={row.id} className="border-b border-gray-50">
                     <td className="p-3">
-                      <b>{row.code || "â€”"}</b>
-                      <div className="text-gray-400">{row.name || "â€”"}</div>
+                      <b>{row.code || "—"}</b>
+                      <div className="text-gray-400">{row.name || "—"}</div>
                     </td>
-                    <td className="p-3">{row.fund_group || "â€”"}</td>
+                    <td className="p-3">{row.fund_group || "—"}</td>
                     <td className="p-3 text-right">{money(row.approved_budget)}</td>
                     <td className="p-3 text-right">{money(row.utilized)}</td>
                     <td className="p-3 text-right">{money(row.disbursed)}</td>
@@ -1659,11 +1659,11 @@ function FundBreakdownView({
             onChange={setSelectedFund}
             options={references.fund_clusters.map((x) => ({
               value: String(x.id),
-              label: `${x.code || ""} â€” ${x.name || ""}`,
+              label: `${x.code || ""} — ${x.name || ""}`,
             }))}
           />
           <div className="text-[10px] text-gray-500 pb-2">
-            FY {year} â€¢ {group}
+            FY {year} • {group}
           </div>
           <button
             type="button"
@@ -1684,10 +1684,10 @@ function FundBreakdownView({
               </div>
               <div>
                 <p className="text-sm font-bold text-[#17135f]">
-                  {selected.code} â€” {selected.name}
+                  {selected.code} — {selected.name}
                 </p>
                 <p className="text-[10px] text-gray-500">
-                  {selected.fund_group || "Fund"} â€¢ {selected.fund_source_name || "No funding source"}
+                  {selected.fund_group || "Fund"} • {selected.fund_source_name || "No funding source"}
                 </p>
               </div>
             </div>
@@ -1790,7 +1790,7 @@ function FinancialReportsView({
                   </div>
                 </div>
                 <div className="mt-4 text-[10px] font-semibold text-[#211b79]">
-                  Generate â†’
+                  Generate →
                 </div>
               </button>
             ))}
@@ -1799,7 +1799,7 @@ function FinancialReportsView({
 
         <Panel title="Report Summary" subtitle="Current filter">
           <div className="space-y-3">
-            <DetailBox label="Report" value={selectedReport?.name || "â€”"} />
+            <DetailBox label="Report" value={selectedReport?.name || "—"} />
             <DetailBox label="Approved Budget" value={money(summary.approved_budget)} />
             <DetailBox label="Obligations" value={money(summary.obligations)} />
             <DetailBox label="Disbursements" value={money(summary.disbursements)} />
@@ -1953,7 +1953,7 @@ function ReportsExportView({
             options={fundOptions}
           />
           <div className="h-9 border border-gray-200 rounded-lg px-3 flex items-center text-[10px] text-gray-500 self-end">
-            FY {year} â€¢ {group}
+            FY {year} • {group}
           </div>
         </div>
       </div>
@@ -1989,7 +1989,7 @@ function ReportsExportView({
               <p className="text-[10px] text-gray-400">BUDGET MONITORING AND ALLOCATION SYSTEM</p>
               <h3 className="text-base font-bold text-[#17135f] mt-1">RBUD Registry Report</h3>
               <p className="text-[10px] text-gray-500 mt-1">
-                Fiscal Year {year} â€¢ Fund Group: {group}
+                Fiscal Year {year} • Fund Group: {group}
               </p>
             </div>
 
@@ -2016,7 +2016,7 @@ function ReportsExportView({
             </div>
             <div className="p-5">
               <div className="border border-gray-200 rounded-xl p-5">
-                <p className="text-[10px] text-gray-400">FY {year} â€¢ {group}</p>
+                <p className="text-[10px] text-gray-400">FY {year} • {group}</p>
                 <h3 className="text-lg font-bold text-[#17135f] mt-1">RBUD Registry Report</h3>
                 <p className="text-xs text-gray-500 mt-1">Fund: {fund || "All Funds"}</p>
                 <div className="mt-5">
@@ -2055,7 +2055,7 @@ function RecordModal({
   const selectOptions = (items, label = "name") =>
     (items || []).map((item) => ({
       value: String(item.id),
-      label: `${item.code ? `${item.code} â€” ` : ""}${item[label] || item.name || ""}`,
+      label: `${item.code ? `${item.code} — ` : ""}${item[label] || item.name || ""}`,
     }));
 
   if (readOnly) {
@@ -2065,7 +2065,7 @@ function RecordModal({
           <DetailField label="Registry No." value={record?.registry_no} />
           <DetailField label="Entry Date" value={dateLabel(record?.entry_date)} />
           <DetailField label="Fiscal Year" value={record?.fiscal_year} />
-          <DetailField label="Fund" value={`${record?.fund_cluster_code || "â€”"} â€” ${record?.fund_cluster_name || "â€”"}`} />
+          <DetailField label="Fund" value={`${record?.fund_cluster_code || "—"} — ${record?.fund_cluster_name || "—"}`} />
           <DetailField label="Fund Group" value={record?.fund_group} />
           <DetailField label="Campus" value={record?.campus_name} />
           <DetailField label="BURS Serial No." value={record?.burs_serial_no} />
@@ -2074,7 +2074,7 @@ function RecordModal({
           <DetailField label="Particulars" value={record?.particulars} />
           <DetailField label="Responsibility Center" value={record?.department_name || record?.responsibility_center_name} />
           <DetailField label="PAP" value={record?.pap_name} />
-          <DetailField label="UACS" value={`${record?.uacs_code || "â€”"} ${record?.account_title || ""}`} />
+          <DetailField label="UACS" value={`${record?.uacs_code || "—"} ${record?.account_title || ""}`} />
           <DetailField label="Object of Expenditure" value={record?.object_expenditure_name} />
           <DetailField label="Utilization / Obligation" value={money(record?.utilization_amount)} />
           <DetailField label="Disbursement" value={money(record?.disbursement_amount)} />
@@ -2272,7 +2272,7 @@ function DetailField({ label, value }) {
   return (
     <div>
       <p className="text-[10px] text-gray-400">{label}</p>
-      <p className="text-xs font-semibold text-gray-700 mt-1">{value || "â€”"}</p>
+      <p className="text-xs font-semibold text-gray-700 mt-1">{value || "—"}</p>
     </div>
   );
 }
@@ -2301,7 +2301,7 @@ function ProgressRow({ label, value, total }) {
     <div>
       <div className="flex justify-between items-center text-[10px] mb-1">
         <span className="font-semibold text-gray-600">{label}</span>
-        <span className="text-gray-500">{money(value)} â€¢ {p.toFixed(2)}%</span>
+        <span className="text-gray-500">{money(value)} • {p.toFixed(2)}%</span>
       </div>
       <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
         <div className="h-full bg-[#211b79] rounded-full" style={{ width: `${Math.min(100, p)}%` }} />
@@ -2405,9 +2405,9 @@ function ReferenceTable({ rows }) {
         <tbody>
           {rows.map((row, index) => (
             <tr key={row.id || `${row.code}-${index}`} className="border-b border-gray-50">
-              <td className="p-3 font-semibold">{row.code || row.id || "â€”"}</td>
-              <td className="p-3">{row.name || row.account_title || row.revised_description || "â€”"}</td>
-              <td className="p-3 text-gray-500">{row.description || row.account_description || row.fund_source_name || "â€”"}</td>
+              <td className="p-3 font-semibold">{row.code || row.id || "—"}</td>
+              <td className="p-3">{row.name || row.account_title || row.revised_description || "—"}</td>
+              <td className="p-3 text-gray-500">{row.description || row.account_description || row.fund_source_name || "—"}</td>
               <td className="p-3 text-center">
                 <span className="px-2 py-1 rounded-full bg-green-50 text-green-700">
                   {row.is_active === false ? "Inactive" : "Active"}
@@ -2477,7 +2477,7 @@ function ReportPreview({ title, summary, onClose, onPrint }) {
         <div className="p-5">
           <div className="border border-gray-200 rounded-xl p-6">
             <div className="text-center border-b border-gray-200 pb-4">
-              <p className="text-[9px] text-gray-400">UNIVERSITY OF ABRA â€” MAIN CAMPUS</p>
+              <p className="text-[9px] text-gray-400">UNIVERSITY OF ABRA — MAIN CAMPUS</p>
               <h3 className="text-base font-bold text-[#17135f] mt-1">{title}</h3>
               <p className="text-[10px] text-gray-500 mt-1">RBUD Financial Report</p>
             </div>
@@ -2528,5 +2528,6 @@ function Modal({ title, onClose, children }) {
     </div>
   );
 }
+
 
 

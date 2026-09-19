@@ -1,4 +1,4 @@
-﻿import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import Layout from './layout/Layout';
 import { API_URL } from '../config/api';
 import Toast from './Toast';
@@ -303,18 +303,18 @@ const numberValue = (value) => {
 };
 
 const money = (value) =>
-  `â‚±${numberValue(value).toLocaleString('en-US', {
+  `?${numberValue(value).toLocaleString('en-US', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })}`;
 
 const dateText = (value) => {
-  if (!value) return 'â€”';
+  if (!value) return '—';
 
   const date = new Date(value);
 
   return Number.isNaN(date.getTime())
-    ? 'â€”'
+    ? '—'
     : date.toLocaleDateString('en-US', {
         year: 'numeric',
         month: 'short',
@@ -2180,3 +2180,4 @@ export default function Exports({
     </Layout>
   );
 }
+
