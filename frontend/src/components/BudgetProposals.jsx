@@ -422,7 +422,7 @@ export default function BudgetProposals({
     if (amount >= 1000000) {
 
       return (
-        '?' +
+        '\u20B1' +
         (
           amount / 1000000
         ).toFixed(2) +
@@ -434,7 +434,7 @@ export default function BudgetProposals({
     if (amount >= 1000) {
 
       return (
-        '?' +
+        '\u20B1' +
         (
           amount / 1000
         ).toFixed(1) +
@@ -443,7 +443,7 @@ export default function BudgetProposals({
 
     }
 
-    return '?' + amount;
+    return '\u20B1' + amount;
 
   };
 
