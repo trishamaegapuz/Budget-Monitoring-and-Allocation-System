@@ -56,83 +56,47 @@ const MODULES = [
   {
     id: "overview",
     number: "1",
-    title: "Overview",
-    description: "View summary of budgets, obligations, disbursements, and fund utilization.",
+    title: "Dashboard",
+    description: "See the current approved budget, utilization, disbursement, and remaining balance at a glance.",
     icon: Wallet,
     tone: "blue",
-    action: "Go to Overview",
+    action: "Open Dashboard",
   },
   {
     id: "allocation",
     number: "2",
     title: "Budget & Allocation",
-    description: "Manage approved budgets, PS / MOOE / CO, and allocation details.",
+    description: "See how the approved budget is allocated by PS, MOOE, CO, department, and PAP.",
     icon: BarChart3,
     tone: "green",
     tabs: ["Summary", "PS / MOOE / CO", "Allocation Details"],
   },
   {
-    id: "funds",
-    number: "3",
-    title: "Fund Registries",
-    description: "View and manage all fund registries and their respective balances.",
-    icon: Folder,
-    tone: "purple",
-    action: "View Fund Registries",
-  },
-  {
     id: "transactions",
-    number: "4",
+    number: "3",
     title: "Transactions",
-    description: "Record, edit, and manage all transactions related to budgets and disbursements.",
+    description: "Enter and manage the actual RBUD transactions. Registry No. is entered manually.",
     icon: ClipboardList,
     tone: "orange",
     tabs: ["Transaction List", "Add Transaction", "Transaction History"],
   },
   {
-    id: "utilization",
-    number: "5",
-    title: "Budget Utilization & Balance",
-    description: "Monitor budget utilization, obligations, disbursements, and remaining balances.",
-    icon: CircleDollarSign,
+    id: "monitoring",
+    number: "4",
+    title: "Monitoring",
+    description: "Check what has been utilized, what has been disbursed, and what budget remains.",
+    icon: TrendingUp,
     tone: "teal",
-    tabs: ["Summary", "WFP Balance", "Utilization Details"],
-  },
-  {
-    id: "breakdown",
-    number: "6",
-    title: "Fund / Project Breakdown",
-    description: "View detailed breakdown of each fund and project utilization.",
-    icon: Database,
-    tone: "yellow",
-    tabs: ["By Fund / Project", "Budget", "Utilization", "Disbursement"],
-  },
-  {
-    id: "financial",
-    number: "7",
-    title: "Financial Reports",
-    description: "Generate and view financial reports required for compliance.",
-    icon: FileText,
-    tone: "red",
-    tabs: ["FAR 2", "FAR 2A", "FAR 2 & 2A", "FHE Deficiency"],
-  },
-  {
-    id: "references",
-    number: "8",
-    title: "Reference / Master Data",
-    description: "Manage reference tables and master data used in the system.",
-    icon: Database,
-    tone: "blue",
-    tabs: ["Fund Codes", "UACS Codes", "Other Data", "All Reference"],
+    tabs: ["Overall", "By Fund", "By Department", "By Budget Class"],
   },
   {
     id: "reports",
-    number: "9",
+    number: "5",
     title: "Reports & Export",
-    description: "Export reports to Excel, PDF or print for documentation.",
-    icon: Download,
-    tone: "green",
-    tabs: ["Export to Excel", "Export to PDF", "Print", "All Reports"],
+    description: "Generate RBUD and financial reports, print records, and export data for documentation.",
+    icon: FileText,
+    tone: "purple",
+    tabs: ["Financial Reports", "RBUD Registry", "Print / Export"],
   },
 ];
 
@@ -292,7 +256,15 @@ export default function RbudFundRegistry({
   const [toast, setToast] = useState("");
 
   const [allocationTab, setAllocationTab] = useState("Summary");
+  const [transactionTab, setTransactionTab] = useState("Transaction List");
+  const [breakdownTab, setBreakdownTab] = useState("By Fund / Project");
+  const [departmentMonitoring, setDepartmentMonitoring] = useState({
+    departments: [],
+    total: 0,
+  });
   const [utilizationTab, setUtilizationTab] = useState("Summary");
+  const [monitoringTab, setMonitoringTab] = useState("Overall");
+  const [reportChoice, setReportChoice] = useState("RBUD Registry");
   const [fundGroupTab, setFundGroupTab] = useState("All");
   const [referenceTab, setReferenceTab] = useState("Fund Codes");
   const [referenceSearch, setReferenceSearch] = useState("");
@@ -301,6 +273,7 @@ export default function RbudFundRegistry({
   const [selectedBreakdownFund, setSelectedBreakdownFund] = useState("");
 
   const [recordModal, setRecordModal] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
   const [selectedRecord, setSelectedRecord] = useState(null);
   const [form, setForm] = useState(initialForm("2026"));
 
@@ -403,6 +376,19 @@ export default function RbudFundRegistry({
     }
   }, [query, filterParams]);
 
+  const loadDepartmentMonitoring = useCallback(async () => {
+    try {
+      const data = await query(`/rbud/departments?${filterParams()}`);
+      setDepartmentMonitoring({
+        departments: data.departments || [],
+        total: Number(data.total || 0),
+      });
+    } catch (err) {
+      setError(err.message);
+      setDepartmentMonitoring({ departments: [], total: 0 });
+    }
+  }, [query, filterParams]);
+
   const loadUtilization = useCallback(async () => {
     try {
       const data = await query(`/rbud/utilization?${filterParams()}`);
@@ -442,10 +428,17 @@ export default function RbudFundRegistry({
   }, [loadReferences]);
 
   useEffect(() => {
-    if (view === "module") return;
+    // The RBUD landing page now shows live summary cards and recent
+    // transactions, so keep only those two lightweight requests active
+    // while the user is on the module home. Other module data loads only
+    // when its corresponding view is opened.
     loadOverview();
     loadEntries(1);
+
+    if (view === "module") return;
+
     loadAllocation();
+    loadDepartmentMonitoring();
     loadUtilization();
     loadFinancialReports();
   }, [
@@ -458,6 +451,7 @@ export default function RbudFundRegistry({
     loadOverview,
     loadEntries,
     loadAllocation,
+    loadDepartmentMonitoring,
     loadUtilization,
     loadFinancialReports,
   ]);
@@ -496,13 +490,32 @@ export default function RbudFundRegistry({
     [references.fund_clusters, selectedBreakdownFund]
   );
 
-  const openView = (nextView) => {
+  const openView = (nextView, initialTab = "") => {
     setError("");
     setView(nextView);
     setReportPreview(false);
-    if (nextView === "breakdown" && !selectedBreakdownFund) {
-      const first = references.fund_clusters[0];
-      if (first) setSelectedBreakdownFund(String(first.id));
+
+    if (nextView === "allocation" && initialTab) setAllocationTab(initialTab);
+    if (nextView === "transactions" && initialTab) {
+      setTransactionTab(initialTab);
+      if (initialTab === "Add Transaction") {
+        window.setTimeout(() => openAddRecord(), 0);
+      }
+    }
+    if (nextView === "monitoring" && initialTab) {
+      setMonitoringTab(initialTab);
+      if (initialTab === "Overall") setUtilizationTab("Summary");
+      if (initialTab === "By Fund") setUtilizationTab("WFP Balance");
+    }
+    if (nextView === "reports" && initialTab) {
+      setReportChoice(
+        initialTab === "Financial Reports"
+          ? "Financial Summary"
+          : initialTab === "RBUD Registry"
+            ? "RBUD Registry"
+            : "RBUD Registry"
+      );
+      if (initialTab === "Print / Export") setReportPreview(true);
     }
   };
 
@@ -526,6 +539,7 @@ export default function RbudFundRegistry({
       loadOverview(),
       loadEntries(pagination.currentPage || 1),
       loadAllocation(),
+      loadDepartmentMonitoring(),
       loadUtilization(),
       loadFinancialReports(),
     ]);
@@ -539,14 +553,34 @@ export default function RbudFundRegistry({
     setRecordModal("add");
   };
 
-  const openEditRecord = (record) => {
-    setSelectedRecord(record);
-    setForm({
-      ...initialForm(selectedFiscalYear),
-      ...record,
-      fiscal_year: Number(record.fiscal_year || selectedFiscalYear),
-    });
-    setRecordModal("edit");
+  const openEditRecord = async (record) => {
+    try {
+      // Always load the complete database record before editing.
+      // The transaction list is a joined/derived row and may not contain every
+      // field required by the PUT request.
+      const fresh = await query(`/rbud/${record.id}`);
+      setSelectedRecord(fresh);
+      setForm({
+        ...initialForm(selectedFiscalYear),
+        ...fresh,
+        fiscal_year: Number(fresh.fiscal_year || selectedFiscalYear),
+        fund_cluster_id: fresh.fund_cluster_id ? String(fresh.fund_cluster_id) : "",
+        fund_source_id: fresh.fund_source_id ? String(fresh.fund_source_id) : "",
+        campus_id: fresh.campus_id ? String(fresh.campus_id) : "",
+        responsibility_center_id: fresh.responsibility_center_id ? String(fresh.responsibility_center_id) : "",
+        pap_id: fresh.pap_id ? String(fresh.pap_id) : "",
+        uacs_code_id: fresh.uacs_code_id ? String(fresh.uacs_code_id) : "",
+        object_expenditure_id: fresh.object_expenditure_id ? String(fresh.object_expenditure_id) : "",
+        mfo_id: fresh.mfo_id ? String(fresh.mfo_id) : "",
+        allotment_class_id: fresh.allotment_class_id ? String(fresh.allotment_class_id) : "",
+        wfp_source_id: fresh.wfp_source_id ? String(fresh.wfp_source_id) : "",
+        old_uacs_code_id: fresh.old_uacs_code_id ? String(fresh.old_uacs_code_id) : "",
+      });
+      setError("");
+      setRecordModal("edit");
+    } catch (err) {
+      setError(err.message || "Failed to load the RBUD record for editing.");
+    }
   };
 
   const openRecord = async (record) => {
@@ -561,6 +595,37 @@ export default function RbudFundRegistry({
 
   const saveRecord = async (event) => {
     event.preventDefault();
+
+    // Client-side validation for the database CHECK constraints.
+    const monthText = String(form.month ?? "").trim();
+    const quarterText = String(form.quarter ?? "").trim();
+
+    if (!String(form.registry_no ?? "").trim()) {
+      setError("Registry No. is required. Please enter it manually.");
+      return;
+    }
+
+    if (!String(form.entry_date ?? "").trim()) {
+      setError("Entry Date is required.");
+      return;
+    }
+
+    if (monthText !== "") {
+      const month = Number(monthText);
+      if (!Number.isInteger(month) || month < 1 || month > 12) {
+        setError("Month must be a whole number from 1 to 12.");
+        return;
+      }
+    }
+
+    if (quarterText !== "") {
+      const quarter = Number(quarterText);
+      if (!Number.isInteger(quarter) || quarter < 1 || quarter > 4) {
+        setError("Quarter must be a whole number from 1 to 4.");
+        return;
+      }
+    }
+
     try {
       const isEdit = recordModal === "edit";
       const path = isEdit
@@ -573,18 +638,23 @@ export default function RbudFundRegistry({
       if (!data) return;
       setRecordModal(null);
       setSelectedRecord(null);
-      await Promise.all([loadEntries(1), loadOverview(), loadUtilization()]);
+      await refreshAll();
       showToast(isEdit ? "RBUD record updated." : "RBUD record added.");
     } catch (err) {
       setError(err.message);
     }
   };
 
-  const deleteRecord = async (record) => {
-    if (!window.confirm(`Delete ${record.registry_no || "this RBUD record"}?`)) return;
+  const requestDeleteRecord = (record) => {
+    setDeleteTarget(record);
+  };
+
+  const deleteRecord = async () => {
+    if (!deleteTarget?.id) return;
     try {
-      await query(`/rbud/${record.id}`, { method: "DELETE" });
-      await Promise.all([loadEntries(1), loadOverview(), loadUtilization()]);
+      await query(`/rbud/${deleteTarget.id}`, { method: "DELETE" });
+      setDeleteTarget(null);
+      await refreshAll();
       showToast("RBUD record deleted.");
     } catch (err) {
       setError(err.message);
@@ -685,10 +755,23 @@ export default function RbudFundRegistry({
 
         {view === "module" ? (
           <ModuleHome
+            modules={MODULES}
+            overview={overview}
+            entries={entries}
+            approved={approved}
+            allocated={numberValue(allocation?.totals?.approved_budget ?? approved)}
+            utilized={obligations}
+            balance={balance}
             fiscalYear={selectedFiscalYear}
             setFiscalYear={setSelectedFiscalYear}
-            modules={MODULES}
+            searchTerm={searchTerm}
+            setSearchTerm={setSearchTerm}
+            selectedStatus={selectedStatus}
+            setSelectedStatus={setSelectedStatus}
             onOpen={openView}
+            onView={openRecord}
+            onEdit={openEditRecord}
+            onDelete={requestDeleteRecord}
           />
         ) : (
           <div className="px-6 py-5">
@@ -722,6 +805,7 @@ export default function RbudFundRegistry({
             {view === "allocation" && (
               <BudgetAllocationView
                 allocation={allocation}
+                departmentMonitoring={departmentMonitoring}
                 tab={allocationTab}
                 setTab={setAllocationTab}
                 searchTerm={searchTerm}
@@ -729,22 +813,11 @@ export default function RbudFundRegistry({
               />
             )}
 
-            {view === "funds" && (
-              <FundRegistriesView
-                references={references}
-                selectedGroup={fundGroupTab}
-                setSelectedGroup={setFundGroupTab}
-                selectedFunds={selectedGroupFunds}
-                onOpenBreakdown={(fundId) => {
-                  setSelectedBreakdownFund(String(fundId));
-                  openView("breakdown");
-                }}
-              />
-            )}
-
             {view === "transactions" && (
               <TransactionsView
                 entries={entries}
+                tab={transactionTab}
+                setTab={setTransactionTab}
                 loading={loading}
                 selectedGroup={selectedGroup}
                 setSelectedGroup={handleGroupClick}
@@ -762,15 +835,16 @@ export default function RbudFundRegistry({
                 onAdd={openAddRecord}
                 onView={openRecord}
                 onEdit={openEditRecord}
-                onDelete={deleteRecord}
+                onDelete={requestDeleteRecord}
               />
             )}
 
-            {view === "utilization" && (
-              <UtilizationView
+            {view === "monitoring" && (
+              <MonitoringView
                 data={utilization}
-                tab={utilizationTab}
-                setTab={setUtilizationTab}
+                departments={departmentMonitoring.departments || []}
+                monitoringTab={monitoringTab}
+                setMonitoringTab={setMonitoringTab}
                 group={selectedGroup}
                 setGroup={handleGroupClick}
                 fund={selectedFund}
@@ -778,42 +852,6 @@ export default function RbudFundRegistry({
                 fundOptions={fundOptions}
                 year={selectedFiscalYear}
                 setYear={setSelectedFiscalYear}
-              />
-            )}
-
-            {view === "breakdown" && (
-              <FundBreakdownView
-                data={breakdown}
-                references={references}
-                selectedFund={selectedBreakdownFund}
-                setSelectedFund={setSelectedBreakdownFund}
-                onLoad={() => loadBreakdown(selectedBreakdownFund)}
-                group={selectedGroup}
-                year={selectedFiscalYear}
-              />
-            )}
-
-            {view === "financial" && (
-              <FinancialReportsView
-                data={financialReports}
-                reportType={reportType}
-                setReportType={setReportType}
-                selectedFund={selectedFund}
-                setSelectedFund={setSelectedFund}
-                fundOptions={fundOptions}
-                reportPreview={reportPreview}
-                setReportPreview={setReportPreview}
-                onPrint={printCurrent}
-              />
-            )}
-
-            {view === "references" && (
-              <MasterDataView
-                references={references}
-                tab={referenceTab}
-                setTab={setReferenceTab}
-                search={referenceSearch}
-                setSearch={setReferenceSearch}
               />
             )}
 
@@ -825,6 +863,8 @@ export default function RbudFundRegistry({
                 fund={selectedFund}
                 setFund={setSelectedFund}
                 fundOptions={fundOptions}
+                reportChoice={reportChoice}
+                setReportChoice={setReportChoice}
                 onExport={exportCsv}
                 onPrint={printCurrent}
                 onPreview={() => setReportPreview(true)}
@@ -833,6 +873,15 @@ export default function RbudFundRegistry({
               />
             )}
           </div>
+        )}
+
+        {deleteTarget && (
+          <ConfirmModal
+            title="Delete RBUD Transaction"
+            message={`Are you sure you want to delete Registry No. ${deleteTarget.registry_no || "this record"}? This action cannot be undone.`}
+            onCancel={() => setDeleteTarget(null)}
+            onConfirm={deleteRecord}
+          />
         )}
 
         {recordModal && (
@@ -858,93 +907,340 @@ export default function RbudFundRegistry({
    MODULE HOME
 ============================================================ */
 
-function ModuleHome({ fiscalYear, setFiscalYear, modules, onOpen }) {
+function ModuleHome({
+  modules,
+  overview,
+  entries,
+  approved,
+  allocated,
+  utilized,
+  balance,
+  fiscalYear,
+  setFiscalYear,
+  searchTerm,
+  setSearchTerm,
+  selectedStatus,
+  setSelectedStatus,
+  onOpen,
+  onView,
+  onEdit,
+  onDelete,
+}) {
+  const allocatedPct = percent(allocated, approved);
+  const utilizedPct = percent(utilized, approved);
+  const balancePct = percent(balance, approved);
+  const recentRows = (entries || []).slice(0, 5);
+
+  const statusOptions = ["All Status", "Recorded", "Obligated", "Disbursed", "Pending", "Rejected"];
+
+  const openTransactions = () => onOpen("transactions");
+
   return (
     <div className="px-6 py-5">
-      <div className="flex items-center justify-end gap-4 mb-5">
-        <div className="flex items-center gap-2 border border-gray-200 bg-white rounded-lg h-9 px-3">
-          <CalendarDays className="w-4 h-4 text-[#211b79]" />
+      {/* Fiscal year */}
+      <div className="flex items-center justify-end mb-4">
+        <label className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 h-10 shadow-sm">
+          <CalendarDays className="h-4 w-4 text-[#211b79]" />
+          <span className="text-[12px] font-semibold text-slate-600">Fiscal Year</span>
           <select
             value={fiscalYear}
             onChange={(e) => setFiscalYear(e.target.value)}
-            className="bg-transparent outline-none text-xs font-semibold text-gray-700"
+            className="bg-transparent text-[13px] font-bold text-[#10245b] outline-none cursor-pointer"
           >
-            {YEARS.map((year) => (
-              <option key={year} value={year}>
-                FY {year}
-              </option>
+            {[2026, 2025, 2024, 2023, 2022].map((year) => (
+              <option key={year} value={year}>{year}</option>
             ))}
           </select>
-          <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
+          <ChevronDown className="h-4 w-4 text-slate-500 pointer-events-none" />
+        </label>
+      </div>
+
+      {/* KPI SUMMARY */}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4 mb-4">
+        <MetricHome
+          label="Approved Budget"
+          value={money(approved)}
+          percent={100}
+          icon={Wallet}
+          tone="blue"
+        />
+        <MetricHome
+          label="Allocated Budget"
+          value={money(allocated)}
+          percent={allocatedPct}
+          icon={CircleDollarSign}
+          tone="green"
+        />
+        <MetricHome
+          label="Utilized Budget"
+          value={money(utilized)}
+          percent={utilizedPct}
+          icon={BarChart3}
+          tone="orange"
+        />
+        <MetricHome
+          label="Remaining Balance"
+          value={money(balance)}
+          percent={balancePct}
+          icon={CircleDollarSign}
+          tone="red"
+        />
+      </div>
+
+      {/* HERO + UTILIZATION */}
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 mb-4">
+        <section className="xl:col-span-2 rounded-xl border border-blue-100 bg-gradient-to-r from-blue-50 via-white to-indigo-50 shadow-sm overflow-hidden">
+          <div className="min-h-[210px] px-6 py-6 flex items-center justify-between gap-6">
+            <div className="max-w-[62%]">
+              <p className="text-[13px] font-extrabold uppercase tracking-wide text-blue-700">RBUD Registry</p>
+              <h1 className="mt-2 text-[24px] leading-7 font-extrabold text-[#10245b]">
+                Monitor, Track, and Manage<br />Budget Utilization
+              </h1>
+              <p className="mt-3 text-[13px] leading-5 text-slate-600">
+                Keep track of approved budget, allocation, utilization, and remaining balance by fund, department, and budget class. Generate financial reports for transparency and decision-making.
+              </p>
+              <button
+                type="button"
+                onClick={() => onOpen("overview")}
+                className="mt-4 h-10 rounded-lg bg-blue-600 px-5 text-[13px] font-bold text-white shadow-sm hover:bg-blue-700 inline-flex items-center gap-2"
+              >
+                Go to Dashboard <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="hidden sm:flex h-40 w-44 shrink-0 items-center justify-center relative">
+              <div className="absolute h-36 w-36 rounded-full bg-blue-100/70" />
+              <div className="relative rounded-xl border border-blue-200 bg-white p-4 shadow-md">
+                <FileCheck2 className="h-12 w-12 text-blue-600 mx-auto" />
+                <div className="mt-3 flex items-end justify-center gap-1.5 h-10">
+                  <span className="w-3 rounded-t bg-blue-300 h-5" />
+                  <span className="w-3 rounded-t bg-blue-400 h-8" />
+                  <span className="w-3 rounded-t bg-blue-600 h-10" />
+                </div>
+                <p className="mt-2 text-[10px] font-extrabold text-center text-[#10245b]">RBUD</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="rounded-xl border border-slate-200 bg-white shadow-sm p-5">
+          <h2 className="text-[17px] font-extrabold text-[#10245b]">Budget Utilization Overview</h2>
+          <p className="mt-1 text-[12px] leading-4 text-slate-500">
+            Comparison of allocated, utilized, and remaining balance for FY {fiscalYear}.
+          </p>
+
+          <ProgressHome label="Allocated Budget" value={allocatedPct} tone="green" />
+          <ProgressHome label="Utilized Budget" value={utilizedPct} tone="orange" />
+          <ProgressHome label="Remaining Balance" value={balancePct} tone="red" />
+        </section>
+      </div>
+
+      {/* MODULES */}
+      <div className="mb-2">
+        <h2 className="text-[18px] font-extrabold text-[#10245b]">MODULES</h2>
+        <p className="text-[12px] text-slate-500">Quick access to RBUD functions.</p>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3 mb-4">
+        {modules.map((item) => (
+          <ModuleCard
+            key={item.id}
+            item={item}
+            Icon={item.icon}
+            onClick={() => onOpen(item.id)}
+          />
+        ))}
+      </div>
+
+      {/* RECENT TRANSACTIONS */}
+      <section className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+        <div className="px-4 py-4 border-b border-slate-100">
+          <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+            <div>
+              <h2 className="text-[18px] font-extrabold text-[#10245b]">Recent RBUD Transactions</h2>
+              <p className="mt-0.5 text-[12px] text-slate-500">
+                Latest RBUD registry transactions for FY {fiscalYear}.
+              </p>
+            </div>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                <input
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") openTransactions();
+                  }}
+                  placeholder="Search registry no., department, payee, particulars..."
+                  className="h-10 w-full sm:w-[300px] rounded-lg border border-slate-200 bg-white pl-9 pr-3 text-[12px] text-slate-700 outline-none focus:border-blue-400"
+                />
+              </div>
+              <select
+                value={selectedStatus}
+                onChange={(e) => {
+                  setSelectedStatus(e.target.value);
+                  window.setTimeout(openTransactions, 0);
+                }}
+                className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-[12px] font-semibold text-slate-600 outline-none"
+              >
+                {statusOptions.map((status) => <option key={status}>{status}</option>)}
+              </select>
+              <button
+                type="button"
+                onClick={openTransactions}
+                className="h-10 px-3 rounded-lg text-[12px] font-bold text-blue-700 hover:bg-blue-50 inline-flex items-center justify-center gap-1"
+              >
+                View All <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
         </div>
-      </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {modules.map((item) => {
-          const Icon = item.icon;
-          return (
-            <ModuleCard
-              key={item.id}
-              item={item}
-              Icon={Icon}
-              onClick={() => onOpen(item.id)}
-            />
-          );
-        })}
-      </div>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[1050px] text-[12px]">
+            <thead>
+              <tr className="bg-slate-50 border-b border-slate-100 text-slate-500">
+                <th className="px-4 py-3 text-left font-bold">REGISTRY NO.</th>
+                <th className="px-4 py-3 text-left font-bold">DATE</th>
+                <th className="px-4 py-3 text-left font-bold">DEPARTMENT</th>
+                <th className="px-4 py-3 text-left font-bold">FUND</th>
+                <th className="px-4 py-3 text-left font-bold">PARTICULARS</th>
+                <th className="px-4 py-3 text-right font-bold">AMOUNT</th>
+                <th className="px-4 py-3 text-center font-bold">STATUS</th>
+                <th className="px-4 py-3 text-center font-bold">ACTIONS</th>
+              </tr>
+            </thead>
+            <tbody>
+              {recentRows.length === 0 ? (
+                <tr>
+                  <td colSpan="8" className="px-4 py-10 text-center text-slate-400">
+                    No RBUD transactions found for FY {fiscalYear}.
+                  </td>
+                </tr>
+              ) : (
+                recentRows.map((row, index) => (
+                  <tr key={row.id || row.registry_no || index} className="border-b border-slate-100 hover:bg-slate-50/70">
+                    <td className="px-4 py-3 font-bold text-[#10245b] whitespace-nowrap">{row.registry_no || "—"}</td>
+                    <td className="px-4 py-3 whitespace-nowrap text-slate-600">{dateLabel(row.entry_date)}</td>
+                    <td className="px-4 py-3 whitespace-nowrap text-slate-700">{row.responsibility_center_name || row.department_name || "—"}</td>
+                    <td className="px-4 py-3 whitespace-nowrap text-slate-700">{row.fund_cluster_name || row.fund_name || row.fund_group || "—"}</td>
+                    <td className="px-4 py-3 max-w-[300px] truncate text-slate-700">{row.particulars || "—"}</td>
+                    <td className="px-4 py-3 text-right font-semibold text-slate-800 whitespace-nowrap">{money(row.utilization_amount || row.amount || row.total_utilized)}</td>
+                    <td className="px-4 py-3 text-center whitespace-nowrap"><StatusBadge status={row.status || row.entry_status} /></td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center justify-center gap-1">
+                        <ActionButton title="View" onClick={() => onView(row)} icon={Eye} />
+                        <ActionButton title="Edit" onClick={() => onEdit(row)} icon={Edit2} />
+                        <ActionButton title="Delete" onClick={() => onDelete(row)} icon={Trash2} />
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
 
-      <div className="mt-4 text-[10px] text-gray-400">
-        FY {fiscalYear} • RBUD Module
+        <div className="px-4 py-3 flex items-center justify-between text-[12px] text-slate-500">
+          <span>Showing 1 to {Math.min(recentRows.length, 5)} of {paginationText(entries)}</span>
+          <button
+            type="button"
+            onClick={openTransactions}
+            className="font-bold text-blue-700 hover:text-blue-800"
+          >
+            View all transactions →
+          </button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function paginationText(entries) {
+  return entries?.length ? `${entries.length} loaded` : "0 entries";
+}
+
+function MetricHome({ label, value, percent: pctValue, icon: Icon, tone }) {
+  const tones = {
+    blue: { icon: "bg-blue-600", bar: "bg-blue-500", soft: "bg-blue-50", text: "text-blue-700" },
+    green: { icon: "bg-green-600", bar: "bg-green-500", soft: "bg-green-50", text: "text-green-700" },
+    orange: { icon: "bg-orange-500", bar: "bg-orange-400", soft: "bg-orange-50", text: "text-orange-700" },
+    red: { icon: "bg-red-500", bar: "bg-red-500", soft: "bg-red-50", text: "text-red-700" },
+  };
+  const t = tones[tone] || tones.blue;
+
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">{label}</p>
+          <p className="mt-1 text-[20px] leading-6 font-extrabold text-[#10245b] whitespace-nowrap">{value}</p>
+        </div>
+        <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full ${t.icon} text-white shadow-sm`}>
+          <Icon className="h-5 w-5" />
+        </span>
+      </div>
+      <div className="mt-3 flex items-center gap-2">
+        <div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-100">
+          <div className={`h-full rounded-full ${t.bar}`} style={{ width: `${Math.min(100, Math.max(0, pctValue || 0))}%` }} />
+        </div>
+        <span className={`text-[11px] font-bold ${t.text}`}>{Number(pctValue || 0).toFixed(2)}%</span>
+      </div>
+    </div>
+  );
+}
+
+function ProgressHome({ label, value, tone }) {
+  const bar = tone === "green" ? "bg-green-500" : tone === "orange" ? "bg-orange-400" : "bg-red-500";
+  return (
+    <div className="mt-5">
+      <div className="mb-1.5 flex items-center justify-between gap-3">
+        <span className="text-[12px] font-semibold text-slate-700">{label}</span>
+        <span className="text-[12px] font-bold text-[#10245b]">{Number(value || 0).toFixed(2)}%</span>
+      </div>
+      <div className="h-3 overflow-hidden rounded-full bg-slate-100">
+        <div className={`h-full rounded-full ${bar}`} style={{ width: `${Math.min(100, Math.max(0, value || 0))}%` }} />
       </div>
     </div>
   );
 }
 
 function ModuleCard({ item, Icon, onClick }) {
+  const openLabel = item.id === "overview"
+    ? "Go to Dashboard"
+    : item.id === "allocation"
+      ? "Open Budget & Allocation"
+      : item.id === "transactions"
+        ? "Open Transactions"
+        : item.id === "monitoring"
+          ? "Open Monitoring"
+          : "Open Reports & Export";
+
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="text-left bg-white border border-gray-100 rounded-xl shadow-sm hover:shadow-md transition p-4 min-h-[170px]"
-    >
-      <div className="flex items-start gap-3">
-        <div
-          className={`w-11 h-11 shrink-0 rounded-xl text-white flex items-center justify-center ${toneMap[item.tone]}`}
-        >
-          <Icon className="w-5 h-5" />
-        </div>
-
+    <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm hover:shadow-md transition min-h-[150px] flex flex-col">
+      <button type="button" onClick={onClick} className="w-full text-left flex items-start gap-3">
+        <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-white ${toneMap[item.tone]}`}>
+          <Icon className="h-5 w-5" />
+        </span>
         <div className="min-w-0">
-          <h2 className="text-sm font-bold text-[#17135f]">
-            {item.number}. {item.title}
-          </h2>
-          <p className="text-[10px] leading-4 text-gray-500 mt-1">
-            {item.description}
-          </p>
+          <h3 className="text-[14px] leading-5 font-extrabold text-[#10245b]">{item.number}. {item.title}</h3>
+          <p className="mt-1.5 text-[11px] leading-4 text-slate-600">{item.description}</p>
         </div>
-      </div>
-
-      <div className="mt-5">
-        {item.tabs ? (
-          <div className="grid grid-cols-4 gap-2">
-            {item.tabs.map((tab) => (
-              <div
-                key={tab}
-                className="border border-gray-100 rounded-lg px-2 py-3 text-center text-[9px] text-gray-600 bg-gray-50/50"
-              >
-                <List className="w-3.5 h-3.5 mx-auto mb-1.5 text-[#211b79]" />
-                {tab}
-              </div>
-            ))}
-          </div>
-        ) : (
-          <span className="inline-flex items-center gap-2 border border-gray-100 rounded-lg px-3 py-2 text-[10px] font-semibold text-[#211b79]">
-            {item.action}
-            <ChevronRight className="w-3.5 h-3.5" />
-          </span>
-        )}
-      </div>
-    </button>
+      </button>
+      <button
+        type="button"
+        onClick={onClick}
+        className={`mt-auto w-full h-9 rounded-lg border text-[11px] font-bold inline-flex items-center justify-center gap-1.5 ${
+          item.tone === "blue" ? "border-blue-600 text-blue-700 hover:bg-blue-600 hover:text-white" :
+          item.tone === "green" ? "border-green-600 text-green-700 hover:bg-green-600 hover:text-white" :
+          item.tone === "orange" ? "border-orange-500 text-orange-600 hover:bg-orange-500 hover:text-white" :
+          item.tone === "teal" ? "border-teal-500 text-teal-600 hover:bg-teal-500 hover:text-white" :
+          "border-purple-600 text-purple-700 hover:bg-purple-600 hover:text-white"
+        }`}
+      >
+        {openLabel}<ChevronRight className="h-4 w-4" />
+      </button>
+    </section>
   );
 }
 
@@ -1158,39 +1454,81 @@ function OverviewView({
    BUDGET & ALLOCATION
 ============================================================ */
 
-function BudgetAllocationView({ allocation, tab, setTab, searchTerm, setSearchTerm }) {
+function BudgetAllocationView({
+  allocation,
+  departmentMonitoring,
+  tab,
+  setTab,
+  searchTerm,
+  setSearchTerm,
+}) {
   const totals = allocation.totals || {};
   const rows = allocation.rows || [];
+  const departments = departmentMonitoring?.departments || [];
 
   return (
     <div>
       <TabBar
-        tabs={["Summary", "PS / MOOE / CO", "Allocation Details"]}
+        tabs={[
+          "Summary",
+          "PS / MOOE / CO",
+          "Department Monitoring",
+          "Allocation Details",
+        ]}
         value={tab}
         onChange={setTab}
       />
 
       {tab === "Summary" && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <Kpi title="Approved Budget" value={money(totals.approved_budget)} icon={Wallet} tone="blue" />
-          <Kpi title="PS" value={money(totals.ps)} icon={Users} tone="green" />
-          <Kpi title="MOOE + CO" value={money(numberValue(totals.mooe) + numberValue(totals.co))} icon={BarChart3} tone="purple" />
-          <Panel title="Allocation Overview" subtitle="Budget allocation is taken from budget_items." className="md:col-span-3">
+          <Kpi
+            title="Approved Budget"
+            value={money(totals.approved_budget)}
+            icon={Wallet}
+            tone="blue"
+          />
+          <Kpi
+            title="PS"
+            value={money(totals.ps)}
+            icon={Users}
+            tone="green"
+          />
+          <Kpi
+            title="MOOE + CO"
+            value={money(
+              numberValue(totals.mooe) + numberValue(totals.co)
+            )}
+            icon={BarChart3}
+            tone="purple"
+          />
+
+          <Panel
+            title="Allocation Overview"
+            subtitle="Approved budget allocation from the budget registry."
+            className="md:col-span-3"
+          >
             <BudgetClassTable totals={totals} />
           </Panel>
         </div>
       )}
 
       {tab === "PS / MOOE / CO" && (
-        <Panel title="PS / MOOE / CO" subtitle="Classification of approved budget">
+        <Panel
+          title="PS / MOOE / CO"
+          subtitle="Approved budget classified by allotment class."
+        >
           <BudgetClassTable totals={totals} />
         </Panel>
+      )}
+
+      {tab === "Department Monitoring" && (
+        <DepartmentMonitoringTable departments={departments} />
       )}
 
       {tab === "Allocation Details" && (
         <Panel
           title="Allocation Details"
-          subtitle="Detailed allocation records for the selected fiscal year and fund group"
+          subtitle="Detailed approved budget records for the selected fiscal year and fund group."
           action={
             <div className="h-8 border border-gray-200 rounded-lg flex items-center gap-2 px-2">
               <Search className="w-3.5 h-3.5 text-gray-400" />
@@ -1221,14 +1559,31 @@ function BudgetAllocationView({ allocation, tab, setTab, searchTerm, setSearchTe
                   <tr key={row.id} className="border-b border-gray-50">
                     <td className="p-3">
                       <b>{row.fund_cluster_code || "—"}</b>
-                      <div className="text-gray-400">{row.fund_cluster_name || "—"}</div>
+                      <div className="text-gray-400">
+                        {row.fund_cluster_name || "—"}
+                      </div>
                     </td>
-                    <td className="p-3">{row.responsibility_center_name || "—"}</td>
-                    <td className="p-3">{row.pap_name || row.mfo_name || row.object_expenditure_name || "—"}</td>
-                    <td className="p-3 text-right font-semibold">{money(row.approved_budget)}</td>
-                    <td className="p-3 text-right">{money(row.ps_amount)}</td>
-                    <td className="p-3 text-right">{money(row.mooe_amount)}</td>
-                    <td className="p-3 text-right">{money(row.co_amount)}</td>
+                    <td className="p-3">
+                      {row.responsibility_center_name || "—"}
+                    </td>
+                    <td className="p-3">
+                      {row.pap_name ||
+                        row.mfo_name ||
+                        row.object_expenditure_name ||
+                        "—"}
+                    </td>
+                    <td className="p-3 text-right font-semibold">
+                      {money(row.approved_budget)}
+                    </td>
+                    <td className="p-3 text-right">
+                      {money(row.ps_amount)}
+                    </td>
+                    <td className="p-3 text-right">
+                      {money(row.mooe_amount)}
+                    </td>
+                    <td className="p-3 text-right">
+                      {money(row.co_amount)}
+                    </td>
                   </tr>
                 ))}
                 {!rows.length && <EmptyRow colSpan={7} />}
@@ -1238,6 +1593,168 @@ function BudgetAllocationView({ allocation, tab, setTab, searchTerm, setSearchTe
         </Panel>
       )}
     </div>
+  );
+}
+
+function DepartmentMonitoringTable({ departments }) {
+  const totalBudget = departments.reduce(
+    (sum, row) => sum + numberValue(row.approved_budget),
+    0
+  );
+  const totalUtilized = departments.reduce(
+    (sum, row) => sum + numberValue(row.utilized),
+    0
+  );
+  const totalDisbursed = departments.reduce(
+    (sum, row) => sum + numberValue(row.disbursed),
+    0
+  );
+  const totalRemaining = totalBudget - totalUtilized;
+  const totalRate = percent(totalUtilized, totalBudget);
+
+  return (
+    <Panel
+      title="Department Budget Monitoring"
+      subtitle="Approved budget and actual RBUD utilization by responsibility center."
+    >
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4">
+        <MiniMetric label="Total Budget" value={money(totalBudget)} />
+        <MiniMetric
+          label="Total Utilized"
+          value={money(totalUtilized)}
+        />
+        <MiniMetric
+          label="Total Disbursed"
+          value={money(totalDisbursed)}
+        />
+        <MiniMetric
+          label="Remaining Balance"
+          value={money(totalRemaining)}
+        />
+      </div>
+
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[900px] text-[10px]">
+          <thead className="bg-gray-50 text-gray-500">
+            <tr>
+              <th className="p-3 text-left">Department / Office</th>
+              <th className="p-3 text-left">Code</th>
+              <th className="p-3 text-right">Budget Given</th>
+              <th className="p-3 text-right">Utilized</th>
+              <th className="p-3 text-right">Disbursed</th>
+              <th className="p-3 text-right">Remaining</th>
+              <th className="p-3 text-right">Utilization</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            {departments.map((row) => {
+              const budget = numberValue(row.approved_budget);
+              const utilized = numberValue(row.utilized);
+              const disbursed = numberValue(row.disbursed);
+              const remaining = budget - utilized;
+              const rate = percent(utilized, budget);
+
+              return (
+                <tr key={row.id} className="border-b border-gray-50">
+                  <td className="p-3">
+                    <div className="font-semibold text-gray-800">
+                      {row.name || "—"}
+                    </div>
+                    {row.description && (
+                      <div className="text-[9px] text-gray-400 mt-0.5">
+                        {row.description}
+                      </div>
+                    )}
+                  </td>
+
+                  <td className="p-3 font-semibold text-[#211b79]">
+                    {row.code || "—"}
+                  </td>
+
+                  <td className="p-3 text-right font-semibold">
+                    {money(budget)}
+                  </td>
+
+                  <td className="p-3 text-right">
+                    {money(utilized)}
+                  </td>
+
+                  <td className="p-3 text-right">
+                    {money(disbursed)}
+                  </td>
+
+                  <td
+                    className={`p-3 text-right font-semibold ${
+                      remaining < 0 ? "text-red-600" : "text-gray-800"
+                    }`}
+                  >
+                    {money(remaining)}
+                  </td>
+
+                  <td className="p-3 text-right">
+                    <div className="font-semibold">
+                      {rate.toFixed(2)}%
+                    </div>
+                    <div className="mt-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-[#211b79] rounded-full"
+                        style={{
+                          width: `${Math.min(
+                            100,
+                            Math.max(0, rate)
+                          )}%`,
+                        }}
+                      />
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+
+            {!departments.length && (
+              <tr>
+                <td
+                  colSpan={7}
+                  className="p-10 text-center text-gray-400"
+                >
+                  No department budget or utilization records found for
+                  the selected fiscal year and fund group.
+                </td>
+              </tr>
+            )}
+
+            {!!departments.length && (
+              <tr className="bg-gray-50 font-bold">
+                <td className="p-3" colSpan={2}>
+                  TOTAL
+                </td>
+                <td className="p-3 text-right">
+                  {money(totalBudget)}
+                </td>
+                <td className="p-3 text-right">
+                  {money(totalUtilized)}
+                </td>
+                <td className="p-3 text-right">
+                  {money(totalDisbursed)}
+                </td>
+                <td className="p-3 text-right">
+                  {money(totalRemaining)}
+                </td>
+                <td className="p-3 text-right">
+                  {totalRate.toFixed(2)}%
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="mt-3 text-[9px] text-gray-400">
+        Budget is based on approved budget items. Utilization and
+        disbursement are based on existing RBUD registry records.
+      </div>
+    </Panel>
   );
 }
 
@@ -1345,6 +1862,8 @@ function FundRegistriesView({
 function TransactionsView({
   entries,
   loading,
+  tab,
+  setTab,
   selectedGroup,
   setSelectedGroup,
   selectedFund,
@@ -1365,6 +1884,14 @@ function TransactionsView({
 }) {
   return (
     <div>
+      <TabBar
+        tabs={["Transaction List", "Add Transaction", "Transaction History"]}
+        value={tab}
+        onChange={(nextTab) => {
+          setTab(nextTab);
+          if (nextTab === "Add Transaction") onAdd();
+        }}
+      />
       <FilterBar
         group={selectedGroup}
         setGroup={setSelectedGroup}
@@ -1445,12 +1972,13 @@ function TransactionTable({
 }) {
   return (
     <div className="overflow-x-auto">
-      <table className={`w-full ${compact ? "min-w-[850px]" : "min-w-[1050px]"} text-[10px]`}>
+      <table className={`w-full ${compact ? "min-w-[1050px]" : "min-w-[1250px]"} text-[10px]`}>
         <thead className="bg-gray-50 text-gray-500">
           <tr>
             <th className="p-3 text-left">Registry No.</th>
             <th className="p-3 text-left">Date</th>
             <th className="p-3 text-left">Fund</th>
+            <th className="p-3 text-left">Department / Responsibility Center</th>
             <th className="p-3 text-left">BURS / Ref. No.</th>
             <th className="p-3 text-left">Payee</th>
             <th className="p-3 text-left">Particulars</th>
@@ -1478,6 +2006,11 @@ function TransactionTable({
                 <td className="p-3">
                   <b>{row.fund_cluster_code || "—"}</b>
                   <div className="text-gray-400">{row.fund_cluster_name || "—"}</div>
+                  <div className="text-[9px] text-gray-400">{row.fund_source_name || row.fund_source_code || ""}</div>
+                </td>
+                <td className="p-3 min-w-[210px]">
+                  <b>{row.responsibility_center_code || "—"}</b>
+                  <div className="text-gray-400">{row.responsibility_center_name || row.department_name || "—"}</div>
                 </td>
                 <td className="p-3">{row.burs_serial_no || row.ref_no || "—"}</td>
                 <td className="p-3">{row.payee || "—"}</td>
@@ -1504,6 +2037,158 @@ function TransactionTable({
           {!loading && !entries.length && <EmptyRow colSpan={compact ? 8 : 10} />}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+/* ============================================================
+   MONITORING
+============================================================ */
+
+function MonitoringView({
+  data,
+  departments,
+  monitoringTab,
+  setMonitoringTab,
+  group,
+  setGroup,
+  fund,
+  setFund,
+  fundOptions,
+  year,
+  setYear,
+}) {
+  const summary = data.summary || {};
+  const budgetClass = data.budget_class || {};
+  const utilizedClass = data.utilized_class || {};
+  const fundBalances = data.fund_balances || [];
+
+  return (
+    <div>
+      <FilterBar
+        group={group}
+        setGroup={setGroup}
+        fund={fund}
+        setFund={setFund}
+        year={year}
+        setYear={setYear}
+        fundOptions={fundOptions}
+      />
+
+      <TabBar
+        tabs={["Overall", "By Fund", "By Department", "By Budget Class"]}
+        value={monitoringTab}
+        onChange={setMonitoringTab}
+      />
+
+      {monitoringTab === "Overall" && (
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-3 mb-4">
+            <Kpi title="Approved Budget" value={money(summary.approved_budget)} icon={Wallet} tone="blue" />
+            <Kpi title="Utilized / Obligated" value={money(summary.obligations)} icon={FileCheck2} tone="green" />
+            <Kpi title="Disbursed" value={money(summary.disbursements)} icon={CreditCard} tone="orange" />
+            <Kpi title="Remaining Balance" value={money(summary.remaining_balance)} icon={CircleDollarSign} tone="purple" />
+            <Kpi title="Utilization Rate" value={`${numberValue(summary.utilization_rate).toFixed(2)}%`} icon={TrendingUp} tone="teal" />
+          </div>
+
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+            <Panel title="Budget Monitoring Summary" subtitle="Approved budget, utilization, disbursement, and remaining balance.">
+              <div className="grid grid-cols-2 gap-3">
+                <DetailBox label="Approved Budget" value={money(summary.approved_budget)} />
+                <DetailBox label="Utilized / Obligated" value={money(summary.obligations)} />
+                <DetailBox label="Disbursed" value={money(summary.disbursements)} />
+                <DetailBox label="Remaining Balance" value={money(summary.remaining_balance)} />
+                <DetailBox label="Unpaid Obligation" value={money(summary.unpaid_obligation)} />
+                <DetailBox label="Disbursement Rate" value={`${numberValue(summary.disbursement_rate).toFixed(2)}%`} />
+              </div>
+            </Panel>
+
+            <Panel title="Budget Class Summary" subtitle="Approved budget versus actual utilization.">
+              <div className="overflow-x-auto">
+                <table className="w-full text-[10px]">
+                  <thead>
+                    <tr className="border-b border-gray-100 text-gray-500">
+                      <th className="p-3 text-left">Class</th>
+                      <th className="p-3 text-right">Approved</th>
+                      <th className="p-3 text-right">Utilized</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {["PS", "MOOE", "CO"].map((code) => (
+                      <tr key={code} className="border-b border-gray-50">
+                        <td className="p-3 font-semibold">{code}</td>
+                        <td className="p-3 text-right">{money(budgetClass[code.toLowerCase()])}</td>
+                        <td className="p-3 text-right">{money(utilizedClass[code.toLowerCase()])}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </Panel>
+          </div>
+        </>
+      )}
+
+      {monitoringTab === "By Fund" && (
+        <Panel title="Fund Monitoring" subtitle="Budget, utilization, disbursement, and remaining balance by fund.">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[900px] text-[10px]">
+              <thead className="bg-gray-50 text-gray-500">
+                <tr>
+                  <th className="p-3 text-left">Fund</th>
+                  <th className="p-3 text-left">Fund Group</th>
+                  <th className="p-3 text-right">Approved Budget</th>
+                  <th className="p-3 text-right">Utilized</th>
+                  <th className="p-3 text-right">Disbursed</th>
+                  <th className="p-3 text-right">Remaining</th>
+                  <th className="p-3 text-center">Utilization</th>
+                </tr>
+              </thead>
+              <tbody>
+                {fundBalances.map((row) => (
+                  <tr key={row.id} className="border-b border-gray-50">
+                    <td className="p-3"><b>{row.code || "—"}</b><div className="text-gray-400">{row.name || "—"}</div></td>
+                    <td className="p-3">{row.fund_group || "—"}</td>
+                    <td className="p-3 text-right">{money(row.approved_budget)}</td>
+                    <td className="p-3 text-right">{money(row.utilized)}</td>
+                    <td className="p-3 text-right">{money(row.disbursed)}</td>
+                    <td className="p-3 text-right">{money(row.unutilized_budget)}</td>
+                    <td className="p-3 text-center">{numberValue(row.utilization_rate).toFixed(2)}%</td>
+                  </tr>
+                ))}
+                {!fundBalances.length && <EmptyRow colSpan={7} />}
+              </tbody>
+            </table>
+          </div>
+        </Panel>
+      )}
+
+      {monitoringTab === "By Department" && (
+        <DepartmentMonitoringTable departments={departments} />
+      )}
+
+      {monitoringTab === "By Budget Class" && (
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+          <Panel title="Approved Budget by Class" subtitle="Approved budget allocation for PS, MOOE, and CO.">
+            <ClassTable
+              rows={[
+                ["PS", "Personnel Services", budgetClass.ps],
+                ["MOOE", "Maintenance and Other Operating Expenses", budgetClass.mooe],
+                ["CO", "Capital Outlay", budgetClass.co],
+              ]}
+            />
+          </Panel>
+          <Panel title="Utilization by Class" subtitle="Actual RBUD utilization / obligations.">
+            <ClassTable
+              rows={[
+                ["PS", "Personnel Services", utilizedClass.ps],
+                ["MOOE", "Maintenance and Other Operating Expenses", utilizedClass.mooe],
+                ["CO", "Capital Outlay", utilizedClass.co],
+              ]}
+            />
+          </Panel>
+        </div>
+      )}
     </div>
   );
 }
@@ -1639,6 +2324,8 @@ function UtilizationView({
 
 function FundBreakdownView({
   data,
+  tab,
+  setTab,
   references,
   selectedFund,
   setSelectedFund,
@@ -1651,6 +2338,11 @@ function FundBreakdownView({
 
   return (
     <div>
+      <TabBar
+        tabs={["By Fund / Project", "Budget", "Utilization", "Disbursement"]}
+        value={tab}
+        onChange={setTab}
+      />
       <div className="bg-white border border-gray-100 rounded-xl shadow-sm p-4 mb-4">
         <div className="grid grid-cols-1 md:grid-cols-[1fr_160px_110px] gap-3 items-end">
           <Select
@@ -1701,8 +2393,8 @@ function FundBreakdownView({
             <Kpi title="Unpaid Obligation" value={money(summary.unpaid_obligation)} icon={FileCheck2} tone="red" />
           </div>
 
-          <Panel title="Fund / Project Breakdown" subtitle="Budget, utilization, disbursement and remaining amount by class">
-            <ClassBreakdownTable rows={data.classes || []} />
+          <Panel title="Fund / Project Breakdown" subtitle={`Current view: ${tab}`}>
+            <ClassBreakdownTable rows={data.classes || []} mode={tab} />
           </Panel>
         </>
       ) : (
@@ -1925,6 +2617,8 @@ function ReportsExportView({
   fund,
   setFund,
   fundOptions,
+  reportChoice,
+  setReportChoice,
   onExport,
   onPrint,
   onPreview,
@@ -1937,8 +2631,8 @@ function ReportsExportView({
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <Select
             label="Report Type"
-            value="RBUD Registry"
-            onChange={() => {}}
+            value={reportChoice}
+            onChange={setReportChoice}
             options={[
               "RBUD Registry",
               "WFP Monitoring Report",
@@ -1987,7 +2681,7 @@ function ReportsExportView({
           <div className="bg-white border border-gray-200 rounded-lg p-5 max-w-4xl mx-auto">
             <div className="text-center border-b border-gray-200 pb-4">
               <p className="text-[10px] text-gray-400">BUDGET MONITORING AND ALLOCATION SYSTEM</p>
-              <h3 className="text-base font-bold text-[#17135f] mt-1">RBUD Registry Report</h3>
+              <h3 className="text-base font-bold text-[#17135f] mt-1">{reportChoice}</h3>
               <p className="text-[10px] text-gray-500 mt-1">
                 Fiscal Year {year} • Fund Group: {group}
               </p>
@@ -2121,7 +2815,6 @@ function RecordModal({
             <InputField label="Series" value={form.series} onChange={(v) => update("series", v)} />
             <InputField label="Series2" value={form.series2} onChange={(v) => update("series2", v)} />
             <InputField label="Quarter" value={form.quarter} onChange={(v) => update("quarter", v)} />
-            <SelectField label="Old UACS Code" value={form.old_uacs_code_id} onChange={(v) => update("old_uacs_code_id", v)} options={selectOptions(references.uacs_codes)} />
             <InputField label="WFP Source Code" value={form.wfp_source_code} onChange={(v) => update("wfp_source_code", v)} />
             <SelectField label="WFP Source" value={form.wfp_source_id} onChange={(v) => update("wfp_source_id", v)} options={selectOptions(references.wfp_sources)} />
           </div>
@@ -2164,6 +2857,31 @@ function RecordModal({
         </div>
       </form>
     </Modal>
+  );
+}
+
+function ConfirmModal({ title, message, onCancel, onConfirm }) {
+  return (
+    <div className="fixed inset-0 z-[140] bg-black/40 flex items-center justify-center p-5">
+      <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl border border-gray-100 overflow-hidden">
+        <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+          <h2 className="text-sm font-bold text-[#17135f]">{title}</h2>
+          <button type="button" onClick={onCancel} className="w-8 h-8 rounded-lg hover:bg-gray-100 flex items-center justify-center">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        <div className="p-5">
+          <div className="w-10 h-10 rounded-full bg-red-50 text-red-600 flex items-center justify-center mb-3">
+            <Trash2 className="w-5 h-5" />
+          </div>
+          <p className="text-xs text-gray-600 leading-5">{message}</p>
+          <div className="flex justify-end gap-2 mt-5">
+            <button type="button" onClick={onCancel} className="h-9 px-4 rounded-lg border border-gray-200 text-xs font-semibold text-gray-700">Cancel</button>
+            <button type="button" onClick={onConfirm} className="h-9 px-4 rounded-lg bg-red-600 text-white text-xs font-semibold">Delete Transaction</button>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -2350,7 +3068,7 @@ function ClassTable({ rows }) {
   );
 }
 
-function ClassBreakdownTable({ rows }) {
+function ClassBreakdownTable({ rows, mode = "By Fund / Project" }) {
   return (
     <div className="overflow-x-auto">
       <table className="w-full min-w-[800px] text-[10px]">
@@ -2528,6 +3246,3 @@ function Modal({ title, onClose, children }) {
     </div>
   );
 }
-
-
-

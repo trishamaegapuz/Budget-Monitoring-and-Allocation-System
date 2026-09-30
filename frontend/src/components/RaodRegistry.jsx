@@ -39,6 +39,8 @@ import {
 
 const FY = 2026;
 const LIMIT = 10;
+const DEPARTMENT_PAGE_SIZE = 10;
+const MONITORING_PAGE_SIZE = 10;
 const money = (v) =>
   `₱${Number(v || 0).toLocaleString("en-US", {
     minimumFractionDigits: 2,
@@ -82,9 +84,6 @@ const emptyForm = {
   old_uacs_code_id: "",
   account_title: "",
   obligation_amount: "",
-  ps_amount: "",
-  mooe_amount: "",
-  co_amount: "",
   wfp_source_id: "",
   wfp_source_code: "",
   dv_payroll_no: "",
@@ -92,25 +91,46 @@ const emptyForm = {
   remarks: "",
   unpaid_obligation: "",
   po_no: "",
-  status_of_po: "",
+  po_status: "",
 
-  // Legacy DB compatibility. The Excel RAOD Input Data uses ORS, not BURS.
-  // This is kept only so older backend/database records remain compatible.
-  allotment_amount: "",
-  dv_no: "",
-  burs_serial_no: "",
 };
 
 const cardData = [
-  ["overview", "1. Overview", "View summary of allotments, obligations, disbursements, and balances.", "bg-blue-600", WalletCards],
-  ["allotment-obligation", "2. Allotment & Obligation", "Manage allotments received, obligations, and remaining balances.", "bg-emerald-500", BarChart3],
-  ["fund-registry", "3. Fund Registries", "View and manage RAOD records by fund and funding source.", "bg-violet-600", FolderOpen],
-  ["transactions", "4. RAOD Transactions", "Record, edit, and manage allotment, obligation, and disbursement entries.", "bg-orange-500", FileText],
-  ["monitoring", "5. Disbursement & Balance", "Monitor disbursements and compare allotment, obligation, and available balances.", "bg-teal-500", BarChart3],
-  ["fund-rc-breakdown", "6. Fund / RC Breakdown", "View detailed RAOD breakdown by fund and responsibility center.", "bg-amber-500", Database],
-  ["financial-reports", "7. Financial Accountability Reports", "Generate and preview official RAOD accountability reports.", "bg-red-500", FileBarChart],
-  ["master-data", "8. Reference / Master Data", "Manage reference data used by the RAOD registry.", "bg-blue-600", Database],
-  ["reports-export", "9. Reports & Export", "Export official RAOD reports to Excel, PDF, or print.", "bg-emerald-500", Download],
+  {
+    id: "dashboard",
+    title: "1. Dashboard",
+    desc: "See the overall allotment, obligation, disbursement, and remaining balance at a glance.",
+    color: "bg-blue-600",
+    icon: WalletCards,
+  },
+  {
+    id: "allotment-budget",
+    title: "2. Allotment & Budget",
+    desc: "View approved allotment, PS/MOOE/CO classification, obligations, and balances.",
+    color: "bg-emerald-500",
+    icon: BarChart3,
+  },
+  {
+    id: "transactions",
+    title: "3. Transactions",
+    desc: "Record, edit, view, and monitor RAOD obligation and disbursement transactions.",
+    color: "bg-orange-500",
+    icon: FileText,
+  },
+  {
+    id: "monitoring",
+    title: "4. Monitoring",
+    desc: "Monitor allotment, obligation, disbursement, and remaining balances.",
+    color: "bg-teal-500",
+    icon: BarChart3,
+  },
+  {
+    id: "reports-export",
+    title: "5. Reports & Export",
+    desc: "Generate financial reports, view the RAOD registry, and print or export records.",
+    color: "bg-violet-600",
+    icon: Download,
+  },
 ];
 
 function SectionTitle({ title, text, action }) {
@@ -130,8 +150,8 @@ function Metric({ label, value, icon: Icon, className = "bg-blue-50 text-blue-70
     <div className="rounded-xl border border-slate-100 bg-white p-4 shadow-sm">
       <div className="flex items-start justify-between">
         <div>
-          <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">{label}</p>
-          <p className="mt-2 text-[17px] font-extrabold text-slate-800">{value}</p>
+          <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">{label}</p>
+          <p className="mt-2 text-[20px] font-extrabold text-slate-800">{value}</p>
         </div>
         <span className={`flex h-9 w-9 items-center justify-center rounded-lg ${className}`}>
           <Icon className="h-4 w-4" />
@@ -142,26 +162,39 @@ function Metric({ label, value, icon: Icon, className = "bg-blue-50 text-blue-70
 }
 
 function CardButton({ item, onClick }) {
-  const [id, title, desc, color, Icon] = item;
+  const Icon = item.icon;
+
   return (
-    <button
-      type="button"
-      onClick={() => onClick(id)}
-      className="group min-h-[145px] rounded-xl border border-slate-100 bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-md"
-    >
-      <div className="flex items-start gap-3">
-        <span className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl text-white ${color}`}>
-          <Icon className="h-6 w-6" />
+    <div className="group flex h-full flex-col rounded-xl border border-slate-100 bg-white p-4 shadow-sm transition hover:border-blue-200 hover:shadow-md">
+      <div className="flex min-h-[92px] items-start gap-3">
+        <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-white ${item.color}`}>
+          <Icon className="h-5 w-5" />
         </span>
         <div className="min-w-0">
-          <h3 className="text-[13px] font-extrabold text-slate-800">{title}</h3>
-          <p className="mt-1 text-[10px] leading-4 text-slate-500">{desc}</p>
+          <h3 className="text-[15px] font-extrabold text-[#10245b]">{item.title}</h3>
+          <p className="mt-1 text-[12px] leading-5 text-slate-500">{item.desc}</p>
         </div>
       </div>
-      <span className="mt-4 inline-flex items-center text-[10px] font-bold text-[#1d4ed8]">
-        Open module <ArrowRight className="ml-1 h-3 w-3 transition group-hover:translate-x-0.5" />
-      </span>
-    </button>
+
+      <button
+        type="button"
+        onClick={() => onClick(item.id)}
+        className={`mt-4 flex h-10 w-full items-center justify-center gap-1 rounded-lg border text-[11px] font-bold transition ${
+          item.id === "dashboard"
+            ? "border-blue-500 bg-white text-[#174fd1] hover:bg-blue-50"
+            : item.id === "allotment-budget"
+              ? "border-emerald-500 bg-white text-emerald-600 hover:bg-emerald-50"
+              : item.id === "transactions"
+                ? "border-orange-500 bg-white text-orange-600 hover:bg-orange-50"
+                : item.id === "monitoring"
+                  ? "border-teal-500 bg-white text-teal-600 hover:bg-teal-50"
+                  : "border-violet-500 bg-white text-violet-600 hover:bg-violet-50"
+        }`}
+      >
+        {item.id === "dashboard" ? "Go to Dashboard" : item.id === "allotment-budget" ? "Open Allotment & Budget" : item.id === "transactions" ? "Open Transactions" : item.id === "monitoring" ? "Open Monitoring" : "Open Reports & Export"}
+        <ArrowRight className="h-3 w-3" />
+      </button>
+    </div>
   );
 }
 
@@ -199,6 +232,93 @@ function Table({ columns, rows, empty = "No records found." }) {
           )}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+
+function Pagination({
+  currentPage = 1,
+  totalPages = 1,
+  totalItems = 0,
+  pageSize = LIMIT,
+  onPageChange,
+}) {
+  if (totalPages <= 1 && totalItems <= pageSize) return null;
+
+  const start = totalItems ? ((currentPage - 1) * pageSize) + 1 : 0;
+  const end = totalItems ? Math.min(currentPage * pageSize, totalItems) : 0;
+
+  const getPages = () => {
+    if (totalPages <= 7) {
+      return Array.from({ length: totalPages }, (_, i) => i + 1);
+    }
+
+    const pages = [1];
+    const left = Math.max(2, currentPage - 1);
+    const right = Math.min(totalPages - 1, currentPage + 1);
+
+    if (left > 2) pages.push("...");
+    for (let i = left; i <= right; i += 1) pages.push(i);
+    if (right < totalPages - 1) pages.push("...");
+    pages.push(totalPages);
+
+    return pages;
+  };
+
+  return (
+    <div className="mt-3 flex flex-col gap-2 rounded-xl border border-slate-100 bg-white px-3 py-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+      <span className="text-[10px] text-slate-500">
+        Showing <b className="text-slate-700">{start}</b> to{" "}
+        <b className="text-slate-700">{end}</b> of{" "}
+        <b className="text-slate-700">{totalItems}</b> entries
+      </span>
+
+      <div className="flex items-center justify-end gap-1">
+        <button
+          type="button"
+          disabled={currentPage <= 1}
+          onClick={() => onPageChange(currentPage - 1)}
+          className="inline-flex h-7 items-center gap-1 rounded-md border border-slate-200 bg-white px-2 text-[9px] font-bold text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-30"
+        >
+          <ArrowLeft className="h-3 w-3" />
+          <span className="hidden sm:inline">Previous</span>
+        </button>
+
+        {getPages().map((pageItem, index) =>
+          pageItem === "..." ? (
+            <span
+              key={`ellipsis-${index}`}
+              className="flex h-7 min-w-7 items-center justify-center px-1 text-[9px] text-slate-400"
+            >
+              …
+            </span>
+          ) : (
+            <button
+              key={pageItem}
+              type="button"
+              onClick={() => onPageChange(pageItem)}
+              className={`h-7 min-w-7 rounded-md px-2 text-[11px] font-bold transition ${
+                currentPage === pageItem
+                  ? "bg-[#174fd1] text-white shadow-sm"
+                  : "border border-slate-200 bg-white text-slate-500 hover:bg-blue-50 hover:text-blue-700"
+              }`}
+            >
+              {pageItem}
+            </button>
+          )
+        )}
+
+        <button
+          type="button"
+          disabled={currentPage >= totalPages}
+          onClick={() => onPageChange(currentPage + 1)}
+          className="inline-flex h-7 items-center gap-1 rounded-md border border-slate-200 bg-white px-2 text-[9px] font-bold text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-30"
+        >
+          <span className="hidden sm:inline">Next</span>
+          <ArrowRight className="h-3 w-3" />
+        </button>
+      </div>
     </div>
   );
 }
@@ -243,7 +363,7 @@ function Select({ children, ...props }) {
   return <select {...props} className={`h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-[10px] text-slate-700 outline-none focus:border-blue-400 ${props.className || ""}`}>{children}</select>;
 }
 
-function TransactionForm({ refs, form, setForm, onSubmit, saving, onClose }) {
+function TransactionForm({ refs, form, setForm, budgetInfo, editing, onSubmit, saving, onClose }) {
   const set = (k, v) => setForm((x) => ({ ...x, [k]: v }));
   const options = (list) => (Array.isArray(list) ? list : []);
 
@@ -267,19 +387,21 @@ function TransactionForm({ refs, form, setForm, onSubmit, saving, onClose }) {
             <Input required type="date" value={form.entry_date} onChange={e => set("entry_date", e.target.value)} />
           </Field>
           <Field label="Fund Cluster">
-            <Select value={form.fund_cluster_id} onChange={e => set("fund_cluster_id", e.target.value)}>
-              <option value="">Select</option>
-              {options(refs.fund_clusters).map(x => (
-                <option key={x.id} value={x.id}>{x.code} — {x.name}</option>
-              ))}
+            <Select value={form.fund_cluster_id} disabled>
+              {options(refs.fund_clusters)
+                .filter(x => String(x.code) === "101")
+                .map(x => (
+                  <option key={x.id} value={x.id}>{x.code} — {x.name}</option>
+                ))}
             </Select>
           </Field>
           <Field label="Fund Code">
-            <Select value={form.fund_source_id} onChange={e => set("fund_source_id", e.target.value)}>
-              <option value="">Select</option>
-              {options(refs.fund_sources).map(x => (
-                <option key={x.id} value={x.id}>{x.code} — {x.name}</option>
-              ))}
+            <Select value={form.fund_source_id} disabled>
+              {options(refs.fund_sources)
+                .filter(x => String(x.code).toUpperCase() === "MAIN" || /main fund/i.test(String(x.name || "")))
+                .map(x => (
+                  <option key={x.id} value={x.id}>{x.code} — {x.name}</option>
+                ))}
             </Select>
           </Field>
           <Field label="Campus">
@@ -291,7 +413,7 @@ function TransactionForm({ refs, form, setForm, onSubmit, saving, onClose }) {
             </Select>
           </Field>
           <Field label="Fiscal Year">
-            <Input type="number" value={form.fiscal_year} onChange={e => set("fiscal_year", e.target.value)} />
+            <Input type="number" value={FY} readOnly />
           </Field>
         </div>
       </div>
@@ -379,6 +501,65 @@ function TransactionForm({ refs, form, setForm, onSubmit, saving, onClose }) {
         </div>
       </div>
 
+      {/* Budget verification: allotment is sourced from budget_items, not entered manually in RAOD. */}
+      <div className="rounded-xl border border-amber-100 bg-amber-50/50 p-4">
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <div>
+            <p className="text-[10px] font-extrabold uppercase tracking-wide text-amber-700">
+              Budget Verification
+            </p>
+            <p className="mt-0.5 text-[9px] text-slate-500">
+              Approved allotment is verified from the selected Responsibility Center's budget for the selected fiscal year.
+            </p>
+          </div>
+          <span className={`rounded-full px-2 py-1 text-[8px] font-extrabold ${
+            budgetInfo ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"
+          }`}>
+            {budgetInfo ? "VERIFIED" : "SELECT RC"}
+          </span>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+          <div className="rounded-lg border border-slate-100 bg-white p-3">
+            <p className="text-[8px] font-bold uppercase text-slate-400">Approved Allotment</p>
+            <p className="mt-1 text-[12px] font-extrabold text-slate-800">
+              {money(budgetInfo?.allocation ?? budgetInfo?.allotment ?? 0)}
+            </p>
+          </div>
+          <div className="rounded-lg border border-slate-100 bg-white p-3">
+            <p className="text-[8px] font-bold uppercase text-slate-400">Existing Obligation</p>
+            <p className="mt-1 text-[12px] font-extrabold text-slate-800">
+              {money(budgetInfo?.obligation ?? 0)}
+            </p>
+          </div>
+          <div className="rounded-lg border border-slate-100 bg-white p-3">
+            <p className="text-[8px] font-bold uppercase text-slate-400">Available Before Entry</p>
+            <p className="mt-1 text-[12px] font-extrabold text-emerald-700">
+              {money(
+                Math.max(
+                  0,
+                  Number(budgetInfo?.allocation ?? budgetInfo?.allotment ?? 0) -
+                  Math.max(0, Number(budgetInfo?.obligation ?? 0) - Number(editing?.obligation_amount || 0))
+                )
+              )}
+            </p>
+          </div>
+          <div className="rounded-lg border border-slate-100 bg-white p-3">
+            <p className="text-[8px] font-bold uppercase text-slate-400">Projected Balance</p>
+            <p className="mt-1 text-[12px] font-extrabold text-blue-700">
+              {money(
+                Math.max(
+                  0,
+                  Number(budgetInfo?.allocation ?? budgetInfo?.allotment ?? 0) -
+                  Math.max(0, Number(budgetInfo?.obligation ?? 0) - Number(editing?.obligation_amount || 0)) -
+                  Number(form.obligation_amount || 0)
+                )
+              )}
+            </p>
+          </div>
+        </div>
+      </div>
+
       {/* 9: particulars */}
       <div className="rounded-xl border border-slate-100 bg-white p-4 shadow-sm">
         <Field label="Particulars / Description">
@@ -414,43 +595,39 @@ function TransactionForm({ refs, form, setForm, onSubmit, saving, onClose }) {
         </div>
       </div>
 
-      {/* 25–28: actual RAOD financial amounts */}
+      {/* RAOD financial amounts */}
       <div className="rounded-xl border border-emerald-100 bg-emerald-50/40 p-4">
         <p className="mb-3 text-[10px] font-extrabold uppercase tracking-wide text-emerald-700">
           Obligation and Disbursement
         </p>
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
           <Field label="Obligation">
-            <Input type="number" step="0.01" value={form.obligation_amount} onChange={e => set("obligation_amount", e.target.value)} />
-          </Field>
-          <Field label="PS">
-            <Input type="number" step="0.01" value={form.ps_amount} onChange={e => set("ps_amount", e.target.value)} />
-          </Field>
-          <Field label="MOOE">
-            <Input type="number" step="0.01" value={form.mooe_amount} onChange={e => set("mooe_amount", e.target.value)} />
-          </Field>
-          <Field label="CO">
-            <Input type="number" step="0.01" value={form.co_amount} onChange={e => set("co_amount", e.target.value)} />
+            <Input required type="number" min="0" step="0.01" value={form.obligation_amount} onChange={e => set("obligation_amount", e.target.value)} />
           </Field>
           <Field label="Disbursement">
-            <Input type="number" step="0.01" value={form.disbursement_amount} onChange={e => set("disbursement_amount", e.target.value)} />
+            <Input type="number" min="0" step="0.01" value={form.disbursement_amount} onChange={e => set("disbursement_amount", e.target.value)} />
           </Field>
           <Field label="Unpaid Obligation">
-            <Input type="number" step="0.01" value={form.unpaid_obligation} onChange={e => set("unpaid_obligation", e.target.value)} />
-          </Field>
-          {/* Excel #33 "Balances" is presented as the calculated remaining allotment. */}
-          <Field label="Balances">
             <Input
               type="number"
               step="0.01"
-              value={Math.max(0, Number(form.allotment_amount || 0) - Number(form.obligation_amount || 0))}
+              value={Math.max(0, Number(form.obligation_amount || 0) - Number(form.disbursement_amount || 0))}
               readOnly
             />
           </Field>
-
-          {/* Kept because the existing RAOD DB/view uses this legacy field. */}
-          <Field label="Allotment (Legacy DB)">
-            <Input type="number" step="0.01" value={form.allotment_amount} onChange={e => set("allotment_amount", e.target.value)} />
+          <Field label="Running Balance">
+            <Input
+              value={Math.max(
+                0,
+                Number(budgetInfo?.allocation ?? budgetInfo?.allotment ?? 0) -
+                Math.max(
+                  0,
+                  Number(budgetInfo?.obligation ?? 0) - Number(editing?.obligation_amount || 0)
+                ) -
+                Number(form.obligation_amount || 0)
+              ).toFixed(2)}
+              readOnly
+            />
           </Field>
         </div>
       </div>
@@ -475,17 +652,14 @@ function TransactionForm({ refs, form, setForm, onSubmit, saving, onClose }) {
           <Field label="DV / Payroll No.">
             <Input
               value={form.dv_payroll_no}
-              onChange={e => {
-                set("dv_payroll_no", e.target.value);
-                set("dv_no", e.target.value);
-              }}
+              onChange={e => set("dv_payroll_no", e.target.value)}
             />
           </Field>
           <Field label="PO No.">
             <Input value={form.po_no} onChange={e => set("po_no", e.target.value)} />
           </Field>
           <Field label="Status of PO">
-            <Select value={form.status_of_po} onChange={e => set("status_of_po", e.target.value)}>
+            <Select value={form.po_status} onChange={e => set("po_status", e.target.value)}>
               <option value="">Select</option>
               <option value="PENDING">PENDING</option>
               <option value="APPROVED">APPROVED</option>
@@ -520,9 +694,45 @@ function TransactionForm({ refs, form, setForm, onSubmit, saving, onClose }) {
   );
 }
 
+function downloadCsv(filename, rows) {
+  const safeRows = Array.isArray(rows) ? rows : [];
+  const headers = [
+    "Registry No.", "Date", "Department / RC", "Particulars",
+    "Allotment", "Obligation", "Disbursement", "Unpaid Obligation", "Status"
+  ];
+  const csvValue = (v) => {
+    const value = v === null || v === undefined ? "" : String(v);
+    return `"${value.replace(/"/g, '""')}"`;
+  };
+  const lines = [headers.map(csvValue).join(",")];
+  safeRows.forEach((r) => {
+    lines.push([
+      r.registry_no,
+      dateText(r.entry_date),
+      r.responsibility_center_name,
+      r.particulars,
+      "",
+      r.obligation_amount,
+      r.disbursement_amount,
+      r.unpaid_obligation,
+      r.entry_status || r.status,
+    ].map(csvValue).join(","));
+  });
+  const blob = new Blob(["\ufeff" + lines.join("\r\n")], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
 function RaodRegistry({ user, onLogout, onNavigate, activePath }) {
   const token = localStorage.getItem("token") || "";
   const [view, setView] = useState("home");
+  const [selectedFiscalYear, setSelectedFiscalYear] = useState(FY);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -543,19 +753,27 @@ function RaodRegistry({ user, onLogout, onNavigate, activePath }) {
   const [selected, setSelected] = useState(null);
   const [modal, setModal] = useState(null);
   const [editing, setEditing] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
   const [form, setForm] = useState(emptyForm);
+  const [budgetInfo, setBudgetInfo] = useState(null);
   const [moduleData, setModuleData] = useState({});
   const [reportType, setReportType] = useState("FAR 1");
   const [masterTab, setMasterTab] = useState("fund_clusters");
   const [fundTab, setFundTab] = useState("overview");
   const [allotTab, setAllotTab] = useState("summary");
+  const [departmentRows, setDepartmentRows] = useState([]);
+  const [departmentPage, setDepartmentPage] = useState(1);
+  const [monitoringPage, setMonitoringPage] = useState(1);
+  const [selectedDepartment, setSelectedDepartment] = useState(null);
+  const [departmentEntries, setDepartmentEntries] = useState([]);
+  const [departmentPagination, setDepartmentPagination] = useState({ totalItems: 0, totalPages: 1, currentPage: 1 });
 
   const headers = useMemo(() => ({ Authorization: `Bearer ${token}` }), [token]);
 
   const fetchJson = useCallback(async (url, options = {}) => {
     const r = await fetch(url, { ...options, headers: { ...headers, ...(options.headers || {}) } });
     const d = await r.json().catch(() => ({}));
-    if (!r.ok) throw new Error(d.error || d.message || "Request failed.");
+    if (!r.ok) throw new Error([d.error || d.message || "Request failed.", d.details].filter(Boolean).join(" Details: "));
     return d;
   }, [headers]);
 
@@ -565,14 +783,14 @@ function RaodRegistry({ user, onLogout, onNavigate, activePath }) {
   }, [fetchJson]);
 
   const loadOverview = useCallback(async () => {
-    const d = await fetchJson(`${API_URL}/raod/overview?fiscal_year=${FY}`);
+    const d = await fetchJson(`${API_URL}/raod/overview?fiscal_year=${selectedFiscalYear}`);
     setOverview(d);
-  }, [fetchJson]);
+  }, [fetchJson, selectedFiscalYear]);
 
   const loadEntries = useCallback(async (p = 1) => {
     setLoading(true);
     try {
-      const q = new URLSearchParams({ page: String(p), limit: String(LIMIT), fiscal_year: String(FY) });
+      const q = new URLSearchParams({ page: String(p), limit: String(LIMIT), fiscal_year: String(selectedFiscalYear) });
       if (search.trim()) q.set("search", search.trim());
       if (dateFrom) q.set("date_from", dateFrom);
       if (dateTo) q.set("date_to", dateTo);
@@ -588,32 +806,84 @@ function RaodRegistry({ user, onLogout, onNavigate, activePath }) {
     } finally {
       setLoading(false);
     }
-  }, [fetchJson, search, dateFrom, dateTo, activeTab]);
+  }, [fetchJson, search, dateFrom, dateTo, activeTab, selectedFiscalYear]);
+
+  const loadDepartmentSummary = useCallback(async () => {
+    const d = await fetchJson(`${API_URL}/raod/department-summary?fiscal_year=${selectedFiscalYear}`);
+    setDepartmentRows(d.rows || []);
+    setDepartmentPage(1);
+    setMonitoringPage(1);
+  }, [fetchJson, selectedFiscalYear]);
+
+  const loadDepartmentBudget = useCallback(async (rcId, fiscalYear = FY) => {
+    if (!rcId) {
+      setBudgetInfo(null);
+      return null;
+    }
+
+    try {
+      const d = await fetchJson(
+        `${API_URL}/raod/department-budget?fiscal_year=${encodeURIComponent(fiscalYear)}&responsibility_center_id=${encodeURIComponent(rcId)}`
+      );
+      setBudgetInfo(d);
+      return d;
+    } catch (e) {
+      setBudgetInfo(null);
+      throw e;
+    }
+  }, [fetchJson]);
+
+  const loadDepartmentEntries = useCallback(async (rcId, p = 1) => {
+    if (!rcId) return;
+    try {
+      const q = new URLSearchParams({ page: String(p), limit: String(LIMIT), fiscal_year: String(selectedFiscalYear), responsibility_center_id: String(rcId) });
+      const d = await fetchJson(`${API_URL}/raod?${q}`);
+      setDepartmentEntries(d.entries || []);
+      setDepartmentPagination({ totalItems: d.totalItems || 0, totalPages: d.totalPages || 1, currentPage: d.currentPage || p });
+    } catch (e) { setError(e.message); }
+  }, [fetchJson, selectedFiscalYear]);
 
   const loadModule = useCallback(async (name) => {
-    if (name === "transactions") return;
+    if (name === "transactions") {
+      await loadEntries(1);
+      return;
+    }
     try {
-      const endpoint = name === "overview" ? "overview" : name;
-      const d = await fetchJson(`${API_URL}/raod/module/${endpoint}?fiscal_year=${FY}`);
+      const endpoint = name === "dashboard" ? "overview" : name === "allotment-budget" ? "allotment-obligation" : name;
+      const d = await fetchJson(`${API_URL}/raod/module/${endpoint}?fiscal_year=${selectedFiscalYear}`);
       setModuleData(d);
     } catch (e) {
       setError(e.message);
     }
-  }, [fetchJson]);
+  }, [fetchJson, loadEntries, selectedFiscalYear]);
 
   useEffect(() => {
-    Promise.all([loadRefs(), loadOverview()]).catch(e => setError(e.message));
-  }, [loadRefs, loadOverview]);
+    Promise.all([loadRefs(), loadOverview(), loadDepartmentSummary()]).catch(e => setError(e.message));
+  }, [loadRefs, loadOverview, loadDepartmentSummary]);
 
   useEffect(() => {
-    if (view === "transactions" || view === "home") loadEntries(1);
+    if (view === "transactions" || view === "home") {
+      setPage(1);
+      loadEntries(1);
+    }
   }, [view, loadEntries]);
 
   useEffect(() => {
     if (view !== "home" && view !== "transactions") loadModule(view);
   }, [view, loadModule]);
 
+  useEffect(() => {
+    if (modal !== "form") return;
+    if (!form.responsibility_center_id) {
+      setBudgetInfo(null);
+      return;
+    }
+    loadDepartmentBudget(form.responsibility_center_id, form.fiscal_year || FY)
+      .catch(e => setError(e.message));
+  }, [modal, form.responsibility_center_id, form.fiscal_year, loadDepartmentBudget]);
+
   const openView = (name) => {
+    setError("");
     setView(name);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
@@ -625,29 +895,30 @@ function RaodRegistry({ user, onLogout, onNavigate, activePath }) {
     [refs.fund_clusters]
   );
   const generalSource = useMemo(
-    () => refs.fund_sources.find(x => String(x.code) === "101"),
+    () => refs.fund_sources.find(x => String(x.code).toUpperCase() === "MAIN") || refs.fund_sources.find(x => /main fund/i.test(String(x.name || ""))),
     [refs.fund_sources]
   );
 
   const openAdd = () => {
     setEditing(null);
+    setBudgetInfo(null);
     setForm({
       ...emptyForm,
       fund_cluster_id: generalCluster?.id ? String(generalCluster.id) : "",
       fund_source_id: generalSource?.id ? String(generalSource.id) : "",
+      fiscal_year: selectedFiscalYear,
     });
     setModal("form");
   };
 
   const openEdit = (row) => {
+    setBudgetInfo(null);
     const f = { ...emptyForm };
     Object.keys(f).forEach(k => { f[k] = row[k] ?? ""; });
     ["fund_cluster_id","fund_source_id","campus_id","responsibility_center_id","pap_id","uacs_code_id","allotment_class_id","wfp_source_id","object_expenditure_id","mfo_id","old_uacs_code_id","month","quarter"]
       .forEach(k => { f[k] = row[k] === null || row[k] === undefined ? "" : String(row[k]); });
-    f.dv_payroll_no = row.dv_payroll_no ?? row.dv_no ?? "";
-    f.dv_no = row.dv_no ?? row.dv_payroll_no ?? "";
-    f.status_of_po = row.status_of_po ?? "";
-    f.running_balance = row.running_balance ?? "";
+    f.dv_payroll_no = row.dv_payroll_no ?? "";
+    f.po_status = row.po_status ?? row.status_of_po ?? "";
     f.entry_date = row.entry_date ? String(row.entry_date).slice(0, 10) : "";
     setEditing(row);
     setForm(f);
@@ -656,6 +927,56 @@ function RaodRegistry({ user, onLogout, onNavigate, activePath }) {
 
   const saveEntry = async (e) => {
     e.preventDefault();
+
+    const obligation = Number(form.obligation_amount || 0);
+    const disbursement = Number(form.disbursement_amount || 0);
+    const allocation = Number(budgetInfo?.allocation ?? budgetInfo?.allotment ?? 0);
+    const existingObligation = Number(budgetInfo?.obligation || 0);
+    const oldObligation = Number(editing?.obligation_amount || 0);
+
+    if (!form.registry_no.trim()) {
+      setError("Registry No. is required.");
+      return;
+    }
+
+    if (!form.entry_date) {
+      setError("Date is required.");
+      return;
+    }
+
+    if (!form.responsibility_center_id) {
+      setError("Responsibility Center is required.");
+      return;
+    }
+
+    if (!budgetInfo) {
+      setError("Budget verification is required. Select a Responsibility Center with an approved budget allocation.");
+      return;
+    }
+
+    if (allocation <= 0) {
+      setError("No approved allotment/budget was found for the selected Responsibility Center for the selected fiscal year.");
+      return;
+    }
+
+    const availableBefore = Math.max(
+      0,
+      allocation - Math.max(0, existingObligation - oldObligation)
+    );
+    const projectedRunningBalance = Math.max(0, availableBefore - obligation);
+
+    if (obligation > availableBefore) {
+      setError(
+        `Obligation of ${money(obligation)} exceeds the available allotment of ${money(availableBefore)} for this Responsibility Center.`
+      );
+      return;
+    }
+
+    if (disbursement > obligation) {
+      setError("Disbursement cannot be greater than the Obligation.");
+      return;
+    }
+
     setSaving(true);
     try {
       const url = editing ? `${API_URL}/raod/${editing.id}` : `${API_URL}/raod`;
@@ -664,18 +985,27 @@ function RaodRegistry({ user, onLogout, onNavigate, activePath }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...form,
-          fiscal_year: Number(form.fiscal_year || FY),
+          fund_cluster_id: generalCluster?.id ? String(generalCluster.id) : form.fund_cluster_id,
+          fund_source_id: generalSource?.id ? String(generalSource.id) : form.fund_source_id,
+          fiscal_year: selectedFiscalYear,
+          obligation_amount: obligation,
+          disbursement_amount: disbursement,
+          unpaid_obligation: Math.max(0, obligation - disbursement),
+          allotment_amount: allocation,
+          ps_amount: Number(budgetInfo?.breakdown?.ps || 0),
+          mooe_amount: Number(budgetInfo?.breakdown?.mooe || 0),
+          co_amount: Number(budgetInfo?.breakdown?.co || 0),
+          status_of_po: form.po_status || "",
           created_by: user?.id,
           updated_by: user?.id,
-          // Keep the old DB compatibility field synchronized with the Excel field.
-          dv_no: form.dv_payroll_no || form.dv_no || null,
         }),
       });
       setModal(null);
       setEditing(null);
+      setBudgetInfo(null);
       setForm(emptyForm);
       setToast({ type: "success", message: editing ? "RAOD record updated successfully." : "RAOD record added successfully." });
-      await Promise.all([loadOverview(), loadEntries(1)]);
+      await Promise.all([loadOverview(), loadEntries(1), loadDepartmentSummary()]);
     } catch (e) {
       setError(e.message);
     } finally {
@@ -684,13 +1014,12 @@ function RaodRegistry({ user, onLogout, onNavigate, activePath }) {
   };
 
   const deleteEntry = async (row) => {
-    if (!window.confirm(`Delete RAOD record ${row.registry_no || row.id}?`)) return;
     try {
       await fetchJson(`${API_URL}/raod/${row.id}`, { method: "DELETE" });
       setToast({ type: "success", message: "RAOD record deleted successfully." });
       setModal(null);
       setSelected(null);
-      await Promise.all([loadOverview(), loadEntries(page)]);
+      await Promise.all([loadOverview(), loadEntries(page), loadDepartmentSummary()]);
     } catch (e) {
       setError(e.message);
     }
@@ -708,7 +1037,6 @@ function RaodRegistry({ user, onLogout, onNavigate, activePath }) {
     { key: "entry_date", label: "DATE", render: r => dateText(r.entry_date) },
     { key: "particulars", label: "PARTICULARS", render: r => <span className="max-w-[260px] truncate block">{r.particulars || "—"}</span> },
     { key: "responsibility_center_name", label: "DEPARTMENT / RC" },
-    { key: "allotment_amount", label: "ALLOTMENT", render: r => money(r.allotment_amount) },
     { key: "obligation_amount", label: "OBLIGATION", render: r => money(r.obligation_amount) },
     { key: "disbursement_amount", label: "DISBURSEMENT", render: r => money(r.disbursement_amount) },
     { key: "entry_status", label: "STATUS", render: r => <Status value={r.entry_status} /> },
@@ -720,49 +1048,207 @@ function RaodRegistry({ user, onLogout, onNavigate, activePath }) {
     )},
   ];
 
-  const renderHome = () => (
-    <>
-      <div className="mb-5 flex justify-end">
-        <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-sm">
-          <CalendarDays className="h-4 w-4 text-[#174fd1]" />
-          <span className="text-[10px] font-bold text-slate-600">FY {FY}</span>
-          <ChevronDown className="h-3.5 w-3.5 text-slate-400" />
+  const renderHome = () => {
+    const utilization = pct(obligation, allotment);
+    const disbursementVsAllotment = pct(disbursement, allotment);
+    const disbursementVsObligation = pct(disbursement, obligation);
+    const recentRows = (overview.recent_entries || entries || []).slice(0, 5);
+
+    const recentColumns = [
+      { key: "registry_no", label: "REGISTRY NO.", render: r => <span className="font-semibold text-[#10245b]">{r.registry_no || "—"}</span> },
+      { key: "entry_date", label: "DATE", render: r => dateText(r.entry_date) },
+      { key: "fund", label: "FUND", render: r => r.fund_source_name || r.fund_source_code || "Main Fund" },
+      { key: "responsibility_center_name", label: "DEPARTMENT / RC", render: r => r.responsibility_center_name || "—" },
+      { key: "payee", label: "PAYEE", render: r => r.payee || "—" },
+      { key: "particulars", label: "PARTICULARS", render: r => <span className="block max-w-[260px] truncate">{r.particulars || "—"}</span> },
+      { key: "obligation_amount", label: "OBLIGATION", render: r => money(r.obligation_amount) },
+      { key: "disbursement_amount", label: "DISBURSEMENT", render: r => money(r.disbursement_amount) },
+      { key: "entry_status", label: "STATUS", render: r => <Status value={r.entry_status || r.status} /> },
+      { key: "actions", label: "ACTIONS", render: r => (
+        <div className="flex items-center gap-1">
+          <button type="button" title="View" onClick={() => { setSelected(r); setModal("view"); }} className="rounded-md border border-slate-200 bg-white p-1.5 text-slate-500 hover:border-blue-200 hover:text-blue-600">
+            <Eye className="h-3.5 w-3.5" />
+          </button>
+          <button type="button" title="Edit" onClick={() => openEdit(r)} className="rounded-md border border-slate-200 bg-white p-1.5 text-slate-500 hover:border-blue-200 hover:text-blue-600">
+            <Pencil className="h-3.5 w-3.5" />
+          </button>
+          <button type="button" title="Delete" onClick={() => setDeleteTarget(r)} className="rounded-md border border-red-100 bg-white p-1.5 text-red-500 hover:bg-red-50">
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
         </div>
-      </div>
+      ) },
+    ];
 
-      <div className="mb-5 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-        {cardData.map(item => <CardButton key={item[0]} item={item} onClick={openView} />)}
-      </div>
-
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
-        <div className="xl:col-span-2">
-          <SectionTitle title="RAOD Financial Summary" text="FY 2026 — General Fund / Fund Cluster 101" />
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-            <Metric label="Total Allotment" value={money(allotment)} icon={WalletCards} />
-            <Metric label="Total Obligations" value={money(obligation)} icon={BarChart3} className="bg-emerald-50 text-emerald-700" />
-            <Metric label="Total Disbursements" value={money(disbursement)} icon={ArrowDownToLine} className="bg-violet-50 text-violet-700" />
-            <Metric label="Unobligated Balance" value={money(unobligated)} icon={Landmark} className="bg-amber-50 text-amber-700" />
+    return (
+      <>
+        {/* FISCAL YEAR SELECTOR */}
+        <div className="mb-4 flex items-center justify-end">
+          <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-sm">
+            <CalendarDays className="h-4 w-4 text-[#174fd1]" />
+            <label htmlFor="raod-fiscal-year" className="text-[11px] font-semibold text-slate-500">Fiscal Year</label>
+            <select
+              id="raod-fiscal-year"
+              value={selectedFiscalYear}
+              onChange={(e) => {
+                const year = Number(e.target.value);
+                setSelectedFiscalYear(year);
+                setPage(1);
+                setDepartmentPage(1);
+                setMonitoringPage(1);
+                setSelectedDepartment(null);
+                setDepartmentEntries([]);
+              }}
+              className="h-9 rounded-md border border-slate-200 bg-white px-3 text-[12px] font-bold text-[#10245b] outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-200"
+            >
+              <option value="2026">2026</option>
+              <option value="2025">2025</option>
+              <option value="2024">2024</option>
+              <option value="2023">2023</option>
+              <option value="2022">2022</option>
+            </select>
+            <ChevronDown className="-ml-7 pointer-events-none h-4 w-4 text-slate-500" />
           </div>
         </div>
-        <div>
-          <SectionTitle title="Recent RAOD Transactions" text={`${overview.total_records || 0} records in FY ${FY}`} />
-          <div className="rounded-xl border border-slate-100 bg-white shadow-sm">
-            {(overview.recent_entries || []).slice(0, 5).map(r => (
-              <button key={r.id} type="button" onClick={() => { setSelected(r); setModal("view"); }} className="flex w-full items-center justify-between gap-3 border-b border-slate-100 px-3 py-2.5 text-left last:border-b-0 hover:bg-slate-50">
-                <div className="min-w-0">
-                  <p className="truncate text-[10px] font-bold text-slate-700">{r.registry_no}</p>
-                  <p className="truncate text-[9px] text-slate-400">{r.particulars || "No particulars"}</p>
-                </div>
-                <span className="shrink-0 text-[9px] font-bold text-slate-700">{money(r.disbursement_amount || r.obligation_amount || r.allotment_amount)}</span>
+
+        {/* RAOD KPI SUMMARY */}
+        <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Total Allotment</p>
+                <p className="mt-2 text-[21px] font-extrabold tracking-tight text-[#10245b]">{money(allotment)}</p>
+                <p className="mt-1 text-[11px] text-slate-400">FY {selectedFiscalYear}</p>
+              </div>
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-blue-50 text-blue-600"><WalletCards className="h-5 w-5" /></span>
+            </div>
+            <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-blue-600" style={{ width: "100%" }} /></div>
+            <p className="mt-1 text-right text-[10px] font-semibold text-slate-500">100%</p>
+          </div>
+
+          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Total Obligations</p>
+                <p className="mt-2 text-[21px] font-extrabold tracking-tight text-[#10245b]">{money(obligation)}</p>
+                <p className="mt-1 text-[11px] text-slate-400">of total allotment</p>
+              </div>
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-emerald-600"><BarChart3 className="h-5 w-5" /></span>
+            </div>
+            <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-emerald-500" style={{ width: `${Math.min(100, utilization)}%` }} /></div>
+            <p className="mt-1 text-right text-[10px] font-semibold text-slate-500">{utilization.toFixed(2)}%</p>
+          </div>
+
+          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Total Disbursements</p>
+                <p className="mt-2 text-[21px] font-extrabold tracking-tight text-[#10245b]">{money(disbursement)}</p>
+                <p className="mt-1 text-[11px] text-slate-400">of total allotment</p>
+              </div>
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-orange-50 text-orange-600"><ArrowDownToLine className="h-5 w-5" /></span>
+            </div>
+            <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-orange-500" style={{ width: `${Math.min(100, disbursementVsAllotment)}%` }} /></div>
+            <p className="mt-1 text-right text-[10px] font-semibold text-slate-500">{disbursementVsAllotment.toFixed(2)}%</p>
+          </div>
+
+          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Unobligated Balance</p>
+                <p className="mt-2 text-[21px] font-extrabold tracking-tight text-[#10245b]">{money(unobligated)}</p>
+                <p className="mt-1 text-[11px] text-slate-400">remaining from allotment</p>
+              </div>
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-violet-50 text-violet-600"><CheckCircle2 className="h-5 w-5" /></span>
+            </div>
+            <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-violet-500" style={{ width: `${Math.min(100, pct(unobligated, allotment))}%` }} /></div>
+            <p className="mt-1 text-right text-[10px] font-semibold text-slate-500">{pct(unobligated, allotment).toFixed(2)}%</p>
+          </div>
+        </div>
+
+        {/* HERO + UTILIZATION */}
+        <div className="mb-5 grid grid-cols-1 gap-4 xl:grid-cols-3">
+          <div className="relative overflow-hidden rounded-xl border border-blue-100 bg-gradient-to-r from-blue-50 via-white to-indigo-50 p-6 shadow-sm xl:col-span-2">
+            <div className="relative z-10 max-w-[68%]">
+              <p className="text-[13px] font-bold uppercase tracking-wide text-blue-600">RAOD Registry</p>
+              <h1 className="mt-2 text-[25px] font-extrabold leading-tight text-[#10245b]">Monitor, Record, and Manage<br className="hidden md:block" /> Allotments, Obligations, and Disbursements</h1>
+              <p className="mt-3 text-[13px] leading-5 text-slate-600">Keep track of allotment, obligation, disbursement transactions and generate financial accountability reports in an organized and transparent manner.</p>
+              <button type="button" onClick={() => openView("dashboard")} className="mt-5 inline-flex items-center gap-2 rounded-lg bg-[#174fd1] px-5 py-3 text-[12px] font-bold text-white shadow-sm hover:bg-blue-700">
+                Go to Dashboard <ArrowRight className="h-4 w-4" />
               </button>
-            ))}
-            {!overview.recent_entries?.length && <p className="p-5 text-center text-[10px] text-slate-400">No RAOD transactions yet.</p>}
+            </div>
+            <div className="absolute bottom-0 right-5 flex h-44 w-52 items-center justify-center opacity-90">
+              <div className="relative flex h-32 w-40 items-end justify-center rounded-2xl bg-white/80 shadow-lg ring-1 ring-blue-100">
+                <FileBarChart className="mb-5 h-24 w-24 text-blue-500" />
+                <div className="absolute -bottom-3 -left-3 h-10 w-10 rounded-full bg-orange-400 shadow-md" />
+                <div className="absolute -bottom-1 right-0 h-14 w-14 rounded-full bg-orange-500/90 shadow-md" />
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="mb-5">
+              <h2 className="text-[17px] font-extrabold text-[#10245b]">Allotment Utilization</h2>
+              <p className="mt-1 text-[11px] leading-4 text-slate-500">Comparison of allotment, obligation, and disbursement for FY {selectedFiscalYear}.</p>
+            </div>
+            <div className="space-y-5">
+              <div>
+                <div className="mb-2 flex items-center justify-between text-[11px]"><span className="font-semibold text-slate-600">Obligation Utilization</span><span className="font-bold text-[#10245b]">{utilization.toFixed(2)}%</span></div>
+                <div className="h-2.5 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-orange-500" style={{ width: `${Math.min(100, utilization)}%` }} /></div>
+              </div>
+              <div>
+                <div className="mb-2 flex items-center justify-between text-[11px]"><span className="font-semibold text-slate-600">Disbursement vs Allotment</span><span className="font-bold text-[#10245b]">{disbursementVsAllotment.toFixed(2)}%</span></div>
+                <div className="h-2.5 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-violet-500" style={{ width: `${Math.min(100, disbursementVsAllotment)}%` }} /></div>
+              </div>
+              <div>
+                <div className="mb-2 flex items-center justify-between text-[11px]"><span className="font-semibold text-slate-600">Disbursement vs Obligation</span><span className="font-bold text-[#10245b]">{disbursementVsObligation.toFixed(2)}%</span></div>
+                <div className="h-2.5 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-emerald-500" style={{ width: `${Math.min(100, disbursementVsObligation)}%` }} /></div>
+              </div>
+            </div>
           </div>
         </div>
-      </div>
-    </>
-  );
 
+        {/* MAIN MODULES */}
+        <div className="mb-5">
+          <div className="mb-3">
+            <h2 className="text-[18px] font-extrabold text-[#10245b]">MODULES</h2>
+            <p className="mt-0.5 text-[12px] text-slate-500">Quick access to RAOD functions.</p>
+          </div>
+          <div className="grid grid-cols-1 items-stretch gap-3 md:grid-cols-2 xl:grid-cols-5">
+            {cardData.map(item => <CardButton key={item.id} item={item} onClick={openView} />)}
+          </div>
+        </div>
+
+        {/* RECENT TRANSACTIONS */}
+        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+          <div className="flex flex-col gap-3 border-b border-slate-100 px-4 py-4 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <h2 className="text-[17px] font-extrabold text-[#10245b]">Recent RAOD Transactions</h2>
+              <p className="mt-0.5 text-[11px] text-slate-500">Latest obligation and disbursement transactions for FY {selectedFiscalYear}.</p>
+            </div>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <div className="relative min-w-[260px]">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search registry no., department, payee, particulars..." className="pl-9 text-[11px]" />
+              </div>
+              <select value={activeTab} onChange={e => { setActiveTab(e.target.value); setPage(1); }} className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-[11px] font-semibold text-slate-600 outline-none focus:border-blue-400">
+                <option value="all">All Status</option>
+                <option value="obligations">Obligations</option>
+                <option value="disbursements">Disbursements</option>
+                <option value="balance">With Balance</option>
+              </select>
+              <button type="button" onClick={() => openView("transactions")} className="inline-flex h-9 items-center justify-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-4 text-[11px] font-bold text-blue-700 hover:bg-blue-100">View All <ArrowRight className="h-3.5 w-3.5" /></button>
+            </div>
+          </div>
+          <div className="overflow-x-auto">
+            <Table columns={recentColumns} rows={recentRows} empty={loading ? "Loading RAOD transactions..." : "No RAOD transactions found."} />
+          </div>
+          <div className="px-4 pb-4">
+            <Pagination currentPage={page} totalPages={pagination.totalPages} totalItems={pagination.totalItems} pageSize={LIMIT} onPageChange={loadEntries} />
+          </div>
+        </div>
+      </>
+    );
+  };
   const renderTransactions = () => (
     <>
       <BackBar title="4. RAOD Transactions" onBack={backHome} />
@@ -779,21 +1265,28 @@ function RaodRegistry({ user, onLogout, onNavigate, activePath }) {
 
       <div className="mb-3 flex gap-1 overflow-x-auto rounded-lg border border-slate-100 bg-white p-1 shadow-sm">
         {[["all","All Records"],["obligations","Obligations"],["disbursements","Disbursements"],["balance","With Balance"]].map(([id,label]) => (
-          <button key={id} type="button" onClick={() => { setActiveTab(id); setPage(1); }} className={`whitespace-nowrap rounded-md px-3 py-2 text-[9px] font-bold ${activeTab === id ? "bg-[#174fd1] text-white" : "text-slate-500 hover:bg-slate-50"}`}>{label}</button>
+          <button
+            key={id}
+            type="button"
+            onClick={() => {
+              setActiveTab(id);
+              setPage(1);
+            }}
+            className={`whitespace-nowrap rounded-md px-3 py-2 text-[9px] font-bold ${activeTab === id ? "bg-[#174fd1] text-white" : "text-slate-500 hover:bg-slate-50"}`}
+          >
+            {label}
+          </button>
         ))}
       </div>
 
       <Table columns={entryColumns} rows={entries} empty={loading ? "Loading RAOD records..." : "No RAOD records found."} />
-      <div className="mt-3 flex items-center justify-between text-[10px] text-slate-400">
-        <span>Showing {entries.length ? ((page - 1) * LIMIT + 1) : 0} to {Math.min(page * LIMIT, pagination.totalItems)} of {pagination.totalItems} entries</span>
-        <div className="flex items-center gap-1">
-          <button type="button" disabled={page <= 1} onClick={() => loadEntries(page - 1)} className="rounded border p-1.5 disabled:opacity-30"><ArrowLeft className="h-3 w-3" /></button>
-          {Array.from({ length: Math.min(5, pagination.totalPages) }, (_, i) => i + 1).map(x => (
-            <button key={x} type="button" onClick={() => loadEntries(x)} className={`rounded px-2.5 py-1.5 ${page === x ? "bg-[#174fd1] text-white" : "border border-slate-200 bg-white text-slate-500"}`}>{x}</button>
-          ))}
-          <button type="button" disabled={page >= pagination.totalPages} onClick={() => loadEntries(page + 1)} className="rounded border p-1.5 disabled:opacity-30"><ArrowRight className="h-3 w-3" /></button>
-        </div>
-      </div>
+      <Pagination
+        currentPage={page}
+        totalPages={pagination.totalPages}
+        totalItems={pagination.totalItems}
+        pageSize={LIMIT}
+        onPageChange={loadEntries}
+      />
     </>
   );
 
@@ -807,7 +1300,7 @@ function RaodRegistry({ user, onLogout, onNavigate, activePath }) {
       <>
         <BackBar title="2. Allotment & Obligation" onBack={backHome} />
         <div className="mb-4 flex gap-1 rounded-lg border border-slate-100 bg-white p-1 shadow-sm">
-          {[["summary","Summary"],["classes","PS / MOOE / CO"],["details","Allotment Details"]].map(([id,label]) => <button key={id} onClick={() => setAllotTab(id)} type="button" className={`rounded-md px-4 py-2 text-[9px] font-bold ${allotTab === id ? "bg-[#174fd1] text-white" : "text-slate-500"}`}>{label}</button>)}
+          {[["summary","Summary"],["classes","PS / MOOE / CO"],["details","Allotment Details"],["departments","Per Department / RC"]].map(([id,label]) => <button key={id} onClick={() => { setAllotTab(id); if (id === "departments") { setDepartmentPage(1); loadDepartmentSummary(); } }} type="button" className={`whitespace-nowrap rounded-md px-4 py-2 text-[9px] font-bold ${allotTab === id ? "bg-[#174fd1] text-white" : "text-slate-500"}`}>{label}</button>)}
         </div>
         {allotTab === "summary" && (
           <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
@@ -825,7 +1318,53 @@ function RaodRegistry({ user, onLogout, onNavigate, activePath }) {
           ]} rows={rows} />
         )}
         {allotTab === "details" && (
-          <Table columns={entryColumns.slice(0, 8)} rows={entries} empty="No allotment details found." />
+          <>
+            <Table columns={entryColumns.slice(0, 8)} rows={entries} empty="No allotment details found." />
+            <Pagination
+              currentPage={page}
+              totalPages={pagination.totalPages}
+              totalItems={pagination.totalItems}
+              pageSize={LIMIT}
+              onPageChange={loadEntries}
+            />
+          </>
+        )}
+        {allotTab === "departments" && (
+          <div className="space-y-4">
+            <SectionTitle title="Allotment & Obligation by Department / Responsibility Center" text="Select a department / responsibility center to view its actual RAOD transactions." />
+            <Table columns={[
+              { key: "code", label: "RC CODE" },
+              { key: "name", label: "DEPARTMENT / RESPONSIBILITY CENTER" },
+              { key: "allotment", label: "ALLOTMENT", render: r => money(r.allotment) },
+              { key: "obligation", label: "OBLIGATION", render: r => money(r.obligation) },
+              { key: "disbursement", label: "DISBURSEMENT", render: r => money(r.disbursement) },
+              { key: "unobligated", label: "UNOBLIGATED", render: r => money(r.unobligated) },
+              { key: "unpaid_obligation", label: "UNPAID OBLIGATION", render: r => money(r.unpaid_obligation) },
+            ]} rows={departmentRows.slice((departmentPage - 1) * DEPARTMENT_PAGE_SIZE, departmentPage * DEPARTMENT_PAGE_SIZE)} empty="No Department / Responsibility Center records found." />
+            <Pagination
+              currentPage={departmentPage}
+              totalPages={Math.max(1, Math.ceil(departmentRows.length / DEPARTMENT_PAGE_SIZE))}
+              totalItems={departmentRows.length}
+              pageSize={DEPARTMENT_PAGE_SIZE}
+              onPageChange={setDepartmentPage}
+            />
+            {selectedDepartment && (
+              <div className="rounded-xl border border-blue-100 bg-blue-50/50 p-4">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <div><p className="text-[9px] font-bold uppercase tracking-wide text-blue-600">Selected Department / RC</p><h3 className="mt-1 text-sm font-extrabold text-[#10245b]">{selectedDepartment.code ? `${selectedDepartment.code} — ` : ""}{selectedDepartment.name}</h3></div>
+                  <button type="button" onClick={() => setSelectedDepartment(null)} className="rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-[9px] font-bold text-slate-600">Close</button>
+                </div>
+                <Table columns={entryColumns} rows={departmentEntries} empty="No RAOD transactions for this responsibility center." />
+                <Pagination
+                  currentPage={departmentPagination.currentPage}
+                  totalPages={departmentPagination.totalPages}
+                  totalItems={departmentPagination.totalItems}
+                  pageSize={LIMIT}
+                  onPageChange={(nextPage) => loadDepartmentEntries(selectedDepartment.id, nextPage)}
+                />
+              </div>
+            )}
+          </div>
         )}
       </>
     );
@@ -846,7 +1385,7 @@ function RaodRegistry({ user, onLogout, onNavigate, activePath }) {
       {fundTab === "transactions" && <Table columns={entryColumns} rows={moduleData.entries || entries} />}
       {fundTab === "gaa" && <BalancePanel title="GAA Balance" allotment={allotment} obligation={obligation} disbursement={disbursement} remaining={unobligated} />}
       {fundTab === "wfp" && <BalancePanel title="WFP Balance" allotment={allotment} obligation={obligation} disbursement={disbursement} remaining={unobligated} />}
-      {fundTab === "reports" && <ReportList onGenerate={x => setReportType(x)} />}
+      {fundTab === "reports" && <ReportList onGenerate={x => { setReportType(x); setModal("report"); }} />}
     </>
   );
 
@@ -863,6 +1402,25 @@ function RaodRegistry({ user, onLogout, onNavigate, activePath }) {
         <BalancePanel title="Obligation Monitoring" allotment={allotment} obligation={obligation} disbursement={disbursement} remaining={unobligated} />
         <BalancePanel title="Disbursement Monitoring" allotment={allotment} obligation={obligation} disbursement={disbursement} remaining={undisbursed} />
       </div>
+      <div className="mt-4">
+        <SectionTitle title="Monitoring by Department / Responsibility Center" text="Compare allotment, obligation, disbursement, and unpaid obligation for each active responsibility center." />
+        <Table columns={[
+          { key: "code", label: "RC CODE" },
+          { key: "name", label: "DEPARTMENT / RC" },
+          { key: "allotment", label: "ALLOTMENT", render: r => money(r.allotment) },
+          { key: "obligation", label: "OBLIGATION", render: r => money(r.obligation) },
+          { key: "disbursement", label: "DISBURSEMENT", render: r => money(r.disbursement) },
+          { key: "unobligated", label: "UNOBLIGATED", render: r => money(r.unobligated) },
+          { key: "unpaid_obligation", label: "UNPAID OBLIGATION", render: r => money(r.unpaid_obligation) },
+        ]} rows={departmentRows.slice((monitoringPage - 1) * MONITORING_PAGE_SIZE, monitoringPage * MONITORING_PAGE_SIZE)} empty="No Department / Responsibility Center data found." />
+        <Pagination
+          currentPage={monitoringPage}
+          totalPages={Math.max(1, Math.ceil(departmentRows.length / MONITORING_PAGE_SIZE))}
+          totalItems={departmentRows.length}
+          pageSize={MONITORING_PAGE_SIZE}
+          onPageChange={setMonitoringPage}
+        />
+      </div>
     </>
   );
 
@@ -871,7 +1429,7 @@ function RaodRegistry({ user, onLogout, onNavigate, activePath }) {
     return (
       <>
         <BackBar title="6. Fund / RC Breakdown" onBack={backHome} />
-        <SectionTitle title="General Fund / Responsibility Center Breakdown" text="RAOD FY 2026 totals by responsibility center." />
+        <SectionTitle title="General Fund / Responsibility Center Breakdown" text="RAOD totals by responsibility center for the selected fiscal year." />
         <Table columns={[
           { key: "code", label: "RC CODE" },
           { key: "name", label: "RESPONSIBILITY CENTER" },
@@ -893,10 +1451,10 @@ function RaodRegistry({ user, onLogout, onNavigate, activePath }) {
           {["FAR 1","FAR 1A","SARONCA"].map(x => <button key={x} type="button" onClick={() => setReportType(x)} className={`mb-2 flex w-full items-center justify-between rounded-lg border px-3 py-3 text-left text-[10px] font-bold ${reportType === x ? "border-blue-200 bg-blue-50 text-blue-700" : "border-slate-100 text-slate-600"}`}>{x}<ArrowRight className="h-3.5 w-3.5"/></button>)}
         </div>
         <div className="lg:col-span-2 rounded-xl border border-slate-100 bg-white p-5 shadow-sm">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-4"><div><p className="text-[9px] font-bold uppercase text-slate-400">FY {FY} • General Fund 101</p><h3 className="mt-1 text-lg font-extrabold text-[#10245b]">{reportType}</h3></div><FileBarChart className="h-7 w-7 text-red-500"/></div>
+          <div className="flex items-center justify-between border-b border-slate-100 pb-4"><div><p className="text-[9px] font-bold uppercase text-slate-400">FY {selectedFiscalYear} • General Fund 101</p><h3 className="mt-1 text-lg font-extrabold text-[#10245b]">{reportType}</h3></div><FileBarChart className="h-7 w-7 text-red-500"/></div>
           <p className="mt-4 text-[11px] leading-5 text-slate-500">{reportDescription(reportType)}</p>
           <div className="mt-5 grid grid-cols-3 gap-3"><Metric label="Allotment" value={money(allotment)} icon={WalletCards}/><Metric label="Obligation" value={money(obligation)} icon={BarChart3} className="bg-amber-50 text-amber-700"/><Metric label="Disbursement" value={money(disbursement)} icon={ArrowDownToLine} className="bg-violet-50 text-violet-700"/></div>
-          <div className="mt-5 flex gap-2"><button type="button" onClick={() => setModal("report")} className="rounded-lg bg-[#174fd1] px-4 py-2 text-[10px] font-bold text-white"><Eye className="mr-1 inline h-3.5 w-3.5"/> Preview</button><button type="button" onClick={() => setToast({type:"success",message:`${reportType} is ready for printing/export.`})} className="rounded-lg border border-slate-200 px-4 py-2 text-[10px] font-bold text-slate-600"><Printer className="mr-1 inline h-3.5 w-3.5"/> Print</button></div>
+          <div className="mt-5 flex gap-2"><button type="button" onClick={async () => { await loadEntries(1); setModal("report"); }} className="rounded-lg bg-[#174fd1] px-4 py-2 text-[10px] font-bold text-white"><Eye className="mr-1 inline h-3.5 w-3.5"/> Preview</button><button type="button" onClick={() => window.print()} className="rounded-lg border border-slate-200 px-4 py-2 text-[10px] font-bold text-slate-600"><Printer className="mr-1 inline h-3.5 w-3.5"/> Print</button></div>
         </div>
       </div>
     </>
@@ -940,7 +1498,7 @@ function RaodRegistry({ user, onLogout, onNavigate, activePath }) {
 
       <div className="mb-4 grid grid-cols-1 gap-4 lg:grid-cols-3">
         <div className="rounded-xl border border-slate-100 bg-white p-5 shadow-sm">
-          <SectionTitle title="General Fund 101" text={`FY ${FY} — RAOD Financial Summary`} />
+          <SectionTitle title="General Fund 101" text={`FY ${selectedFiscalYear} — RAOD Financial Summary`} />
           <div className="space-y-3">
             <div className="flex items-center justify-between border-b border-slate-100 pb-2"><span className="text-[10px] text-slate-500">Allotment</span><b className="text-[11px] text-slate-700">{money(allotment)}</b></div>
             <div className="flex items-center justify-between border-b border-slate-100 pb-2"><span className="text-[10px] text-slate-500">Obligations</span><b className="text-[11px] text-slate-700">{money(obligation)}</b></div>
@@ -970,7 +1528,7 @@ function RaodRegistry({ user, onLogout, onNavigate, activePath }) {
 
       <div className="rounded-xl border border-slate-100 bg-white shadow-sm">
         <div className="border-b border-slate-100 px-5 py-4">
-          <SectionTitle title="Recent RAOD Transactions" text={`${overview.total_records || 0} records in FY ${FY}`} />
+          <SectionTitle title="Recent RAOD Transactions" text={`${overview.total_records || 0} records in FY ${selectedFiscalYear}`} />
         </div>
         <Table columns={entryColumns.filter(c => c.key !== "actions")} rows={(overview.recent_entries || []).slice(0, 10)} empty="No RAOD transactions yet." />
       </div>
@@ -982,11 +1540,15 @@ function RaodRegistry({ user, onLogout, onNavigate, activePath }) {
       <BackBar title="9. Reports & Export" onBack={backHome} />
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <div className="rounded-xl border border-slate-100 bg-white p-4 shadow-sm">
-          <SectionTitle title="Report Selection" text="Use RAOD FY 2026 data." />
+          <SectionTitle title="Report Selection" text="Use the selected fiscal year RAOD data." />
           <Field label="Report Type"><Select value={reportType} onChange={e => setReportType(e.target.value)}><option>RAOD Registry</option><option>FAR 1</option><option>FAR 1A</option><option>SARONCA</option><option>GAA Balance</option><option>WFP Balance</option><option>GAM</option><option>Table List</option></Select></Field>
           <Field label="Fund" className="mt-3"><Select><option>101 — GENERAL FUND</option></Select></Field>
-          <Field label="Period" className="mt-3"><Select><option>FY 2026</option></Select></Field>
-          <div className="mt-4 grid grid-cols-3 gap-2"><button type="button" onClick={() => setModal("report")} className="rounded-lg border border-slate-200 p-2 text-[9px] font-bold text-slate-600"><Eye className="mx-auto mb-1 h-4 w-4"/>Preview</button><button type="button" onClick={() => setToast({type:"success",message:"Excel export action prepared from RAOD records."})} className="rounded-lg border border-slate-200 p-2 text-[9px] font-bold text-slate-600"><FileSpreadsheet className="mx-auto mb-1 h-4 w-4"/>Excel</button><button type="button" onClick={() => window.print()} className="rounded-lg border border-slate-200 p-2 text-[9px] font-bold text-slate-600"><Printer className="mx-auto mb-1 h-4 w-4"/>Print</button></div>
+          <Field label="Department / Responsibility Center" className="mt-3"><Select value={selectedDepartment?.id || ""} onChange={e => { const r = departmentRows.find(x => String(x.id) === String(e.target.value)); setSelectedDepartment(r || null); if (r) loadDepartmentEntries(r.id, 1); else setDepartmentEntries([]); }}>
+            <option value="">All Departments / RC</option>
+            {departmentRows.map(r => <option key={r.id} value={r.id}>{r.code ? `${r.code} — ` : ""}{r.name}</option>)}
+          </Select></Field>
+          <Field label="Period" className="mt-3"><Select><option>FY {selectedFiscalYear}</option></Select></Field>
+          <div className="mt-4 grid grid-cols-3 gap-2"><button type="button" onClick={async () => { await loadEntries(1); setModal("report"); }} className="rounded-lg border border-slate-200 p-2 text-[9px] font-bold text-slate-600"><Eye className="mx-auto mb-1 h-4 w-4"/>Preview</button><button type="button" onClick={() => { downloadCsv(`RAOD_FY${selectedFiscalYear}_${reportType.replace(/[^a-z0-9]+/gi, "_")}${selectedDepartment ? `_${selectedDepartment.code || selectedDepartment.name}` : ""}.csv`, selectedDepartment ? departmentEntries : entries); setToast({type:"success",message:"RAOD records exported to CSV (Excel-compatible)."}); }} className="rounded-lg border border-slate-200 p-2 text-[9px] font-bold text-slate-600"><FileSpreadsheet className="mx-auto mb-1 h-4 w-4"/>Excel</button><button type="button" onClick={() => window.print()} className="rounded-lg border border-slate-200 p-2 text-[9px] font-bold text-slate-600"><Printer className="mx-auto mb-1 h-4 w-4"/>Print</button></div>
         </div>
         <div className="lg:col-span-2"><ReportPreview title={reportType} entries={entries.slice(0, 8)} /></div>
       </div>
@@ -995,14 +1557,10 @@ function RaodRegistry({ user, onLogout, onNavigate, activePath }) {
 
   const renderView = () => {
     if (view === "home") return renderHome();
-    if (view === "overview") return renderOverview();
+    if (view === "dashboard") return renderOverview();
+    if (view === "allotment-budget") return renderAllotment();
     if (view === "transactions") return renderTransactions();
-    if (view === "allotment-obligation") return renderAllotment();
-    if (view === "fund-registry") return renderFundRegistry();
     if (view === "monitoring") return renderMonitoring();
-    if (view === "fund-rc-breakdown") return renderBreakdown();
-    if (view === "financial-reports") return renderFinancialReports();
-    if (view === "master-data") return renderMaster();
     if (view === "reports-export") return renderReportsExport();
     return null;
   };
@@ -1018,7 +1576,7 @@ function RaodRegistry({ user, onLogout, onNavigate, activePath }) {
         {renderView()}
       </div>
 
-      {modal === "form" && <Modal title={editing ? "Edit RAOD Transaction" : "Add RAOD Transaction"} onClose={() => setModal(null)} wide><TransactionForm refs={refs} form={form} setForm={setForm} onSubmit={saveEntry} saving={saving} onClose={() => setModal(null)} /></Modal>}
+      {modal === "form" && <Modal title={editing ? "Edit RAOD Transaction" : "Add RAOD Transaction"} onClose={() => setModal(null)} wide><TransactionForm refs={refs} form={form} setForm={setForm} budgetInfo={budgetInfo} editing={editing} onSubmit={saveEntry} saving={saving} onClose={() => setModal(null)} /></Modal>}
 
       {modal === "view" && selected && <Modal title={`RAOD Record — ${selected.registry_no || selected.id}`} onClose={() => setModal(null)} wide>
         <div className="grid grid-cols-1 gap-x-5 gap-y-3 md:grid-cols-3">
@@ -1050,13 +1608,10 @@ function RaodRegistry({ user, onLogout, onNavigate, activePath }) {
             ["WFP Source Code", selected.wfp_source_code],
             ["DV / Payroll No.", selected.dv_payroll_no || selected.dv_no],
             ["PO No.", selected.po_no],
-            ["Status of PO", selected.status_of_po],
+            ["Status of PO", selected.po_status || selected.status_of_po],
             ["Obligation", money(selected.obligation_amount)],
-            ["PS", money(selected.ps_amount)],
-            ["MOOE", money(selected.mooe_amount)],
-            ["CO", money(selected.co_amount)],
             ["Disbursement", money(selected.disbursement_amount)],
-            ["Balances", money(Math.max(0, Number(selected.allotment_amount || 0) - Number(selected.obligation_amount || 0)))],
+            ["Running Balance", money(selected.running_balance ?? Math.max(0, Number(selected.allotment_amount || 0) - Number(selected.obligation_amount || 0)))],
             ["Unpaid Obligation", money(selected.unpaid_obligation)],
             ["Status", selected.entry_status || selected.status],
             ["Particulars / Description", selected.particulars],
@@ -1072,9 +1627,17 @@ function RaodRegistry({ user, onLogout, onNavigate, activePath }) {
           <button type="button" onClick={() => openEdit(selected)} className="rounded-lg border px-3 py-2 text-[10px] font-bold">
             <Pencil className="mr-1 inline h-3.5 w-3.5"/> Edit
           </button>
-          <button type="button" onClick={() => deleteEntry(selected)} className="rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-[10px] font-bold text-red-600">
+          <button type="button" onClick={() => setDeleteTarget(selected)} className="rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-[10px] font-bold text-red-600">
             <Trash2 className="mr-1 inline h-3.5 w-3.5"/> Delete
           </button>
+        </div>
+      </Modal>}
+
+      {deleteTarget && <Modal title="Delete RAOD Record" onClose={() => setDeleteTarget(null)}>
+        <p className="text-[11px] leading-5 text-slate-600">Are you sure you want to delete RAOD record <b>{deleteTarget.registry_no || deleteTarget.id}</b>? This action cannot be undone.</p>
+        <div className="mt-5 flex justify-end gap-2">
+          <button type="button" onClick={() => setDeleteTarget(null)} className="rounded-lg border border-slate-200 px-4 py-2 text-[10px] font-bold text-slate-600">Cancel</button>
+          <button type="button" onClick={async () => { const row = deleteTarget; setDeleteTarget(null); await deleteEntry(row); }} className="rounded-lg bg-red-600 px-4 py-2 text-[10px] font-bold text-white">Delete Record</button>
         </div>
       </Modal>}
 
@@ -1122,24 +1685,24 @@ function ReportList({ onGenerate }) {
 
 function reportDescription(x) {
   if (x === "FAR 1") return "Financial Accountability Report No. 1 covering appropriations, allotments, obligations, disbursements, and balances.";
-  if (x === "FAR 1A") return "Financial Accountability Report No. 1A based on the RAOD registry and FY 2026 General Fund records.";
+  if (x === "FAR 1A") return "Financial Accountability Report No. 1A based on the RAOD registry and selected fiscal-year General Fund records.";
   if (x === "SARONCA") return "Summary of Appropriations, Releases, Obligations and Notice of Cash Allocation using available RAOD data.";
   return "RAOD report preview.";
 }
 
 function ReportPreview({ title, entries }) {
-  const total = entries.reduce((a, r) => a + Number(r.disbursement_amount || r.obligation_amount || r.allotment_amount || 0), 0);
+  const total = entries.reduce((a, r) => a + Number(r.disbursement_amount || r.obligation_amount || 0), 0);
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm print:shadow-none">
       <div className="border-b-2 border-[#102b67] pb-3 text-center">
         <p className="text-[9px] font-bold uppercase tracking-widest text-slate-500">University of Abra — Main Campus</p>
         <h2 className="mt-1 text-lg font-extrabold text-slate-800">{title}</h2>
-        <p className="mt-1 text-[9px] text-slate-400">FY 2026 • General Fund / 101 • RAOD Registry</p>
+        <p className="mt-1 text-[9px] text-slate-400">Selected Fiscal Year • General Fund / 101 • RAOD Registry</p>
       </div>
       <div className="mt-5 overflow-x-auto">
         <table className="min-w-full text-[9px]">
           <thead><tr className="bg-slate-100 font-bold text-slate-700"><th className="px-2 py-2 text-left">RAOD No.</th><th className="px-2 py-2">Date</th><th className="px-2 py-2 text-left">Department</th><th className="px-2 py-2 text-right">Amount</th></tr></thead>
-          <tbody className="divide-y divide-slate-100">{entries.map(r => <tr key={r.id}><td className="px-2 py-2">{r.registry_no}</td><td className="px-2 py-2 text-center">{dateText(r.entry_date)}</td><td className="px-2 py-2">{r.responsibility_center_name || "—"}</td><td className="px-2 py-2 text-right">{money(r.disbursement_amount || r.obligation_amount || r.allotment_amount)}</td></tr>)}</tbody>
+          <tbody className="divide-y divide-slate-100">{entries.map(r => <tr key={r.id}><td className="px-2 py-2">{r.registry_no}</td><td className="px-2 py-2 text-center">{dateText(r.entry_date)}</td><td className="px-2 py-2">{r.responsibility_center_name || "—"}</td><td className="px-2 py-2 text-right">{money(r.disbursement_amount || r.obligation_amount)}</td></tr>)}</tbody>
           <tfoot><tr className="bg-slate-50 font-extrabold"><td colSpan="3" className="px-2 py-2 text-right">TOTAL</td><td className="px-2 py-2 text-right">{money(total)}</td></tr></tfoot>
         </table>
       </div>
@@ -1148,7 +1711,3 @@ function ReportPreview({ title, entries }) {
 }
 
 export default RaodRegistry;
-
-
-
-

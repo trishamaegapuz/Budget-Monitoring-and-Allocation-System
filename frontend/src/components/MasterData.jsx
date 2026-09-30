@@ -16,7 +16,6 @@ import {
   BookOpen,
   Building2,
   ListOrdered,
-  Users,
   PieChart,
   Flower2,
   MoreHorizontal,
@@ -32,6 +31,7 @@ import {
   RefreshCw,
   Eye,
   AlertTriangle,
+  Users,
 } from 'lucide-react';
 
 
@@ -42,6 +42,9 @@ const DEFAULT_FORM = {
   category: '',
   fund_source_id: '',
   fund_group_id: '',
+  old_code: '',
+  account_title: '',
+  abbreviation: '',
   status: 'Active',
 };
 
@@ -65,10 +68,6 @@ const OTHER_TYPES = [
   {
     value: 'wfp',
     label: 'WFP Sources',
-  },
-  {
-    value: 'users',
-    label: 'Users',
   },
 ];
 
@@ -245,8 +244,7 @@ export default function MasterData({
     activeTab,
   ]);
 
-  const isReadOnly =
-    activeTab === 'others';
+  const isReadOnly = false;
 
   // ==========================================================
   // LABEL HELPERS
@@ -260,8 +258,22 @@ export default function MasterData({
       objects: 'Object Code',
       sources: 'Funding Source',
       allotments: 'Allotment Class',
-      others: 'Reference Data',
     };
+
+    if (activeTab === 'others') {
+      const otherLabels = {
+        mfo: 'MFO',
+        uacs: 'UACS Code',
+        campuses: 'Campus',
+        pap: 'PAP',
+        wfp: 'WFP Source',
+      };
+
+      return (
+        otherLabels[othersType] ||
+        'Reference Data'
+      );
+    }
 
     return (
       labels[activeTab] ||
@@ -269,6 +281,7 @@ export default function MasterData({
     );
   }, [
     activeTab,
+    othersType,
   ]);
 
   const getOthersLabel = useCallback(() => {
@@ -413,10 +426,6 @@ export default function MasterData({
                 data.allotments
               ) || 0,
 
-            users:
-              Number(
-                data.users
-              ) || 0,
           });
         } catch (err) {
           console.error(
@@ -593,17 +602,6 @@ export default function MasterData({
 
   const openCreateModal =
     () => {
-      if (
-        isReadOnly
-      ) {
-        showToast(
-          'This reference data is view-only.',
-          'info'
-        );
-
-        return;
-      }
-
       setEditingId(null);
 
       setFormData({
@@ -619,17 +617,6 @@ export default function MasterData({
 
   const openEditModal =
     (item) => {
-      if (
-        isReadOnly
-      ) {
-        showToast(
-          'This reference data is view-only.',
-          'info'
-        );
-
-        return;
-      }
-
       setEditingId(
         item.id
       );
@@ -654,6 +641,19 @@ export default function MasterData({
 
         category:
           item.category ||
+          '',
+
+        old_code:
+          item.old_code ||
+          '',
+
+        account_title:
+          item.account_title ||
+          item.name ||
+          '',
+
+        abbreviation:
+          item.abbreviation ||
           '',
 
         fund_source_id:
@@ -768,10 +768,15 @@ export default function MasterData({
         const endpoint =
           activeTabConfig.endpoint;
 
+        const typeQuery =
+          activeTab === 'others'
+            ? `?type=${encodeURIComponent(othersType)}`
+            : '';
+
         const url =
           editingId
-            ? `${API_URL}/masterdata/${endpoint}/${editingId}`
-            : `${API_URL}/masterdata/${endpoint}`;
+            ? `${API_URL}/masterdata/${endpoint}/${editingId}${typeQuery}`
+            : `${API_URL}/masterdata/${endpoint}${typeQuery}`;
 
         const method =
           editingId
@@ -825,6 +830,40 @@ export default function MasterData({
         ) {
           payload.category =
             formData.category.trim();
+        }
+
+        // ----------------------------------------------------
+        // OTHER REFERENCE DATA
+        // ----------------------------------------------------
+
+        if (
+          activeTab ===
+          'others'
+        ) {
+          payload.type =
+            othersType;
+
+          if (
+            othersType ===
+            'uacs'
+          ) {
+            payload.old_code =
+              formData.old_code.trim();
+
+            payload.account_title =
+              (
+                formData.account_title ||
+                formData.name
+              ).trim();
+          }
+
+          if (
+            othersType ===
+            'campuses'
+          ) {
+            payload.abbreviation =
+              formData.abbreviation.trim();
+          }
         }
 
         const response =
@@ -908,17 +947,6 @@ export default function MasterData({
 
   const openDeleteModal =
     (item) => {
-      if (
-        isReadOnly
-      ) {
-        showToast(
-          'This reference data is view-only.',
-          'info'
-        );
-
-        return;
-      }
-
       setDeleteId(
         item.id
       );
@@ -964,9 +992,14 @@ export default function MasterData({
         const endpoint =
           activeTabConfig.endpoint;
 
+        const typeQuery =
+          activeTab === 'others'
+            ? `?type=${encodeURIComponent(othersType)}`
+            : '';
+
         const response =
           await fetch(
-            `${API_URL}/masterdata/${endpoint}/${deleteId}`,
+            `${API_URL}/masterdata/${endpoint}/${deleteId}${typeQuery}`,
             {
               method:
                 'DELETE',
@@ -1267,7 +1300,7 @@ export default function MasterData({
           'Total Users',
         icon:
           Users,
-      },
+              },
     ];
 
   // ==========================================================
@@ -1452,7 +1485,7 @@ export default function MasterData({
             <p className="text-xs text-gray-500 mt-0.5">
               {activeTab ===
               'others'
-                ? `View ${getOthersLabel()} reference records used throughout the system.`
+                ? `Manage ${getOthersLabel()} reference records used throughout the system.`
                 : activeTabConfig.description}
             </p>
 
@@ -2038,7 +2071,9 @@ export default function MasterData({
                 <div>
 
                   <label className="block text-xs font-semibold text-gray-700 mb-1">
-                    Name *
+                    {activeTab === 'others' && othersType === 'uacs'
+                      ? 'Account Title *'
+                      : 'Name *'}
                   </label>
 
                   <input
@@ -2056,6 +2091,79 @@ export default function MasterData({
                   />
 
                 </div>
+
+                {/* UACS-SPECIFIC FIELDS */}
+
+                {activeTab ===
+                  'others' &&
+                  othersType ===
+                    'uacs' && (
+                  <>
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-700 mb-1">
+                        Old UACS Code
+                      </label>
+
+                      <input
+                        type="text"
+                        name="old_code"
+                        value={
+                          formData.old_code
+                        }
+                        onChange={
+                          handleFormChange
+                        }
+                        placeholder="Optional old UACS code"
+                        className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-blue-600 focus:border-blue-600"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-700 mb-1">
+                        Account Title
+                      </label>
+
+                      <input
+                        type="text"
+                        name="account_title"
+                        value={
+                          formData.account_title
+                        }
+                        onChange={
+                          handleFormChange
+                        }
+                        placeholder="Enter account title"
+                        className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-blue-600 focus:border-blue-600"
+                      />
+                    </div>
+                  </>
+                )}
+
+                {/* CAMPUS-SPECIFIC FIELDS */}
+
+                {activeTab ===
+                  'others' &&
+                  othersType ===
+                    'campuses' && (
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-700 mb-1">
+                      Abbreviation
+                    </label>
+
+                    <input
+                      type="text"
+                      name="abbreviation"
+                      value={
+                        formData.abbreviation
+                      }
+                      onChange={
+                        handleFormChange
+                      }
+                      placeholder="Optional abbreviation"
+                      className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-blue-600 focus:border-blue-600"
+                    />
+                  </div>
+                )}
 
                 {/* FUND SOURCE */}
 

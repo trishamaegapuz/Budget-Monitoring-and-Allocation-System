@@ -8,10 +8,10 @@ import {
   PieChart as PieChartIcon,
   ChevronDown,
   ArrowRight,
-  PlusCircle,
   FileText,
-  BarChart2,
-  Folder,
+  Database,
+  Users,
+  Settings,
   HelpCircle,
   Wallet
 } from 'lucide-react';
@@ -982,7 +982,7 @@ export default function Dashboard({
             className="mt-4 inline-flex items-center gap-1 text-xs font-semibold text-blue-600 hover:underline w-fit"
           >
 
-            View Utilization Details
+            View RBUD Details
 
             <ArrowRight className="w-3.5 h-3.5" />
 
@@ -1127,7 +1127,7 @@ export default function Dashboard({
 
             <button
               onClick={() =>
-                onNavigate('/transactions')
+                onNavigate('/rbud')
               }
               className="text-xs text-blue-600 font-medium inline-flex items-center gap-0.5 hover:underline"
             >
@@ -1217,11 +1217,15 @@ export default function Dashboard({
                           rounded
                           font-medium
                           ${
-                            tx.status === 'Valid' ||
-                            tx.status === 'active' ||
-                            tx.status === 'Approved'
+                            tx.status === 'COMPLETED'
                               ? 'bg-emerald-100 text-emerald-700'
-                              : 'bg-amber-100 text-amber-700'
+                              : tx.status === 'PARTIALLY DISBURSED'
+                                ? 'bg-blue-100 text-blue-700'
+                                : tx.status === 'OBLIGATED'
+                                  ? 'bg-amber-100 text-amber-700'
+                                  : tx.status === 'CANCELLED'
+                                    ? 'bg-red-100 text-red-700'
+                                    : 'bg-slate-100 text-slate-600'
                           }
                         `}
                       >
@@ -1268,7 +1272,7 @@ export default function Dashboard({
 
             <button
               onClick={() =>
-                onNavigate('/fund-sources')
+                onNavigate('/master-data')
               }
               className="text-xs text-blue-600 font-medium inline-flex items-center gap-0.5 hover:underline"
             >
@@ -1604,12 +1608,12 @@ export default function Dashboard({
 
           <button
             onClick={() =>
-              onNavigate('/fund-sources')
+              onNavigate('/master-data')
             }
             className="mt-4 inline-flex items-center gap-1 text-xs font-semibold text-blue-600 hover:underline w-fit"
           >
 
-            View Fund Sources
+            View Master Data
 
             <ArrowRight className="w-3.5 h-3.5" />
 
@@ -1784,103 +1788,60 @@ export default function Dashboard({
           QUICK ACCESS
         </h3>
 
-
         <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
 
-
-          {/* RBUD */}
-
+          {/* BUDGET PROPOSALS */}
           <button
-            onClick={() =>
-              onNavigate('/rbud')
-            }
+            onClick={() => onNavigate('/budget-proposals')}
             className="flex items-center justify-center gap-2 p-2.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg text-xs font-semibold transition"
           >
-
-            <PlusCircle className="w-4 h-4" />
-
-            Add RBUD Record
-
+            <FileText className="w-4 h-4" />
+            Budget Proposals
           </button>
 
-
-          {/* RAOD */}
-
+          {/* RBUD */}
           <button
-            onClick={() =>
-              onNavigate('/raod')
-            }
-            className="flex items-center justify-center gap-2 p-2.5 bg-purple-50 hover:bg-purple-100 text-purple-700 rounded-lg text-xs font-semibold transition"
-          >
-
-            <PlusCircle className="w-4 h-4" />
-
-            Add RAOD Record
-
-          </button>
-
-
-          {/* BUDGET ALLOCATION */}
-
-          <button
-            onClick={() =>
-              onNavigate('/budget-allocation')
-            }
+            onClick={() => onNavigate('/rbud')}
             className="flex items-center justify-center gap-2 p-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-lg text-xs font-semibold transition"
           >
-
-            <FileText className="w-4 h-4" />
-
-            Budget Allocation
-
+            <Wallet className="w-4 h-4" />
+            RBUD Registry
           </button>
 
-
-          {/* FINANCIAL REPORTS */}
-
+          {/* RAOD */}
           <button
-            onClick={() =>
-              onNavigate('/financial-reports')
-            }
-            className="flex items-center justify-center gap-2 p-2.5 bg-teal-50 hover:bg-teal-100 text-teal-700 rounded-lg text-xs font-semibold transition"
+            onClick={() => onNavigate('/raod')}
+            className="flex items-center justify-center gap-2 p-2.5 bg-purple-50 hover:bg-purple-100 text-purple-700 rounded-lg text-xs font-semibold transition"
           >
-
-            <BarChart2 className="w-4 h-4" />
-
-            Financial Reports
-
+            <TrendingUp className="w-4 h-4" />
+            RAOD Registry
           </button>
-
-
-          {/* REPORTS */}
-
-          <button
-            onClick={() =>
-              onNavigate('/reports-exports')
-            }
-            className="flex items-center justify-center gap-2 p-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-xs font-semibold transition"
-          >
-
-            <Folder className="w-4 h-4" />
-
-            Reports & Exports
-
-          </button>
-
 
           {/* MASTER DATA */}
-
           <button
-            onClick={() =>
-              onNavigate('/master-data')
-            }
+            onClick={() => onNavigate('/master-data')}
             className="flex items-center justify-center gap-2 p-2.5 bg-slate-50 hover:bg-slate-100 text-slate-700 rounded-lg text-xs font-semibold transition"
           >
-
-            <Folder className="w-4 h-4" />
-
+            <Database className="w-4 h-4" />
             Master Data
+          </button>
 
+          {/* USER MANAGEMENT */}
+          <button
+            onClick={() => onNavigate('/user-management')}
+            className="flex items-center justify-center gap-2 p-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-xs font-semibold transition"
+          >
+            <Users className="w-4 h-4" />
+            User Management
+          </button>
+
+          {/* SETTINGS */}
+          <button
+            onClick={() => onNavigate('/settings')}
+            className="flex items-center justify-center gap-2 p-2.5 bg-amber-50 hover:bg-amber-100 text-amber-700 rounded-lg text-xs font-semibold transition"
+          >
+            <Settings className="w-4 h-4" />
+            Settings
           </button>
 
         </div>

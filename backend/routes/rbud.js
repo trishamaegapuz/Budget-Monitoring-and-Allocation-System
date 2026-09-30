@@ -132,7 +132,7 @@ CASE
     THEN 'Disbursed'
 
   WHEN COALESCE(r.utilization_amount, 0) > 0
-    THEN 'Obligated'
+    THEN 'Utilized'
 
   ELSE 'Approved'
 END
@@ -368,93 +368,55 @@ router.get("/", async (req, res) => {
   try {
     const params = [fy];
     let index = 2;
+    let where = `WHERE r.fiscal_year = $1`;
 
-    let where = `
-      WHERE r.fiscal_year = $1
-    `;
-
-    /*
-    |--------------------------------------------------------------------------
-    | FUND GROUP
-    |--------------------------------------------------------------------------
-    */
-
-    if (group !== "All") {
-      where += `
-        AND (${FUND_GROUP_CASE}) = $${index}
-      `;
-
+    if (group && group !== "All") {
+      where += ` AND (${FUND_GROUP_CASE}) = $${index}`;
       params.push(group);
       index++;
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | FUND
-    |--------------------------------------------------------------------------
-    */
-
     if (fund && fund !== "All Funds") {
-      where += `
-        AND (
-          fc.name ILIKE $${index}
-          OR fc.code ILIKE $${index}
-        )
-      `;
-
+      where += ` AND (COALESCE(fc.name,'') ILIKE $${index} OR COALESCE(fc.code,'') ILIKE $${index})`;
       params.push(`%${fund}%`);
       index++;
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | STATUS
-    |--------------------------------------------------------------------------
-    */
-
-    if (
-      status &&
-      status !== "All Status" &&
-      status !== "All"
-    ) {
-      where += `
-        AND (${STATUS_CASE}) = $${index}
-      `;
-
-      params.push(status);
-      index++;
-    }
-
-    /*
-    |--------------------------------------------------------------------------
-    | SEARCH
-    |--------------------------------------------------------------------------
-    */
-
-    if (search.trim()) {
+    if (search && search.trim()) {
       where += `
         AND (
-          r.registry_no ILIKE $${index}
-          OR COALESCE(r.payee, '') ILIKE $${index}
-          OR COALESCE(r.particulars, '') ILIKE $${index}
-          OR COALESCE(rc.name, '') ILIKE $${index}
-          OR COALESCE(rc.code, '') ILIKE $${index}
-          OR COALESCE(fc.name, '') ILIKE $${index}
-          OR COALESCE(fc.code, '') ILIKE $${index}
-          OR COALESCE(fs.name, '') ILIKE $${index}
-          OR COALESCE(fs.code, '') ILIKE $${index}
-        )
-      `;
-
+          COALESCE(r.registry_no,'') ILIKE $${index}
+          OR COALESCE(r.payee,'') ILIKE $${index}
+          OR COALESCE(r.particulars,'') ILIKE $${index}
+          OR COALESCE(rc.name,'') ILIKE $${index}
+          OR COALESCE(rc.code,'') ILIKE $${index}
+          OR COALESCE(fc.name,'') ILIKE $${index}
+          OR COALESCE(fc.code,'') ILIKE $${index}
+          OR COALESCE(fs.name,'') ILIKE $${index}
+          OR COALESCE(fs.code,'') ILIKE $${index}
+        )`;
       params.push(`%${search.trim()}%`);
       index++;
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | DATA
-    |--------------------------------------------------------------------------
-    */
+    // Status filtering is intentionally based on transaction amounts and the
+    // stable RBUD status column, avoiding optional PO-status columns.
+    if (status && status !== "All Status" && status !== "All") {
+      where += `
+        AND (
+          CASE
+            WHEN COALESCE(r.disbursement_amount,0) > 0 THEN 'Disbursed'
+            WHEN COALESCE(r.utilization_amount,0) > 0 THEN 'Utilized'
+            ELSE COALESCE(NULLIF(TRIM(r.status),''),'Approved')
+          END
+        ) = $${index}`;
+      params.push(status);
+      index++;
+    }
+
+    const dataParams = [...params, pg.limit, pg.offset];
+    const limitParam = index;
+    const offsetParam = index + 1;
 
     const dataResult = await pool.query(
       `
@@ -463,25 +425,26 @@ router.get("/", async (req, res) => {
         r.registry_no,
         r.entry_date,
         r.fiscal_year,
+        r.month,
+        r.series,
+        r.series2,
+        r.quarter,
         r.payee,
         r.particulars,
-
         r.utilization_amount,
         r.ps_utilization,
         r.mooe_utilization,
         r.co_utilization,
-
         r.disbursement_amount,
         r.running_balance,
         r.unpaid_utilization,
         r.po_no,
         r.po_status,
-
+        r.status AS record_status,
         r.burs_serial_no,
         r.dv_payroll_no,
         r.ref_no,
         r.remarks,
-
         r.fund_cluster_id,
         r.fund_source_id,
         r.campus_id,
@@ -490,221 +453,95 @@ router.get("/", async (req, res) => {
         r.uacs_code_id,
         r.object_expenditure_id,
         r.mfo_id,
-
+        r.wfp_source_id,
+        r.wfp_source_code,
         fc.code AS fund_cluster_code,
         fc.name AS fund_cluster_name,
-
         fs.code AS fund_source_code,
         fs.name AS fund_source_name,
-
         c.code AS campus_code,
         c.name AS campus_name,
-
         rc.code AS responsibility_center_code,
         rc.name AS responsibility_center_name,
-
         pap.code AS pap_code,
         pap.name AS pap_name,
-
         mfo.code AS mfo_code,
         mfo.name AS mfo_name,
-
         oe.code AS object_expenditure_code,
         oe.name AS object_expenditure_name,
-
+        ws.code AS wfp_source_master_code,
+        ws.name AS wfp_source,
         uacs.code AS uacs_code,
         uacs.account_title,
-
         (${FUND_GROUP_CASE}) AS fund_group,
-
-        (${STATUS_CASE}) AS derived_status,
-
-        COALESCE(
-          (
-            SELECT SUM(bi.approved_budget)
-            FROM budget_items bi
-            WHERE bi.fiscal_year = r.fiscal_year
-
-              AND bi.fund_cluster_id
-                IS NOT DISTINCT FROM r.fund_cluster_id
-
-              AND bi.fund_source_id
-                IS NOT DISTINCT FROM r.fund_source_id
-
-              AND bi.campus_id
-                IS NOT DISTINCT FROM r.campus_id
-
-              AND bi.responsibility_center_id
-                IS NOT DISTINCT FROM r.responsibility_center_id
-
-              AND bi.pap_id
-                IS NOT DISTINCT FROM r.pap_id
-
-              AND bi.mfo_id
-                IS NOT DISTINCT FROM r.mfo_id
-
-              AND bi.object_expenditure_id
-                IS NOT DISTINCT FROM r.object_expenditure_id
-          ),
-          0
-        ) AS approved_budget
-
+        CASE
+          WHEN COALESCE(r.disbursement_amount,0) > 0 THEN 'Disbursed'
+          WHEN COALESCE(r.utilization_amount,0) > 0 THEN 'Utilized'
+          ELSE COALESCE(NULLIF(TRIM(r.status),''),'Approved')
+        END AS derived_status
       FROM rbud_entries r
-
-      LEFT JOIN fund_clusters fc
-        ON fc.id = r.fund_cluster_id
-
-      LEFT JOIN fund_sources fs
-        ON fs.id = r.fund_source_id
-
-      LEFT JOIN campuses c
-        ON c.id = r.campus_id
-
-      LEFT JOIN responsibility_centers rc
-        ON rc.id = r.responsibility_center_id
-
-      LEFT JOIN pap
-        ON pap.id = r.pap_id
-
-      LEFT JOIN mfo
-        ON mfo.id = r.mfo_id
-
-      LEFT JOIN object_expenditures oe
-        ON oe.id = r.object_expenditure_id
-
-      LEFT JOIN uacs_codes uacs
-        ON uacs.id = r.uacs_code_id
-
+      LEFT JOIN fund_clusters fc ON fc.id = r.fund_cluster_id
+      LEFT JOIN fund_sources fs ON fs.id = r.fund_source_id
+      LEFT JOIN campuses c ON c.id = r.campus_id
+      LEFT JOIN responsibility_centers rc ON rc.id = r.responsibility_center_id
+      LEFT JOIN pap ON pap.id = r.pap_id
+      LEFT JOIN mfo ON mfo.id = r.mfo_id
+      LEFT JOIN object_expenditures oe ON oe.id = r.object_expenditure_id
+      LEFT JOIN uacs_codes uacs ON uacs.id = r.uacs_code_id
+      LEFT JOIN wfp_sources ws ON ws.id = r.wfp_source_id
       ${where}
-
-      ORDER BY
-        r.entry_date DESC,
-        r.id DESC
-
-      LIMIT $${index}
-      OFFSET $${index + 1}
+      ORDER BY r.entry_date DESC NULLS LAST, r.id DESC
+      LIMIT $${limitParam} OFFSET $${offsetParam}
       `,
-      [
-        ...params,
-        pg.limit,
-        pg.offset,
-      ]
+      dataParams
     );
-
-    /*
-    |--------------------------------------------------------------------------
-    | COUNT
-    |--------------------------------------------------------------------------
-    */
 
     const countResult = await pool.query(
       `
       SELECT COUNT(*) AS total
-
       FROM rbud_entries r
-
-      LEFT JOIN fund_clusters fc
-        ON fc.id = r.fund_cluster_id
-
-      LEFT JOIN fund_sources fs
-        ON fs.id = r.fund_source_id
-
-      LEFT JOIN campuses c
-        ON c.id = r.campus_id
-
-      LEFT JOIN responsibility_centers rc
-        ON rc.id = r.responsibility_center_id
-
+      LEFT JOIN fund_clusters fc ON fc.id = r.fund_cluster_id
+      LEFT JOIN fund_sources fs ON fs.id = r.fund_source_id
+      LEFT JOIN responsibility_centers rc ON rc.id = r.responsibility_center_id
       ${where}
       `,
       params
     );
 
-    const totalItems = int(
-      countResult.rows[0].total
-    );
+    const totalItems = int(countResult.rows[0]?.total, 0);
+    const totalPages = totalItems > 0 ? Math.ceil(totalItems / pg.limit) : 0;
 
-    /*
-    |--------------------------------------------------------------------------
-    | FORMAT DATA
-    |--------------------------------------------------------------------------
-    */
+    const entries = dataResult.rows.map((row) => ({
+      ...row,
+      fundGroup: row.fund_group,
+      fund: row.fund_cluster_name || row.fund_source_name || "N/A",
+      department: row.responsibility_center_name || "N/A",
+      status: row.derived_status,
+      utilization_amount: num(row.utilization_amount),
+      disbursement_amount: num(row.disbursement_amount),
+      unpaid_utilization: num(row.unpaid_utilization),
+      running_balance: num(row.running_balance),
+      approved_budget: 0,
+      remaining_balance: Math.max(0, num(row.running_balance)),
+    }));
 
-    const entries = dataResult.rows.map((row) => {
-      const approved = num(row.approved_budget);
-      const utilized = num(row.utilization_amount);
-      const disbursed = num(row.disbursement_amount);
-
-      const balance = approved - utilized;
-
-      return {
-        ...row,
-
-        fundGroup: row.fund_group,
-        fund_group: row.fund_group,
-
-        fund: row.fund_cluster_name,
-        fund_code: row.fund_cluster_code,
-        fund_cluster: row.fund_cluster_name,
-
-        responsibility_center:
-          row.responsibility_center_name,
-
-        department_name:
-          row.responsibility_center_name,
-
-        campus: row.campus_name,
-
-        approved_budget: approved,
-        allocated_budget: approved,
-
-        utilized,
-        total_utilized: utilized,
-
-        disbursed,
-        total_disbursed: disbursed,
-
-        remaining_balance: balance,
-        available_balance: balance,
-
-        utilized_percent: pct(
-          utilized,
-          approved
-        ),
-
-        status: row.derived_status,
-      };
-    });
-
-    res.json({
+    return res.json({
       entries,
-
-      page: pg.page,
-      currentPage: pg.page,
-
-      limit: pg.limit,
-
+      rows: entries,
       totalItems,
-
-      totalPages: Math.ceil(
-        totalItems / pg.limit
-      ),
-
+      total: totalItems,
+      totalPages,
+      currentPage: pg.page,
+      page: pg.page,
+      limit: pg.limit,
       fiscalYear: fy,
       fiscal_year: fy,
-
-      group,
-      fund,
-      status,
     });
   } catch (error) {
-    console.error(
-      "GET /api/rbud error:",
-      error
-    );
-
-    res.status(500).json({
-      error: error.message,
+    console.error("RBUD list error:", error);
+    return res.status(500).json({
+      error: error.message || "Failed to load RBUD records.",
+      code: error.code || null,
     });
   }
 });
@@ -997,7 +834,6 @@ router.get("/overview", async (req, res) => {
 
           WHEN fund_group = 'BGD'
             THEN 2
-
           WHEN fund_group = 'Other Funds'
             THEN 3
 
@@ -1157,94 +993,69 @@ router.get("/overview", async (req, res) => {
 
 router.get("/departments", async (req, res) => {
   const fy = year(req.query.year);
-  const group = req.query.group || "Main";
+  const group = req.query.group || "All";
   const fund = req.query.fund || "";
 
   try {
-    const params = [fy, group];
+    const params = [fy];
+    let nextParam = 2;
 
-    let fundFilter = "";
+    const groupFilter =
+      group && group !== "All"
+        ? `AND (${FUND_GROUP_CASE}) = $${nextParam}`
+        : "";
 
-    if (
-      fund &&
-      fund !== "All Funds"
-    ) {
-      params.push(`%${fund}%`);
-
-      fundFilter = `
-        AND (
-          fc.code ILIKE $3
-          OR fc.name ILIKE $3
-        )
-      `;
+    if (group && group !== "All") {
+      params.push(group);
+      nextParam++;
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | RESPONSIBILITY CENTERS
-    |--------------------------------------------------------------------------
-    */
+    const fundFilter =
+      fund && fund !== "All Funds"
+        ? `AND (
+             COALESCE(fc.code, '') ILIKE $${nextParam}
+             OR COALESCE(fc.name, '') ILIKE $${nextParam}
+           )`
+        : "";
+
+    if (fund && fund !== "All Funds") {
+      params.push(`%${fund}%`);
+      nextParam++;
+    }
 
     const result = await pool.query(
       `
       WITH budget AS (
         SELECT
           bi.responsibility_center_id,
-
-          SUM(
-            bi.approved_budget
-          ) AS approved_budget
-
+          SUM(COALESCE(bi.approved_budget, 0)) AS approved_budget
         FROM budget_items bi
-
         LEFT JOIN fund_clusters fc
           ON fc.id = bi.fund_cluster_id
-
         LEFT JOIN fund_sources fs
           ON fs.id = bi.fund_source_id
-
         WHERE bi.fiscal_year = $1
-
-          AND (${FUND_GROUP_CASE})
-              = $2
-
+          ${groupFilter}
           ${fundFilter}
-
-        GROUP BY
-          bi.responsibility_center_id
+        GROUP BY bi.responsibility_center_id
       ),
 
       rbud AS (
         SELECT
           r.responsibility_center_id,
-
           COUNT(*) AS records,
-
-          SUM(
-            r.utilization_amount
-          ) AS utilized,
-
-          SUM(
-            r.disbursement_amount
-          ) AS disbursed
-
+          SUM(COALESCE(r.utilization_amount, 0)) AS utilized,
+          SUM(COALESCE(r.disbursement_amount, 0)) AS disbursed,
+          SUM(COALESCE(r.unpaid_utilization, 0)) AS unpaid_utilization
         FROM rbud_entries r
-
         LEFT JOIN fund_clusters fc
           ON fc.id = r.fund_cluster_id
-
         LEFT JOIN fund_sources fs
           ON fs.id = r.fund_source_id
-
         WHERE r.fiscal_year = $1
-
-          AND (${FUND_GROUP_CASE})
-              = $2
-
+          ${groupFilter}
           ${fundFilter}
-
-        GROUP BY
-          r.responsibility_center_id
+        GROUP BY r.responsibility_center_id
       )
 
       SELECT
@@ -1252,318 +1063,94 @@ router.get("/departments", async (req, res) => {
         rc.code,
         rc.name,
         rc.description,
-
-        COALESCE(
-          budget.approved_budget,
-          0
-        ) AS approved_budget,
-
-        COALESCE(
-          rbud.utilized,
-          0
-        ) AS utilized,
-
-        COALESCE(
-          rbud.disbursed,
-          0
-        ) AS disbursed,
-
-        COALESCE(
-          rbud.records,
-          0
-        ) AS records
-
+        COALESCE(budget.approved_budget, 0) AS approved_budget,
+        COALESCE(rbud.utilized, 0) AS utilized,
+        COALESCE(rbud.disbursed, 0) AS disbursed,
+        COALESCE(rbud.unpaid_utilization, 0) AS unpaid_utilization,
+        COALESCE(rbud.records, 0) AS records
       FROM responsibility_centers rc
-
       LEFT JOIN budget
-        ON budget.responsibility_center_id =
-           rc.id
-
+        ON budget.responsibility_center_id = rc.id
       LEFT JOIN rbud
-        ON rbud.responsibility_center_id =
-           rc.id
-
+        ON rbud.responsibility_center_id = rc.id
       WHERE rc.is_active = TRUE
-
         AND (
-          COALESCE(
-            budget.approved_budget,
-            0
-          ) > 0
-
-          OR
-
-          COALESCE(
-            rbud.records,
-            0
-          ) > 0
+          COALESCE(budget.approved_budget, 0) > 0
+          OR COALESCE(rbud.records, 0) > 0
         )
-
-      ORDER BY
-        rc.name
+      ORDER BY rc.name ASC
       `,
       params
     );
 
-    let departments = result.rows.map(
-      (row, index) => {
-        const approved = num(
-          row.approved_budget
-        );
+    const departments = result.rows.map((row) => {
+      const approved = num(row.approved_budget);
+      const utilized = num(row.utilized);
+      const disbursed = num(row.disbursed);
+      const unpaid = num(row.unpaid_utilization);
 
-        const utilized = num(
-          row.utilized
-        );
+      return {
+        id: row.id,
+        code: row.code || "—",
+        name: row.name || "Unassigned Department / Office",
+        description: row.description || "",
+        approved_budget: approved,
+        utilized,
+        disbursed,
+        unpaid_utilization: unpaid,
+        remaining_balance: approved - utilized,
+        utilization_rate: pct(utilized, approved),
+        disbursed_rate: pct(disbursed, approved),
+        records: int(row.records),
+      };
+    });
 
-        const disbursed = num(
-          row.disbursed
-        );
-
-        return {
-          id: row.id,
-
-          code:
-            row.code ||
-            String.fromCharCode(
-              65 + (index % 26)
-            ),
-
-          name: row.name,
-
-          description:
-            row.description || "",
-
-          approved_budget: approved,
-
-          utilized,
-
-          disbursed,
-
-          remaining_balance:
-            approved - utilized,
-
-          utilization_rate: pct(
-            utilized,
-            approved
-          ),
-
-          records: int(
-            row.records
-          ),
-
-          is_fund_unit: false,
-        };
+    const totals = departments.reduce(
+      (acc, row) => {
+        acc.approved_budget += row.approved_budget;
+        acc.utilized += row.utilized;
+        acc.disbursed += row.disbursed;
+        acc.unpaid_utilization += row.unpaid_utilization;
+        acc.remaining_balance += row.remaining_balance;
+        acc.records += row.records;
+        return acc;
+      },
+      {
+        approved_budget: 0,
+        utilized: 0,
+        disbursed: 0,
+        unpaid_utilization: 0,
+        remaining_balance: 0,
+        records: 0,
       }
     );
 
-    /*
-    |--------------------------------------------------------------------------
-    | FUND CLUSTER FALLBACK
-    |--------------------------------------------------------------------------
-    */
+    totals.utilization_rate = pct(
+      totals.utilized,
+      totals.approved_budget
+    );
 
-    if (
-      departments.length === 0
-    ) {
-      const fallbackParams = [
-        fy,
-        group,
-      ];
-
-      let fallbackFundFilter = "";
-
-      if (
-        fund &&
-        fund !== "All Funds"
-      ) {
-        fallbackParams.push(
-          `%${fund}%`
-        );
-
-        fallbackFundFilter = `
-          AND (
-            fc.code ILIKE $3
-            OR fc.name ILIKE $3
-          )
-        `;
-      }
-
-      const fallback =
-        await pool.query(
-          `
-          SELECT
-            fc.id,
-            fc.code,
-            fc.name,
-            fc.description,
-
-            COALESCE(
-              (
-                SELECT
-                  SUM(
-                    bi.approved_budget
-                  )
-
-                FROM budget_items bi
-
-                WHERE bi.fiscal_year = $1
-
-                  AND bi.fund_cluster_id =
-                      fc.id
-              ),
-              0
-            ) AS approved_budget,
-
-            COALESCE(
-              (
-                SELECT
-                  SUM(
-                    r.utilization_amount
-                  )
-
-                FROM rbud_entries r
-
-                WHERE r.fiscal_year = $1
-
-                  AND r.fund_cluster_id =
-                      fc.id
-              ),
-              0
-            ) AS utilized,
-
-            COALESCE(
-              (
-                SELECT
-                  SUM(
-                    r.disbursement_amount
-                  )
-
-                FROM rbud_entries r
-
-                WHERE r.fiscal_year = $1
-
-                  AND r.fund_cluster_id =
-                      fc.id
-              ),
-              0
-            ) AS disbursed,
-
-            COALESCE(
-              (
-                SELECT
-                  COUNT(*)
-
-                FROM rbud_entries r
-
-                WHERE r.fiscal_year = $1
-
-                  AND r.fund_cluster_id =
-                      fc.id
-              ),
-              0
-            ) AS records
-
-          FROM fund_clusters fc
-
-          LEFT JOIN fund_sources fs
-            ON fs.id = fc.fund_source_id
-
-          WHERE fc.is_active = TRUE
-
-            AND (${FUND_GROUP_CASE})
-                = $2
-
-            ${fallbackFundFilter}
-
-          ORDER BY
-            fc.code,
-            fc.name
-          `,
-          fallbackParams
-        );
-
-      departments =
-        fallback.rows.map(
-          (row, index) => {
-            const approved = num(
-              row.approved_budget
-            );
-
-            const utilized = num(
-              row.utilized
-            );
-
-            const disbursed = num(
-              row.disbursed
-            );
-
-            return {
-              id: row.id,
-
-              code:
-                row.code ||
-                String(index + 1),
-
-              name: row.name,
-
-              description:
-                row.description ||
-                "Fund Cluster / Project Unit",
-
-              approved_budget:
-                approved,
-
-              utilized,
-
-              disbursed,
-
-              remaining_balance:
-                approved - utilized,
-
-              utilization_rate:
-                pct(
-                  utilized,
-                  approved
-                ),
-
-              records: int(
-                row.records
-              ),
-
-              is_fund_unit: true,
-            };
-          }
-        );
-    }
+    totals.disbursed_rate = pct(
+      totals.disbursed,
+      totals.approved_budget
+    );
 
     res.json({
       fiscalYear: fy,
+      fiscal_year: fy,
       group,
       fund,
-
-      departments,
-
-      units: departments,
-
       total: departments.length,
+      departments,
+      totals,
     });
   } catch (error) {
-    console.error(
-      "RBUD departments error:",
-      error
-    );
-
+    console.error("RBUD departments error:", error);
     res.status(500).json({
       error: error.message,
     });
   }
 });
-
-/*
-|--------------------------------------------------------------------------
-| DEPARTMENT DETAIL
-|--------------------------------------------------------------------------
-*/
 
 router.get(
   "/department-detail/:id",
@@ -2267,7 +1854,16 @@ router.get("/budget-allocation", async (req, res) => {
   try {
     const params = [fy];
     let i = 2;
-    let where = `WHERE bi.fiscal_year = $1`;
+
+    // Only approved Budget Proposal allocations are treated as approved budget.
+    // Legacy budget_items without a linked proposal remain visible.
+    let where = `
+      WHERE bi.fiscal_year = $1
+        AND (
+          bi.budget_proposal_id IS NULL
+          OR bp.status = 'Approved'
+        )
+    `;
 
     if (group !== "All") {
       where += ` AND (${FUND_GROUP_CASE}) = $${i}`;
@@ -2278,7 +1874,10 @@ router.get("/budget-allocation", async (req, res) => {
     if (search) {
       where += `
         AND (
-          COALESCE(fc.code, '') ILIKE $${i}
+          COALESCE(bp.proposal_no, '') ILIKE $${i}
+          OR COALESCE(bp.proposal_title, '') ILIKE $${i}
+          OR COALESCE(bp.department_unit, '') ILIKE $${i}
+          OR COALESCE(fc.code, '') ILIKE $${i}
           OR COALESCE(fc.name, '') ILIKE $${i}
           OR COALESCE(rc.code, '') ILIKE $${i}
           OR COALESCE(rc.name, '') ILIKE $${i}
@@ -2304,6 +1903,13 @@ router.get("/budget-allocation", async (req, res) => {
         bi.co_amount,
         bi.status,
         bi.notes,
+        bi.budget_proposal_id,
+
+        bp.proposal_no,
+        bp.proposal_title,
+        bp.department_unit AS proposal_department,
+        bp.status AS proposal_status,
+        bp.approved_at AS proposal_approved_at,
 
         fc.id AS fund_cluster_id,
         fc.code AS fund_cluster_code,
@@ -2324,15 +1930,73 @@ router.get("/budget-allocation", async (req, res) => {
         oe.code AS object_expenditure_code,
         oe.name AS object_expenditure_name,
 
-        (${FUND_GROUP_CASE}) AS fund_group
+        (${FUND_GROUP_CASE}) AS fund_group,
+
+        COALESCE((
+          SELECT SUM(r.utilization_amount)
+          FROM rbud_entries r
+          WHERE r.fiscal_year = bi.fiscal_year
+            AND r.fund_cluster_id IS NOT DISTINCT FROM bi.fund_cluster_id
+            AND r.fund_source_id IS NOT DISTINCT FROM bi.fund_source_id
+            AND r.campus_id IS NOT DISTINCT FROM bi.campus_id
+            AND r.responsibility_center_id IS NOT DISTINCT FROM bi.responsibility_center_id
+            AND r.mfo_id IS NOT DISTINCT FROM bi.mfo_id
+            AND r.pap_id IS NOT DISTINCT FROM bi.pap_id
+            AND r.uacs_code_id IS NOT DISTINCT FROM bi.uacs_code_id
+            AND r.object_expenditure_id IS NOT DISTINCT FROM bi.object_expenditure_id
+            AND r.allotment_class_id IS NOT DISTINCT FROM bi.allotment_class_id
+        ), 0) AS utilized_amount,
+
+        COALESCE((
+          SELECT SUM(r.disbursement_amount)
+          FROM rbud_entries r
+          WHERE r.fiscal_year = bi.fiscal_year
+            AND r.fund_cluster_id IS NOT DISTINCT FROM bi.fund_cluster_id
+            AND r.fund_source_id IS NOT DISTINCT FROM bi.fund_source_id
+            AND r.campus_id IS NOT DISTINCT FROM bi.campus_id
+            AND r.responsibility_center_id IS NOT DISTINCT FROM bi.responsibility_center_id
+            AND r.mfo_id IS NOT DISTINCT FROM bi.mfo_id
+            AND r.pap_id IS NOT DISTINCT FROM bi.pap_id
+            AND r.uacs_code_id IS NOT DISTINCT FROM bi.uacs_code_id
+            AND r.object_expenditure_id IS NOT DISTINCT FROM bi.object_expenditure_id
+            AND r.allotment_class_id IS NOT DISTINCT FROM bi.allotment_class_id
+        ), 0) AS disbursement_amount,
+
+        COALESCE((
+          SELECT SUM(r.unpaid_utilization)
+          FROM rbud_entries r
+          WHERE r.fiscal_year = bi.fiscal_year
+            AND r.fund_cluster_id IS NOT DISTINCT FROM bi.fund_cluster_id
+            AND r.fund_source_id IS NOT DISTINCT FROM bi.fund_source_id
+            AND r.campus_id IS NOT DISTINCT FROM bi.campus_id
+            AND r.responsibility_center_id IS NOT DISTINCT FROM bi.responsibility_center_id
+            AND r.mfo_id IS NOT DISTINCT FROM bi.mfo_id
+            AND r.pap_id IS NOT DISTINCT FROM bi.pap_id
+            AND r.uacs_code_id IS NOT DISTINCT FROM bi.uacs_code_id
+            AND r.object_expenditure_id IS NOT DISTINCT FROM bi.object_expenditure_id
+            AND r.allotment_class_id IS NOT DISTINCT FROM bi.allotment_class_id
+        ), 0) AS unpaid_utilization
 
       FROM budget_items bi
-      LEFT JOIN fund_clusters fc ON fc.id = bi.fund_cluster_id
-      LEFT JOIN fund_sources fs ON fs.id = bi.fund_source_id
+
+      LEFT JOIN budget_proposals bp
+        ON bp.proposal_id = bi.budget_proposal_id
+
+      LEFT JOIN fund_clusters fc
+        ON fc.id = bi.fund_cluster_id
+
+      LEFT JOIN fund_sources fs
+        ON fs.id = bi.fund_source_id
+
       LEFT JOIN responsibility_centers rc
         ON rc.id = bi.responsibility_center_id
-      LEFT JOIN pap ON pap.id = bi.pap_id
-      LEFT JOIN mfo ON mfo.id = bi.mfo_id
+
+      LEFT JOIN pap
+        ON pap.id = bi.pap_id
+
+      LEFT JOIN mfo
+        ON mfo.id = bi.mfo_id
+
       LEFT JOIN object_expenditures oe
         ON oe.id = bi.object_expenditure_id
 
@@ -2349,24 +2013,54 @@ router.get("/budget-allocation", async (req, res) => {
       acc.ps += num(row.ps_amount);
       acc.mooe += num(row.mooe_amount);
       acc.co += num(row.co_amount);
+      acc.utilized += num(row.utilized_amount);
+      acc.disbursed += num(row.disbursement_amount);
+      acc.unpaid += num(row.unpaid_utilization);
       return acc;
-    }, { approved_budget: 0, ps: 0, mooe: 0, co: 0 });
+    }, {
+      approved_budget: 0,
+      ps: 0,
+      mooe: 0,
+      co: 0,
+      utilized: 0,
+      disbursed: 0,
+      unpaid: 0
+    });
 
     res.json({
       fiscalYear: fy,
       group,
-      rows: rows.rows.map(row => ({
-        ...row,
-        approved_budget: num(row.approved_budget),
-        ps_amount: num(row.ps_amount),
-        mooe_amount: num(row.mooe_amount),
-        co_amount: num(row.co_amount)
-      })),
+      rows: rows.rows.map(row => {
+        const approved = num(row.approved_budget);
+        const utilized = num(row.utilized_amount);
+        const disbursed = num(row.disbursement_amount);
+        const unpaid = num(row.unpaid_utilization);
+
+        return {
+          ...row,
+          approved_budget: approved,
+          ps_amount: num(row.ps_amount),
+          mooe_amount: num(row.mooe_amount),
+          co_amount: num(row.co_amount),
+          utilized_amount: utilized,
+          disbursement_amount: disbursed,
+          unpaid_utilization: unpaid,
+          remaining_balance: approved - utilized,
+          utilization_rate: pct(utilized, approved),
+          disbursement_rate: pct(disbursed, approved),
+        };
+      }),
       totals: {
         approved_budget: totals.approved_budget,
         ps: totals.ps,
         mooe: totals.mooe,
-        co: totals.co
+        co: totals.co,
+        utilized: totals.utilized,
+        disbursed: totals.disbursed,
+        unpaid_utilization: totals.unpaid,
+        remaining_balance: totals.approved_budget - totals.utilized,
+        utilization_rate: pct(totals.utilized, totals.approved_budget),
+        disbursement_rate: pct(totals.disbursed, totals.approved_budget),
       }
     });
   } catch (error) {
@@ -2812,6 +2506,7 @@ router.get("/master-data", async (req, res) => {
 });
 
 
+
 router.get("/:id", async (req, res) => {
   try {
     const id = int(req.params.id);
@@ -2872,6 +2567,9 @@ router.get("/:id", async (req, res) => {
 
       LEFT JOIN uacs_codes uacs
         ON uacs.id = r.uacs_code_id
+
+      LEFT JOIN wfp_sources ws
+        ON ws.id = r.wfp_source_id
 
       WHERE r.id = $1
       `,
@@ -2943,7 +2641,7 @@ const RBUD_FIELDS = [
   "remarks",
   "unpaid_utilization",
   "po_no",
-  "status",
+  "po_status",
 ];
 
 const ID_FIELDS = [
@@ -2972,7 +2670,48 @@ const NUMERIC_FIELDS = [
   "unpaid_utilization",
 ];
 
+async function resolveWfpSourceId(body) {
+  if (body.wfp_source_id) return body.wfp_source_id;
+
+  const value = String(body.wfp_source || body.wfp_source_code || "").trim();
+  if (!value) return null;
+
+  const result = await pool.query(
+    `SELECT id
+       FROM wfp_sources
+      WHERE LOWER(COALESCE(code, '')) = LOWER($1)
+         OR LOWER(COALESCE(name, '')) = LOWER($1)
+      ORDER BY id
+      LIMIT 1`,
+    [value]
+  );
+
+  return result.rows[0]?.id ?? null;
+}
+
 function fieldValue(field, body) {
+  // PostgreSQL requires month 1-12 and quarter 1-4 when values are provided.
+  // Keep them NULL when the form field is blank instead of converting blank to 0.
+  if (field === "month" || field === "quarter") {
+    const raw = body[field];
+    if (raw === undefined || raw === null || String(raw).trim() === "") {
+      return null;
+    }
+    const value = Number(raw);
+    if (!Number.isInteger(value)) {
+      throw new Error(`${field} must be a whole number.`);
+    }
+    const max = field === "month" ? 12 : 4;
+    if (value < 1 || value > max) {
+      throw new Error(`${field} must be between 1 and ${max}.`);
+    }
+    return value;
+  }
+
+  if (field === "wfp_source_id") {
+    return body.wfp_source_id || body._resolved_wfp_source_id || null;
+  }
+
   if (ID_FIELDS.includes(field)) {
     return body[field] || null;
   }
@@ -2997,71 +2736,73 @@ function fieldValue(field, body) {
   }
 
   return body[field] ?? null;
-}
+}router.post("/", async (req, res) => {
+  const client = await pool.connect();
 
-router.post("/", async (req, res) => {
   try {
-    if (
-      !req.body.registry_no ||
-      !req.body.entry_date
-    ) {
+    if (!req.body.entry_date) {
       return res.status(400).json({
-        error:
-          "Registry number and entry date are required.",
+        error: "Entry date is required.",
       });
     }
 
-    const values =
-      RBUD_FIELDS.map(
-        (field) =>
-          fieldValue(
-            field,
-            req.body
-          )
-      );
+    if (!req.body.registry_no || !String(req.body.registry_no).trim()) {
+      return res.status(400).json({
+        error: "Registry No. is required. Please enter it manually.",
+      });
+    }
 
-    const placeholders =
-      RBUD_FIELDS.map(
-        (_, i) => `$${i + 1}`
-      );
+    await client.query("BEGIN");
 
-    const result =
-      await pool.query(
-        `
+    // Registry No. is supplied manually by the user.
+    const body = { ...req.body };
+    body._resolved_wfp_source_id = await resolveWfpSourceId(body);
+
+    if (body.wfp_source && !body._resolved_wfp_source_id) {
+      return res.status(400).json({
+        error: "WFP Source was not found in the WFP master data.",
+      });
+    }
+
+    const values = RBUD_FIELDS.map((field) => fieldValue(field, body));
+    const placeholders = RBUD_FIELDS.map((_, i) => `$${i + 1}`);
+
+    const result = await client.query(
+      `
         INSERT INTO rbud_entries (
           ${RBUD_FIELDS.join(",")}
         )
-
         VALUES (
           ${placeholders.join(",")}
         )
-
         RETURNING *
-        `,
-        values
-      );
-
-    res.status(201).json(
-      result.rows[0]
+      `,
+      values
     );
+
+    await client.query("COMMIT");
+
+    res.status(201).json(result.rows[0]);
   } catch (error) {
-    console.error(
-      "RBUD create error:",
-      error
-    );
+    try {
+      await client.query("ROLLBACK");
+    } catch (_) {
+      // Ignore rollback errors and return the original database error.
+    }
 
-    if (
-      error.code === "23505"
-    ) {
+    console.error("RBUD create error:", error);
+
+    if (error.code === "23505") {
       return res.status(409).json({
-        error:
-          "Registry number already exists.",
+        error: "Registry No. already exists. Please enter a unique Registry No.",
       });
     }
 
     res.status(500).json({
       error: error.message,
     });
+  } finally {
+    client.release();
   }
 });
 
@@ -3073,12 +2814,21 @@ router.post("/", async (req, res) => {
 
 router.put("/:id", async (req, res) => {
   try {
+    const body = { ...req.body };
+    body._resolved_wfp_source_id = await resolveWfpSourceId(body);
+
+    if (body.wfp_source && !body._resolved_wfp_source_id) {
+      return res.status(400).json({
+        error: "WFP Source was not found in the WFP master data.",
+      });
+    }
+
     const values =
       RBUD_FIELDS.map(
         (field) =>
           fieldValue(
             field,
-            req.body
+            body
           )
       );
 
@@ -3570,5 +3320,3 @@ router.get(
 */
 
 module.exports = router;
-
-

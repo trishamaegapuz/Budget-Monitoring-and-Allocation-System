@@ -1,5 +1,5 @@
 import React from 'react';
-import { LogOut, ChevronLeft, ChevronRight } from 'lucide-react';
+import { LogOut, ChevronLeft, ChevronRight, Database } from 'lucide-react';
 import { navItems } from '../../constants/navigation';
 
 export default function Sidebar({
@@ -23,6 +23,37 @@ export default function Sidebar({
   | to keep RBUD Registry highlighted.
   |--------------------------------------------------------------------------
   */
+  // Keep the existing navigation and restore the standalone Master Data module.
+  // If navigation.js already contains Master Data, we do not add a duplicate.
+  const sidebarItems = (() => {
+    const items = Array.isArray(navItems) ? [...navItems] : [];
+
+    const alreadyExists = items.some(
+      (item) => item?.path === '/master-data'
+    );
+
+    if (alreadyExists) return items;
+
+    const masterDataItem = {
+      label: 'Master Data',
+      path: '/master-data',
+      icon: Database,
+    };
+
+    // Put Master Data before User Management when possible.
+    const userIndex = items.findIndex(
+      (item) => item?.path === '/user-management'
+    );
+
+    if (userIndex >= 0) {
+      items.splice(userIndex, 0, masterDataItem);
+    } else {
+      items.push(masterDataItem);
+    }
+
+    return items;
+  })();
+
   const isItemActive = (item) => {
     if (!item?.path) return false;
 
@@ -164,7 +195,7 @@ export default function Sidebar({
 
         <div className="space-y-1">
 
-          {navItems.map((item, index) => {
+          {sidebarItems.map((item, index) => {
             const active = isItemActive(item);
 
             return (

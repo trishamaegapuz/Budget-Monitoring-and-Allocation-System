@@ -103,10 +103,38 @@ export default function BudgetProposals({
   const [workflowAction, setWorkflowAction] =
     useState(null);
 
+  const [overviewMode, setOverviewMode] = useState('summary');
+  const [editingProposalId, setEditingProposalId] = useState(null);
+  const [allHistory, setAllHistory] = useState([]);
+  const [selectedSupportingFile, setSelectedSupportingFile] = useState(null);
+
+  // Pagination state for database tables
+  const PAGE_SIZE = 5;
+  const [overviewPage, setOverviewPage] = useState(1);
+  const [recentPage, setRecentPage] = useState(1);
+  const [recordsPage, setRecordsPage] = useState(1);
+  const [reviewPage, setReviewPage] = useState(1);
+  const [workflowPage, setWorkflowPage] = useState(1);
+  const [historyPage, setHistoryPage] = useState(1);
+  const [reportPage, setReportPage] = useState(1);
+
   const [proposals, setProposals] = useState([]);
   const [loadingProposals, setLoadingProposals] = useState(true);
   const [proposalError, setProposalError] = useState('');
   const [proposalHistory, setProposalHistory] = useState([]);
+
+  // Existing RBUD/RAOD Master Data used by the Budget Proposal form.
+  const [fundClusters, setFundClusters] = useState([]);
+  const [fundSources, setFundSources] = useState([]);
+  const [campuses, setCampuses] = useState([]);
+  const [responsibilityCenters, setResponsibilityCenters] = useState([]);
+  const [papOptions, setPapOptions] = useState([]);
+  const [uacsOptions, setUacsOptions] = useState([]);
+  const [wfpOptions, setWfpOptions] = useState([]);
+  const [mfoOptions, setMfoOptions] = useState([]);
+  const [objectExpenditureOptions, setObjectExpenditureOptions] = useState([]);
+  const [allotmentClasses, setAllotmentClasses] = useState([]);
+  const [loadingReferenceData, setLoadingReferenceData] = useState(true);
   const [proposalForm, setProposalForm] = useState({
     fundCluster: '',
     fundCode: '',
@@ -114,12 +142,19 @@ export default function BudgetProposals({
     responsibilityCenter: '',
     wfpDescription: '',
     sourceCode: '',
-    department: '',
+    proposingOffice: '',
+    pap: '',
+    mfo: '',
+    objectExpenditure: '',
     uacsCode: '',
     classification: '',
+    psAmount: '',
+    mooeAmount: '',
+    coAmount: '',
     amount: '',
-    fundingSource: '',
     particulars: '',
+    justification: '',
+    expectedOutputs: '',
     proponent: '',
     title: '',
     remarks: ''
@@ -131,6 +166,69 @@ export default function BudgetProposals({
     return token
       ? { Authorization: `Bearer ${token}` }
       : {};
+  };
+
+  const loadBudgetProposalReferences = async () => {
+    setLoadingReferenceData(true);
+    try {
+      const response = await fetch(
+        `${API_URL}/rbud/references`,
+        { headers: { ...authHeaders() } }
+      );
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || data.message || 'Unable to load Master Data.');
+      }
+
+      const refs = data.references || data;
+
+      setFundClusters(
+        Array.isArray(refs.fundClusters)
+          ? refs.fundClusters
+          : Array.isArray(refs.fund_clusters)
+            ? refs.fund_clusters
+            : []
+      );
+
+      setFundSources(
+        Array.isArray(refs.fundSources)
+          ? refs.fundSources
+          : Array.isArray(refs.fund_sources)
+            ? refs.fund_sources
+            : []
+      );
+
+      setCampuses(
+        Array.isArray(refs.campuses) ? refs.campuses : []
+      );
+
+      setResponsibilityCenters(
+        Array.isArray(refs.responsibilityCenters)
+          ? refs.responsibilityCenters
+          : Array.isArray(refs.responsibility_centers)
+            ? refs.responsibility_centers
+            : []
+      );
+
+      setPapOptions(Array.isArray(refs.pap) ? refs.pap : Array.isArray(refs.paps) ? refs.paps : []);
+      setMfoOptions(Array.isArray(refs.mfo) ? refs.mfo : Array.isArray(refs.mfoList) ? refs.mfoList : []);
+      setObjectExpenditureOptions(
+        Array.isArray(refs.objectExpenditures)
+          ? refs.objectExpenditures
+          : Array.isArray(refs.object_expenditures)
+            ? refs.object_expenditures
+            : []
+      );
+      setUacsOptions(Array.isArray(refs.uacsCodes) ? refs.uacsCodes : Array.isArray(refs.uacs_codes) ? refs.uacs_codes : []);
+      setWfpOptions(Array.isArray(refs.wfpSources) ? refs.wfpSources : Array.isArray(refs.wfp_sources) ? refs.wfp_sources : []);
+      setAllotmentClasses(Array.isArray(refs.allotmentClasses) ? refs.allotmentClasses : Array.isArray(refs.allotment_classes) ? refs.allotment_classes : []);
+    } catch (error) {
+      console.error('Budget Proposal Master Data load error:', error);
+      setProposalError(error.message || 'Unable to load Master Data.');
+    } finally {
+      setLoadingReferenceData(false);
+    }
   };
 
   const loadProposalHistory = async (proposalId) => {
@@ -148,6 +246,20 @@ export default function BudgetProposals({
     } catch (error) {
       console.error('Budget Proposal history error:', error);
       setProposalHistory([]);
+    }
+  };
+
+  const loadAllHistory = async () => {
+    try {
+      const response = await fetch(
+        `${API_URL}/budget-proposals/history?year=${selectedYear}`,
+        { headers: { ...authHeaders() } }
+      );
+      const data = await response.json();
+      setAllHistory(response.ok && Array.isArray(data.history) ? data.history : []);
+    } catch (error) {
+      console.error('Budget Proposal all-history error:', error);
+      setAllHistory([]);
     }
   };
 
@@ -179,7 +291,19 @@ export default function BudgetProposals({
 
   useEffect(() => {
     loadBudgetProposals();
+    loadAllHistory();
+    setOverviewPage(1);
+    setRecentPage(1);
+    setRecordsPage(1);
+    setReviewPage(1);
+    setWorkflowPage(1);
+    setHistoryPage(1);
+    setReportPage(1);
   }, [selectedYear]);
+
+  useEffect(() => {
+    loadBudgetProposalReferences();
+  }, []);
 
   useEffect(() => {
     loadProposalHistory(selectedProposal?.id);
@@ -196,51 +320,120 @@ export default function BudgetProposals({
     try {
       setProposalError('');
 
-      const amount = Number(proposalForm.amount);
+      const psAmount = Number(proposalForm.psAmount || 0);
+      const mooeAmount = Number(proposalForm.mooeAmount || 0);
+      const coAmount = Number(proposalForm.coAmount || 0);
+      const amount = psAmount + mooeAmount + coAmount;
 
-      if (!proposalForm.department.trim()) {
-        throw new Error('PAP / Department is required.');
+      if (!proposalForm.proposingOffice.trim()) {
+        throw new Error('Proposing Office / Department is required.');
       }
-
+      if (!proposalForm.pap) {
+        throw new Error('P/A/P is required.');
+      }
+      if (!proposalForm.title.trim()) {
+        throw new Error('Proposal Title is required.');
+      }
       if (!proposalForm.particulars.trim()) {
         throw new Error('Particulars / Description is required.');
       }
 
-      if (!Number.isFinite(amount) || amount <= 0) {
-        throw new Error('Proposed Amount must be greater than zero.');
+      if (
+        !proposalForm.fundCluster ||
+        !proposalForm.fundCode ||
+        !proposalForm.campus ||
+        !proposalForm.responsibilityCenter ||
+        !proposalForm.wfpDescription ||
+        !proposalForm.mfo ||
+        !proposalForm.uacsCode ||
+        !proposalForm.objectExpenditure ||
+        !proposalForm.classification
+      ) {
+        throw new Error(
+          'Please complete Fund Cluster, Fund Code, Campus, Responsibility Center, WFP Description, P/A/P, MFO, UACS Code, Object of Expenditure, and Allotment Class.'
+        );
       }
+
+      if (
+        ![psAmount, mooeAmount, coAmount].every(Number.isFinite) ||
+        psAmount < 0 ||
+        mooeAmount < 0 ||
+        coAmount < 0 ||
+        amount <= 0
+      ) {
+        throw new Error('At least one proposed amount (PS, MOOE, or CO) must be greater than zero.');
+      }
+
+      const fc = fundClusters.find(x => String(x.id) === String(proposalForm.fundCluster));
+      const fs = fundSources.find(x => String(x.id) === String(proposalForm.fundCode));
+      const campus = campuses.find(x => String(x.id) === String(proposalForm.campus));
+      const rc = responsibilityCenters.find(x => String(x.id) === String(proposalForm.responsibilityCenter));
+      const wfp = wfpOptions.find(x => String(x.id) === String(proposalForm.wfpDescription));
+      const pap = papOptions.find(x => String(x.id) === String(proposalForm.pap));
+      const mfo = mfoOptions.find(x => String(x.id) === String(proposalForm.mfo));
+      const uacs = uacsOptions.find(x => String(x.id) === String(proposalForm.uacsCode));
+      const objectExpenditure = objectExpenditureOptions.find(
+        x => String(x.id) === String(proposalForm.objectExpenditure)
+      );
+      const allotment = allotmentClasses.find(x => String(x.id) === String(proposalForm.classification));
 
       const payload = {
         fiscal_year: selectedYear,
-        department: proposalForm.department,
+
+        // Proposal identity
+        department: proposalForm.proposingOffice.trim(),
+        proposing_office: proposalForm.proposingOffice.trim(),
         proponent: proposalForm.proponent || user?.name || user?.username || 'System User',
-        title: proposalForm.title || proposalForm.particulars,
-        description: proposalForm.particulars,
-        fund_source: proposalForm.fundingSource || proposalForm.fundCluster || null,
-        amount,
+        title: proposalForm.title.trim(),
+        description: proposalForm.particulars.trim(),
+        particulars: proposalForm.particulars.trim(),
+        justification: proposalForm.justification || null,
+        expected_outputs: proposalForm.expectedOutputs || null,
         remarks: proposalForm.remarks || null,
         created_by: user?.id || user?.user_id || null,
-        fund_cluster: proposalForm.fundCluster,
-        fund_code: proposalForm.fundCode,
-        campus: proposalForm.campus,
-        responsibility_center: proposalForm.responsibilityCenter,
-        wfp_description: proposalForm.wfpDescription,
-        source_code: proposalForm.sourceCode,
-        uacs_code: proposalForm.uacsCode,
-        budget_classification: proposalForm.classification
+
+        // Budget/WFP classification
+        fund_source: fs?.code || proposalForm.fundCode || null,
+        fund_cluster_id: fc?.id || null,
+        fund_source_id: fs?.id || null,
+        campus_id: campus?.id || null,
+        responsibility_center_id: rc?.id || null,
+        wfp_source_id: wfp?.id || null,
+        pap_id: pap?.id || null,
+        mfo_id: mfo?.id || null,
+        uacs_code_id: uacs?.id || null,
+        object_expenditure_id: objectExpenditure?.id || null,
+        allotment_class_id: allotment?.id || null,
+
+        fund_cluster: fc?.code || null,
+        fund_code: fs?.code || proposalForm.fundCode || null,
+        campus: campus?.code || campus?.name || null,
+        responsibility_center: rc?.code || rc?.name || null,
+        wfp_description: wfp?.name || proposalForm.wfpDescription || null,
+        source_code: proposalForm.sourceCode || null,
+        pap: pap?.name || null,
+        mfo: mfo?.name || null,
+        uacs_code: uacs?.code || null,
+        object_expenditure: objectExpenditure?.name || null,
+        budget_classification: allotment?.code || null,
+
+        amount,
+        proposed_ps: psAmount,
+        proposed_mooe: mooeAmount,
+        proposed_co: coAmount
       };
 
-      const response = await fetch(
-        `${API_URL}/budget-proposals`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...authHeaders()
-          },
-          body: JSON.stringify(payload)
-        }
-      );
+      const url = editingProposalId
+        ? `${API_URL}/budget-proposals/${editingProposalId}`
+        : `${API_URL}/budget-proposals`;
+
+      const method = editingProposalId ? 'PUT' : 'POST';
+
+      const response = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        body: JSON.stringify(payload)
+      });
 
       const data = await response.json();
 
@@ -248,21 +441,30 @@ export default function BudgetProposals({
         throw new Error(data.error || data.message || 'Unable to save budget proposal.');
       }
 
-      if (submit && data.proposal?.id) {
-        await fetch(
-          `${API_URL}/budget-proposals/${data.proposal.id}/status`,
-          {
-            method: 'PATCH',
-            headers: {
-              'Content-Type': 'application/json',
-              ...authHeaders()
-            },
-            body: JSON.stringify({ status: 'Submitted' })
-          }
-        );
+      const savedId = data.proposal?.id || editingProposalId;
+
+      if (submit && savedId) {
+        const submitResponse = await fetch(`${API_URL}/budget-proposals/${savedId}/status`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', ...authHeaders() },
+          body: JSON.stringify({
+            status: 'Submitted',
+            actor_id: user?.id || user?.user_id || null,
+            actor_name: user?.name || user?.username || 'System User'
+          })
+        });
+
+        const submitData = await submitResponse.json();
+
+        if (!submitResponse.ok) {
+          throw new Error(submitData.error || 'Proposal was saved but could not be submitted.');
+        }
       }
 
       setFormSaved(true);
+      setEditingProposalId(null);
+      setSelectedSupportingFile(null);
+
       setProposalForm({
         fundCluster: '',
         fundCode: '',
@@ -270,54 +472,123 @@ export default function BudgetProposals({
         responsibilityCenter: '',
         wfpDescription: '',
         sourceCode: '',
-        department: '',
+        proposingOffice: '',
+        pap: '',
+        mfo: '',
+        objectExpenditure: '',
         uacsCode: '',
         classification: '',
+        psAmount: '',
+        mooeAmount: '',
+        coAmount: '',
         amount: '',
-        fundingSource: '',
         particulars: '',
+        justification: '',
+        expectedOutputs: '',
         proponent: '',
         title: '',
         remarks: ''
       });
 
-      await loadBudgetProposals();
+      await Promise.all([loadBudgetProposals(), loadAllHistory()]);
+
+      if (submit) setSelectedSection('records');
     } catch (error) {
       console.error('Budget Proposal save error:', error);
       setProposalError(error.message || 'Unable to save budget proposal.');
     }
   };
 
-  const changeProposalStatus = async (status) => {
-    if (!selectedProposal?.id) return;
+  const editProposal = (proposal) => {
+    setEditingProposalId(proposal.id);
+    setSelectedProposal(proposal);
+    setFormSaved(false);
+    setProposalError('');
 
+    const allotmentCode = String(proposal.allotment_code || proposal.budget_classification || '').toUpperCase();
+
+    setProposalForm({
+      fundCluster: proposal.fund_cluster_id ? String(proposal.fund_cluster_id) : '',
+      fundCode: proposal.fund_source_id
+        ? String(proposal.fund_source_id)
+        : proposal.fundCode
+          ? String(fundSources.find(x => x.code === proposal.fundCode)?.id || '')
+          : '',
+      campus: proposal.campus_id ? String(proposal.campus_id) : '',
+      responsibilityCenter: proposal.responsibility_center_id ? String(proposal.responsibility_center_id) : '',
+      wfpDescription: proposal.wfp_source_id ? String(proposal.wfp_source_id) : '',
+      sourceCode: proposal.sourceCode || proposal.source_code || '',
+      proposingOffice: proposal.department || proposal.department_unit || '',
+      pap: proposal.pap_id ? String(proposal.pap_id) : '',
+      mfo: proposal.mfo_id ? String(proposal.mfo_id) : '',
+      objectExpenditure: proposal.object_expenditure_id ? String(proposal.object_expenditure_id) : '',
+      uacsCode: proposal.uacs_code_id ? String(proposal.uacs_code_id) : '',
+      classification: proposal.allotment_class_id ? String(proposal.allotment_class_id) : '',
+      psAmount: proposal.proposed_ps != null
+        ? String(proposal.proposed_ps)
+        : allotmentCode === 'PS' ? String(proposal.amount ?? '') : '',
+      mooeAmount: proposal.proposed_mooe != null
+        ? String(proposal.proposed_mooe)
+        : allotmentCode === 'MOOE' ? String(proposal.amount ?? '') : '',
+      coAmount: proposal.proposed_co != null
+        ? String(proposal.proposed_co)
+        : allotmentCode === 'CO' ? String(proposal.amount ?? '') : '',
+      amount: String(proposal.amount ?? ''),
+      particulars: proposal.particulars || proposal.description || '',
+      justification: proposal.justification || '',
+      expectedOutputs: proposal.expected_outputs || '',
+      proponent: proposal.proponent || '',
+      title: proposal.title || proposal.proposal_title || '',
+      remarks: proposal.remarks || ''
+    });
+
+    setSelectedSection('create');
+  };
+
+  const deleteProposal = async (proposal) => {
+    if (!proposal?.id) return;
+    if (!window.confirm(`Delete budget proposal ${proposal.reference}?`)) return;
     try {
-      const response = await fetch(
-        `${API_URL}/budget-proposals/${selectedProposal.id}/status`,
-        {
-          method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json',
-            ...authHeaders()
-          },
-          body: JSON.stringify({
-            status,
-            remarks: reviewMessage
-          })
-        }
-      );
-
+      const response = await fetch(`${API_URL}/budget-proposals/${proposal.id}`, { method:'DELETE', headers:{...authHeaders()} });
       const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Unable to delete proposal.');
+      setSelectedProposal(null);
+      await Promise.all([loadBudgetProposals(), loadAllHistory()]);
+    } catch (error) {
+      setProposalError(error.message || 'Unable to delete proposal.');
+    }
+  };
 
-      if (!response.ok) {
-        throw new Error(data.error || data.message || 'Unable to update proposal status.');
-      }
+  const handleSupportingFile = (event) => {
+    const file = event.target.files?.[0];
+    if (!file) { setSelectedSupportingFile(null); return; }
+    setSelectedSupportingFile({ name:file.name, size:file.size, type:file.type, lastModified:file.lastModified });
+  };
 
+
+  const changeProposalStatus = async (status) => {
+    if (!selectedProposal?.id) {
+      setProposalError('Select a proposal first.');
+      return;
+    }
+    try {
+      const response = await fetch(`${API_URL}/budget-proposals/${selectedProposal.id}/status`, {
+        method:'PATCH',
+        headers:{'Content-Type':'application/json', ...authHeaders()},
+        body:JSON.stringify({
+          status,
+          remarks:reviewMessage,
+          actor_id:user?.id || user?.user_id || null,
+          actor_name:user?.name || user?.username || 'System User'
+        })
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || data.message || 'Unable to update proposal status.');
       const updatedProposal = data.proposal || selectedProposal;
       setSelectedProposal(updatedProposal);
       setWorkflowAction(status.toLowerCase());
-      await loadBudgetProposals();
-      await loadProposalHistory(updatedProposal?.id);
+      setReviewMessage('');
+      await Promise.all([loadBudgetProposals(), loadProposalHistory(updatedProposal.id), loadAllHistory()]);
     } catch (error) {
       setProposalError(error.message || 'Unable to update proposal status.');
     }
@@ -362,6 +633,8 @@ export default function BudgetProposals({
     setFormSaved(false);
 
     setWorkflowAction(null);
+    setEditingProposalId(null);
+    setSelectedSupportingFile(null);
 
     window.scrollTo({
       top: 0,
@@ -380,10 +653,28 @@ export default function BudgetProposals({
   const fundGroupData = useMemo(() => {
     const groups = new Map();
 
+    // Keep all valid Master Data fund sources visible even when there is
+    // no proposal under that source yet. Existing proposal values are then
+    // added to the corresponding group.
+    fundSources.forEach(source => {
+      const name = source?.name || source?.code || 'Other Funds';
+      if (!groups.has(name)) {
+        groups.set(name, {
+          name,
+          code: source?.code || '',
+          budget: 0,
+          obligations: 0,
+          disbursements: 0,
+          balance: 0
+        });
+      }
+    });
+
     proposalRecords.forEach(item => {
       const name = item.fundGroup || item.fund_source || 'Other Funds';
       const current = groups.get(name) || {
         name,
+        code: item.fundCode || '',
         budget: 0,
         obligations: 0,
         disbursements: 0,
@@ -397,6 +688,27 @@ export default function BudgetProposals({
     });
 
     return Array.from(groups.values());
+  }, [proposalRecords, fundSources]);
+
+  const classificationTotals = useMemo(() => {
+    const totals = { PS: 0, MOOE: 0, CO: 0 };
+
+    proposalRecords.forEach(item => {
+      const classification = String(
+        item.classification ||
+        item.budget_classification ||
+        item.allotmentClass ||
+        item.allotment_class ||
+        ''
+      ).trim().toUpperCase();
+
+      const amount = Number(item.amount) || 0;
+      if (classification.includes('PS')) totals.PS += amount;
+      else if (classification.includes('MOOE')) totals.MOOE += amount;
+      else if (classification.includes('CO')) totals.CO += amount;
+    });
+
+    return { ...totals, total: totals.PS + totals.MOOE + totals.CO };
   }, [proposalRecords]);
 
   // ==========================================================
@@ -454,11 +766,13 @@ export default function BudgetProposals({
 
   const summaryData = useMemo(() => ({
     totalProposals: proposalRecords.length,
-    pendingProposals: proposalRecords.filter(item => item.status === 'Pending' || item.status === 'Draft').length,
-    reviewProposals: proposalRecords.filter(item => item.status === 'For Review' || item.status === 'Submitted').length,
+    draftProposals: proposalRecords.filter(item => item.status === 'Draft').length,
+    submittedProposals: proposalRecords.filter(item => item.status === 'Submitted').length,
+    reviewProposals: proposalRecords.filter(item => item.status === 'Under Review').length,
+    revisionProposals: proposalRecords.filter(item => item.status === 'For Revision').length,
     endorsedProposals: proposalRecords.filter(item => item.status === 'Endorsed').length,
     approvedProposals: proposalRecords.filter(item => item.status === 'Approved').length,
-    returnedProposals: proposalRecords.filter(item => item.status === 'Returned' || item.status === 'Disapproved').length
+    rejectedProposals: proposalRecords.filter(item => item.status === 'Rejected').length
   }), [proposalRecords]);
 
   // ==========================================================
@@ -510,28 +824,72 @@ export default function BudgetProposals({
     });
 
 
+  useEffect(() => {
+    setRecordsPage(1);
+  }, [searchTerm, statusFilter]);
+
+  useEffect(() => {
+    setReportPage(1);
+  }, [reportType, reportFundGroup, reportStatus]);
+
+  useEffect(() => {
+    setOverviewPage(1);
+  }, [overviewMode, overviewFundGroup]);
+
+  const getDepartment = (proposal) => {
+    if (!proposal) return '—';
+    return proposal.department || proposal.proposing_office || proposal.department_unit || proposal.department_name || proposal.office_name || proposal.pap || '—';
+  };
+
+  const paginate = (items, page) => {
+    const list = Array.isArray(items) ? items : [];
+    const totalPages = Math.max(1, Math.ceil(list.length / PAGE_SIZE));
+    const safePage = Math.min(Math.max(Number(page) || 1, 1), totalPages);
+    const startIndex = (safePage - 1) * PAGE_SIZE;
+    return {
+      rows: list.slice(startIndex, startIndex + PAGE_SIZE),
+      page: safePage,
+      totalPages,
+      totalRows: list.length,
+      start: list.length ? startIndex + 1 : 0,
+      end: Math.min(startIndex + PAGE_SIZE, list.length)
+    };
+  };
+
+  const Pagination = ({ page, totalPages, totalRows, start, end, onPageChange }) => {
+    if (!totalRows) return null;
+    return (
+      <div className="bp-pagination">
+        <span className="bp-pagination-info">Showing {start}–{end} of {totalRows}</span>
+        <div className="bp-pagination-controls">
+          <button type="button" className="bp-page-button" disabled={page <= 1} onClick={() => onPageChange(page - 1)}>‹</button>
+          {Array.from({ length: totalPages }, (_, i) => i + 1).map(n => (
+            <button type="button" key={n} className={`bp-page-button ${n === page ? 'active' : ''}`} onClick={() => onPageChange(n)}>{n}</button>
+          ))}
+          <button type="button" className="bp-page-button" disabled={page >= totalPages} onClick={() => onPageChange(page + 1)}>›</button>
+        </div>
+      </div>
+    );
+  };
+
   // ==========================================================
   // OVERVIEW
   // ==========================================================
 
   const overviewData = useMemo(() => {
-
-    if (
-      overviewFundGroup ===
-      'All Fund Groups'
-    ) {
-      return fundGroupData;
+    if (overviewMode === 'status') {
+      const groups = new Map();
+      proposalRecords.forEach(item => { const key=item.status || 'Unspecified'; const row=groups.get(key)||{name:key,budget:0,obligations:0,disbursements:0,balance:0}; row.budget += Number(item.amount||0); row.balance += Number(item.amount||0); groups.set(key,row); });
+      return Array.from(groups.values()).sort((a,b)=>b.budget-a.budget);
     }
-
-    return fundGroupData.filter(
-      item =>
-        item.name ===
-        overviewFundGroup
-    );
-
-  }, [
-    overviewFundGroup
-  ]);
+    if (overviewMode === 'department') {
+      const groups = new Map();
+      proposalRecords.forEach(item => { const key=item.department || 'Unspecified'; const row=groups.get(key)||{name:key,budget:0,obligations:0,disbursements:0,balance:0}; row.budget += Number(item.amount||0); row.balance += Number(item.amount||0); groups.set(key,row); });
+      return Array.from(groups.values()).sort((a,b)=>b.budget-a.budget);
+    }
+    if (overviewFundGroup === 'All Fund Groups') return fundGroupData;
+    return fundGroupData.filter(item => item.name === overviewFundGroup);
+  }, [overviewMode, overviewFundGroup, fundGroupData, proposalRecords]);
 
 
   const overviewTotals =
@@ -579,59 +937,22 @@ export default function BudgetProposals({
       : 0;
 
 
+  const overviewPagination = paginate(overviewData, overviewPage);
+  const recentPagination = paginate(proposalRecords, recentPage);
+
+
   // ==========================================================
   // STATUS DATA
   // ==========================================================
 
   const proposalStatuses = [
-
-    {
-      label: 'Pending',
-      count:
-        summaryData.pendingProposals,
-      className:
-        'bp-status-pending'
-    },
-
-    {
-      label: 'For Review',
-      count:
-        summaryData.reviewProposals,
-      className:
-        'bp-status-review'
-    },
-
-    {
-      label: 'Endorsed',
-      count:
-        summaryData.endorsedProposals,
-      className:
-        'bp-status-endorsed'
-    },
-
-    {
-      label: 'Approved',
-      count:
-        summaryData.approvedProposals,
-      className:
-        'bp-status-approved'
-    },
-
-    {
-      label: 'Returned',
-      count:
-        summaryData.returnedProposals,
-      className:
-        'bp-status-returned'
-    },
-
-    {
-      label: 'Disapproved',
-      count: 0,
-      className:
-        'bp-status-disapproved'
-    }
-
+    { label: 'Draft', count: summaryData.draftProposals, className: 'bp-status-pending' },
+    { label: 'Submitted', count: summaryData.submittedProposals, className: 'bp-status-review' },
+    { label: 'Under Review', count: summaryData.reviewProposals, className: 'bp-status-review' },
+    { label: 'For Revision', count: summaryData.revisionProposals, className: 'bp-status-returned' },
+    { label: 'Endorsed', count: summaryData.endorsedProposals, className: 'bp-status-endorsed' },
+    { label: 'Approved', count: summaryData.approvedProposals, className: 'bp-status-approved' },
+    { label: 'Rejected', count: summaryData.rejectedProposals, className: 'bp-status-disapproved' }
   ];
 
 
@@ -640,32 +961,16 @@ export default function BudgetProposals({
   // ==========================================================
 
   const getStatusClass = (status) => {
-
     switch (status) {
-
-      case 'Pending':
-        return 'bp-badge-pending';
-
-      case 'For Review':
-        return 'bp-badge-review';
-
-      case 'Endorsed':
-        return 'bp-badge-endorsed';
-
-      case 'Approved':
-        return 'bp-badge-approved';
-
-      case 'Returned':
-        return 'bp-badge-returned';
-
-      case 'Disapproved':
-        return 'bp-badge-disapproved';
-
-      default:
-        return 'bp-badge-default';
-
+      case 'Draft': return 'bp-badge-pending';
+      case 'Submitted': return 'bp-badge-review';
+      case 'Under Review': return 'bp-badge-review';
+      case 'For Revision': return 'bp-badge-returned';
+      case 'Endorsed': return 'bp-badge-endorsed';
+      case 'Approved': return 'bp-badge-approved';
+      case 'Rejected': return 'bp-badge-disapproved';
+      default: return 'bp-badge-default';
     }
-
   };
 
 
@@ -872,6 +1177,8 @@ export default function BudgetProposals({
         repeat(12, minmax(0, 1fr));
       gap: 14px;
       width: 100%;
+      min-height: calc(100vh - 255px);
+      align-items: stretch;
     }
 
     .bp-grid .bp-card:nth-child(-n + 4) {
@@ -892,10 +1199,14 @@ export default function BudgetProposals({
     .bp-card {
       background: #ffffff;
       border: 1px solid #e2e8f0;
-      border-radius: 6px;
-      padding: 14px;
+      border-radius: 8px;
+      padding: 20px;
       min-width: 0;
       width: 100%;
+      min-height: 360px;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
       box-shadow:
         0 1px 3px rgba(15, 23, 42, 0.04);
       transition:
@@ -1036,9 +1347,31 @@ export default function BudgetProposals({
        CARD BUTTON
     ======================================================== */
 
+    .bp-card-features {
+      margin: 18px 0 18px;
+      padding: 14px 14px 14px 30px;
+      background: #f8fafc;
+      border: 1px solid #e8edf3;
+      border-radius: 7px;
+      color: #475569;
+      font-size: 12px;
+      line-height: 1.65;
+      flex: 1;
+    }
+
+    .bp-card-features li {
+      margin-bottom: 7px;
+    }
+
+    .bp-card-features li:last-child {
+      margin-bottom: 0;
+    }
+
     .bp-card-button {
       width: 100%;
-      margin-top: 7px;
+      margin-top: auto;
+      padding-top: 9px;
+      padding-bottom: 9px;
       height: 31px;
       background: #ffffff;
       border: 1px solid #2563eb;
@@ -1447,34 +1780,49 @@ export default function BudgetProposals({
     ======================================================== */
 
     .bp-budget-table-wrap {
-      overflow-x: auto;
+      width: 100%;
+      max-width: 100%;
+      overflow-x: hidden;
+      overflow-y: visible;
       border: 1px solid #e2e8f0;
       border-radius: 6px;
     }
 
     .bp-budget-table {
       width: 100%;
+      max-width: 100%;
       border-collapse: collapse;
-      min-width: 760px;
+      border-spacing: 0;
+      table-layout: fixed;
+    }
+
+    .bp-budget-table th,
+    .bp-budget-table td {
+      box-sizing: border-box;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+      white-space: normal;
     }
 
     .bp-budget-table th {
-      padding: 9px;
+      padding: 8px 6px;
       background: #f8fafc;
       color: #64748b;
       border-bottom: 1px solid #e2e8f0;
-      font-size: 8px;
+      font-size: 7.5px;
+      line-height: 1.25;
       font-weight: 800;
       text-transform: uppercase;
       text-align: left;
-      white-space: nowrap;
+      vertical-align: middle;
     }
 
     .bp-budget-table td {
-      padding: 9px;
+      padding: 8px 6px;
       border-bottom: 1px solid #edf2f7;
       color: #475569;
-      font-size: 8.5px;
+      font-size: 8px;
+      line-height: 1.35;
       vertical-align: middle;
     }
 
@@ -1486,7 +1834,21 @@ export default function BudgetProposals({
       text-align: right;
       color: #10255c;
       font-weight: 800;
-      white-space: nowrap;
+      white-space: normal;
+      overflow-wrap: anywhere;
+    }
+
+    .bp-budget-table .bp-badge {
+      max-width: 100%;
+      white-space: normal;
+      text-align: center;
+      justify-content: center;
+    }
+
+    .bp-budget-table .bp-small-button {
+      max-width: 100%;
+      white-space: normal;
+      min-width: 0;
     }
 
     .bp-total-row td {
@@ -1495,6 +1857,74 @@ export default function BudgetProposals({
       font-weight: 900;
     }
 
+    /* Fixed, responsive widths for each database table.
+       These keep every table inside the panel without a horizontal scrollbar. */
+    .bp-table-summary th:nth-child(1), .bp-table-summary td:nth-child(1) { width: 32%; }
+    .bp-table-summary th:nth-child(n+2), .bp-table-summary td:nth-child(n+2) { width: 17%; text-align: right; }
+
+    .bp-table-recent th:nth-child(1), .bp-table-recent td:nth-child(1) { width: 14%; }
+    .bp-table-recent th:nth-child(2), .bp-table-recent td:nth-child(2) { width: 13%; }
+    .bp-table-recent th:nth-child(3), .bp-table-recent td:nth-child(3) { width: 21%; }
+    .bp-table-recent th:nth-child(4), .bp-table-recent td:nth-child(4) { width: 14%; }
+    .bp-table-recent th:nth-child(5), .bp-table-recent td:nth-child(5) { width: 13%; text-align: right; }
+    .bp-table-recent th:nth-child(6), .bp-table-recent td:nth-child(6) { width: 13%; text-align: center; }
+    .bp-table-recent th:nth-child(7), .bp-table-recent td:nth-child(7) { width: 12%; text-align: center; }
+
+    .bp-table-records th:nth-child(1), .bp-table-records td:nth-child(1) { width: 10%; }
+    .bp-table-records th:nth-child(2), .bp-table-records td:nth-child(2) { width: 10%; }
+    .bp-table-records th:nth-child(3), .bp-table-records td:nth-child(3) { width: 10%; }
+    .bp-table-records th:nth-child(4), .bp-table-records td:nth-child(4) { width: 8%; }
+    .bp-table-records th:nth-child(5), .bp-table-records td:nth-child(5) { width: 12%; }
+    .bp-table-records th:nth-child(6), .bp-table-records td:nth-child(6) { width: 8%; }
+    .bp-table-records th:nth-child(7), .bp-table-records td:nth-child(7) { width: 14%; }
+    .bp-table-records th:nth-child(8), .bp-table-records td:nth-child(8) { width: 10%; text-align: right; }
+    .bp-table-records th:nth-child(9), .bp-table-records td:nth-child(9) { width: 9%; text-align: center; }
+    .bp-table-records th:nth-child(10), .bp-table-records td:nth-child(10) { width: 9%; text-align: center; }
+
+    .bp-table-review th:nth-child(1), .bp-table-review td:nth-child(1) { width: 16%; }
+    .bp-table-review th:nth-child(2), .bp-table-review td:nth-child(2) { width: 24%; }
+    .bp-table-review th:nth-child(3), .bp-table-review td:nth-child(3) { width: 21%; }
+    .bp-table-review th:nth-child(4), .bp-table-review td:nth-child(4) { width: 15%; text-align: right; }
+    .bp-table-review th:nth-child(5), .bp-table-review td:nth-child(5) { width: 13%; text-align: center; }
+    .bp-table-review th:nth-child(6), .bp-table-review td:nth-child(6) { width: 11%; text-align: center; }
+
+    .bp-table-workflow th:nth-child(1), .bp-table-workflow td:nth-child(1) { width: 20%; }
+    .bp-table-workflow th:nth-child(2), .bp-table-workflow td:nth-child(2) { width: 30%; }
+    .bp-table-workflow th:nth-child(3), .bp-table-workflow td:nth-child(3) { width: 17%; text-align: right; }
+    .bp-table-workflow th:nth-child(4), .bp-table-workflow td:nth-child(4) { width: 18%; text-align: center; }
+    .bp-table-workflow th:nth-child(5), .bp-table-workflow td:nth-child(5) { width: 15%; text-align: center; }
+
+    .bp-table-history th:nth-child(1), .bp-table-history td:nth-child(1) { width: 12%; }
+    .bp-table-history th:nth-child(2), .bp-table-history td:nth-child(2) { width: 16%; }
+    .bp-table-history th:nth-child(3), .bp-table-history td:nth-child(3) { width: 16%; }
+    .bp-table-history th:nth-child(4), .bp-table-history td:nth-child(4) { width: 13%; text-align: center; }
+    .bp-table-history th:nth-child(5), .bp-table-history td:nth-child(5) { width: 25%; }
+    .bp-table-history th:nth-child(6), .bp-table-history td:nth-child(6) { width: 18%; }
+
+    .bp-table-report th:nth-child(1), .bp-table-report td:nth-child(1) { width: 10%; }
+    .bp-table-report th:nth-child(2), .bp-table-report td:nth-child(2) { width: 10%; }
+    .bp-table-report th:nth-child(3), .bp-table-report td:nth-child(3) { width: 10%; }
+    .bp-table-report th:nth-child(4), .bp-table-report td:nth-child(4) { width: 8%; }
+    .bp-table-report th:nth-child(5), .bp-table-report td:nth-child(5) { width: 12%; }
+    .bp-table-report th:nth-child(6), .bp-table-report td:nth-child(6) { width: 11%; text-align: right; }
+    .bp-table-report th:nth-child(7), .bp-table-report td:nth-child(7) { width: 9%; text-align: center; }
+    .bp-table-report th:nth-child(8), .bp-table-report td:nth-child(8) { width: 10%; }
+    .bp-table-report th:nth-child(9), .bp-table-report td:nth-child(9) { width: 7%; text-align: center; }
+    .bp-table-report th:nth-child(10), .bp-table-report td:nth-child(10) { width: 7%; text-align: right; }
+    .bp-table-report th:nth-child(11), .bp-table-report td:nth-child(11) { width: 6%; text-align: right; }
+
+    @media (max-width: 1100px) {
+      .bp-budget-table th { font-size: 7px; padding: 7px 5px; }
+      .bp-budget-table td { font-size: 7.5px; padding: 7px 5px; }
+      .bp-small-button { font-size: 8px; padding: 0 7px; }
+    }
+
+    @media (max-width: 800px) {
+      .bp-budget-table th { font-size: 6.5px; padding: 6px 4px; }
+      .bp-budget-table td { font-size: 7px; padding: 6px 4px; }
+      .bp-pagination { font-size: 9px; }
+      .bp-page-button { min-width: 25px; height: 25px; padding: 0 6px; }
+    }
 
     /* ========================================================
        BADGES
@@ -1628,6 +2058,16 @@ export default function BudgetProposals({
        EMPTY
     ======================================================== */
 
+    .bp-pagination {
+      display:flex; align-items:center; justify-content:space-between; gap:10px;
+      margin-top:10px; padding:8px 2px 2px; font-size:10px; color:#64748b; flex-wrap:wrap;
+    }
+    .bp-pagination-controls { display:flex; align-items:center; gap:4px; }
+    .bp-page-button { min-width:27px; height:27px; padding:0 7px; border:1px solid #dbe3ee; border-radius:5px; background:#fff; color:#334155; font-size:10px; font-weight:700; cursor:pointer; }
+    .bp-page-button:hover:not(:disabled) { background:#f1f5f9; }
+    .bp-page-button.active { background:#0f4cbd; color:#fff; border-color:#0f4cbd; }
+    .bp-page-button:disabled { opacity:.45; cursor:not-allowed; }
+
     .bp-empty {
       border: 1px dashed #dbe3ee;
       border-radius: 6px;
@@ -1658,6 +2098,24 @@ export default function BudgetProposals({
       line-height: 1.5;
     }
 
+
+    @media (max-width: 900px) {
+      .bp-workflow {
+        overflow-x: auto;
+        padding-bottom: 12px;
+      }
+
+      .bp-workflow-step {
+        flex: 0 0 145px;
+        border-radius: 0 !important;
+      }
+    }
+
+    @media (max-width: 600px) {
+      .bp-workflow-step {
+        flex-basis: 135px;
+      }
+    }
 
     /* ========================================================
        FORM
@@ -1817,6 +2275,13 @@ export default function BudgetProposals({
         repeat(4, minmax(0, 1fr));
       gap: 9px;
       margin-bottom: 14px;
+    }
+
+    .bp-rate-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 9px;
+      margin-top: 9px;
     }
 
     .bp-info-card {
@@ -1986,6 +2451,25 @@ export default function BudgetProposals({
       color: #475569;
     }
 
+    .bp-review-action:hover:not(:disabled) {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
+    }
+
+    .bp-review-action:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+      background: #f8fafc;
+    }
+
+    .bp-card-button, .bp-action, .bp-small-button, .bp-primary-button, .bp-secondary-button {
+      transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease;
+    }
+
+    .bp-card-button:hover, .bp-primary-button:hover, .bp-secondary-button:hover, .bp-small-button:hover {
+      transform: translateY(-1px);
+    }
+
     .bp-review-textarea {
       width: 100%;
       min-height: 80px;
@@ -2004,20 +2488,27 @@ export default function BudgetProposals({
 
     .bp-workflow {
       display: flex;
+      flex-direction: row;
       align-items: stretch;
+      width: 100%;
       gap: 0;
-      overflow-x: auto;
+      overflow: visible;
       padding: 8px 2px 14px;
     }
 
     .bp-workflow-step {
-      min-width: 145px;
-      flex: 1;
+      min-width: 0;
+      flex: 1 1 0;
       position: relative;
-      padding: 12px 10px;
+      padding: 16px 10px;
       border: 1px solid #dbe3ee;
       background: #ffffff;
       text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 92px;
     }
 
     .bp-workflow-step:first-child {
@@ -2065,10 +2556,14 @@ export default function BudgetProposals({
     }
 
     .bp-workflow-arrow {
+      width: 28px;
+      min-width: 28px;
       display: flex;
       align-items: center;
-      color: #cbd5e1;
+      justify-content: center;
+      color: #94a3b8;
       flex-shrink: 0;
+      background: #ffffff;
     }
 
     .bp-workflow-arrow svg {
@@ -2209,6 +2704,14 @@ export default function BudgetProposals({
       text-align: center;
     }
 
+    .bp-report-preview-logo {
+      display: block;
+      width: 58px;
+      height: 58px;
+      object-fit: contain;
+      margin: 0 auto 7px;
+    }
+
     .bp-report-preview-header strong {
       display: block;
       color: #10255c;
@@ -2294,6 +2797,14 @@ export default function BudgetProposals({
     ======================================================== */
 
     @media (max-width: 1200px) {
+
+      .bp-grid {
+        min-height: auto;
+      }
+
+      .bp-card {
+        min-height: 300px;
+      }
 
       .bp-grid {
         grid-template-columns:
@@ -2423,6 +2934,936 @@ export default function BudgetProposals({
         width: 100%;
       }
 
+    }
+
+
+    /* ========================================================
+       REDESIGNED BUDGET PROPOSALS DASHBOARD
+       UI-only layer. Existing navigation, API calls, forms,
+       workflow and database actions remain unchanged.
+    ======================================================== */
+
+    .bp-dashboard-page {
+      width: 100%;
+      min-width: 0;
+      padding-bottom: 18px;
+    }
+
+    .bp-dashboard-system-area {
+      display: grid;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+
+    .bp-dashboard-note-error,
+    .bp-dashboard-note-loading {
+      margin: 0;
+      border-radius: 10px;
+    }
+
+    .bp-dashboard-toolbar {
+      display: flex;
+      justify-content: flex-end;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .bp-dashboard-year-selector {
+      height: 36px;
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 0 10px;
+      background: #ffffff;
+      border: 1px solid #dbe4f0;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+      color: #334155;
+      font-size: 10px;
+      font-weight: 700;
+    }
+
+    .bp-dashboard-year-selector > svg:first-child {
+      width: 14px;
+      height: 14px;
+      color: #123b7a;
+    }
+
+    .bp-dashboard-year-selector > svg:last-child {
+      width: 13px;
+      height: 13px;
+      color: #64748b;
+      pointer-events: none;
+      margin-left: -2px;
+    }
+
+    .bp-dashboard-year-selector select {
+      appearance: none;
+      border: 0;
+      outline: 0;
+      background: transparent;
+      padding: 0 1px;
+      color: #0f172a;
+      font-size: 10px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+
+    .bp-dashboard-summary-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+
+    .bp-dashboard-summary-card {
+      min-width: 0;
+      min-height: 92px;
+      border: 1px solid #e2e8f0;
+      border-radius: 9px;
+      background: #ffffff;
+      padding: 13px 12px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      text-align: left;
+      cursor: pointer;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 2px 8px rgba(15, 23, 42, 0.035);
+      transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease;
+    }
+
+    .bp-dashboard-summary-card:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 16px rgba(15, 23, 42, 0.08);
+    }
+
+    .bp-dashboard-summary-card::after {
+      content: '';
+      position: absolute;
+      width: 58px;
+      height: 58px;
+      border-radius: 50%;
+      right: -25px;
+      top: -22px;
+      opacity: .12;
+    }
+
+    .summary-blue::after { background: #2563eb; }
+    .summary-green::after { background: #10a968; }
+    .summary-orange::after { background: #f59e0b; }
+    .summary-red::after { background: #ef4444; }
+
+    .bp-summary-icon {
+      width: 45px;
+      height: 45px;
+      border-radius: 50%;
+      flex: 0 0 45px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #ffffff;
+    }
+
+    .summary-blue .bp-summary-icon { background: #2563eb; }
+    .summary-green .bp-summary-icon { background: #10a968; }
+    .summary-orange .bp-summary-icon { background: #f59e0b; }
+    .summary-red .bp-summary-icon { background: #ef4444; }
+
+    .bp-summary-icon svg {
+      width: 22px;
+      height: 22px;
+    }
+
+    .bp-summary-content {
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      line-height: 1.15;
+    }
+
+    .bp-summary-label {
+      color: #64748b;
+      font-size: 8px;
+      font-weight: 800;
+      letter-spacing: .03em;
+    }
+
+    .bp-summary-content strong {
+      margin: 4px 0 2px;
+      color: #10255c;
+      font-size: 22px;
+      line-height: 1;
+      font-weight: 850;
+    }
+
+    .bp-summary-content > span:last-child {
+      color: #94a3b8;
+      font-size: 8px;
+      white-space: nowrap;
+    }
+
+    .bp-summary-arrow {
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-left: auto;
+      flex: 0 0 30px;
+    }
+
+    .summary-blue .bp-summary-arrow { color: #2563eb; background: #eaf2ff; }
+    .summary-green .bp-summary-arrow { color: #10a968; background: #e8f8f0; }
+    .summary-orange .bp-summary-arrow { color: #f59e0b; background: #fff3df; }
+    .summary-red .bp-summary-arrow { color: #ef4444; background: #fee7e7; }
+
+    .bp-summary-arrow svg {
+      width: 15px;
+      height: 15px;
+    }
+
+    .bp-dashboard-hero-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.7fr) minmax(340px, .95fr);
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .bp-dashboard-hero-card,
+    .bp-dashboard-status-card,
+    .bp-dashboard-recent-card {
+      background: #ffffff;
+      border: 1px solid #e1e8f2;
+      border-radius: 10px;
+      box-shadow: 0 2px 9px rgba(15, 23, 42, 0.035);
+    }
+
+    .bp-dashboard-hero-card {
+      min-height: 235px;
+      padding: 20px 22px;
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      background:
+        radial-gradient(circle at 84% 42%, rgba(99, 102, 241, .13), transparent 31%),
+        linear-gradient(115deg, #ffffff 0%, #fbfcff 64%, #f3f5ff 100%);
+    }
+
+    .bp-dashboard-hero-copy {
+      width: 59%;
+      position: relative;
+      z-index: 2;
+    }
+
+    .bp-dashboard-eyebrow {
+      color: #315bdc;
+      font-size: 9px;
+      font-weight: 850;
+      letter-spacing: .04em;
+    }
+
+    .bp-dashboard-hero-copy h1 {
+      margin: 5px 0 8px;
+      color: #10255c;
+      font-size: 23px;
+      line-height: 1.05;
+      font-weight: 850;
+      letter-spacing: -.02em;
+    }
+
+    .bp-dashboard-hero-copy p {
+      max-width: 470px;
+      margin: 0 0 13px;
+      color: #64748b;
+      font-size: 9.5px;
+      line-height: 1.55;
+    }
+
+    .bp-dashboard-primary-button {
+      height: 34px;
+      padding: 0 15px;
+      border: 0;
+      border-radius: 7px;
+      background: linear-gradient(135deg, #4633ff, #5b3df1);
+      color: #ffffff;
+      font-size: 9px;
+      font-weight: 800;
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      cursor: pointer;
+      box-shadow: 0 5px 13px rgba(79, 70, 229, .22);
+    }
+
+    .bp-dashboard-primary-button svg {
+      width: 14px;
+      height: 14px;
+    }
+
+    .bp-dashboard-hero-art {
+      position: absolute;
+      right: 4%;
+      top: 50%;
+      width: 255px;
+      height: 205px;
+      transform: translateY(-50%);
+      pointer-events: none;
+    }
+
+    .bp-hero-orbit {
+      position: absolute;
+      border-radius: 50%;
+      background: rgba(99, 102, 241, .10);
+    }
+
+    .orbit-one {
+      width: 175px;
+      height: 175px;
+      right: 26px;
+      top: 11px;
+    }
+
+    .orbit-two {
+      width: 118px;
+      height: 118px;
+      right: 55px;
+      top: 40px;
+      border: 1px solid rgba(99, 102, 241, .16);
+      background: rgba(255,255,255,.3);
+    }
+
+    .bp-hero-document {
+      position: absolute;
+      right: 68px;
+      top: 19px;
+      width: 115px;
+      height: 156px;
+      border: 6px solid #8ca0ff;
+      border-radius: 7px;
+      background: #ffffff;
+      transform: rotate(-1deg);
+      box-shadow: 0 11px 20px rgba(53, 70, 173, .18);
+      color: #5c70ec;
+      padding: 13px 11px;
+    }
+
+    .bp-hero-document > svg {
+      width: 27px;
+      height: 27px;
+      margin-bottom: 6px;
+    }
+
+    .bp-hero-lines {
+      display: grid;
+      gap: 4px;
+    }
+
+    .bp-hero-lines span {
+      height: 4px;
+      border-radius: 4px;
+      background: #d9e0ff;
+    }
+
+    .bp-hero-lines span:nth-child(1) { width: 75%; }
+    .bp-hero-lines span:nth-child(2) { width: 90%; }
+    .bp-hero-lines span:nth-child(3) { width: 62%; }
+    .bp-hero-lines span:nth-child(4) { width: 82%; }
+
+    .bp-hero-chart {
+      display: flex;
+      align-items: flex-end;
+      gap: 5px;
+      height: 37px;
+      margin-top: 11px;
+      padding: 5px 8px;
+      background: #f0f3ff;
+      border-radius: 5px;
+    }
+
+    .bp-hero-chart i {
+      width: 10px;
+      border-radius: 2px 2px 0 0;
+      background: #6678ef;
+    }
+
+    .bp-hero-chart i:nth-child(1) { height: 12px; }
+    .bp-hero-chart i:nth-child(2) { height: 20px; }
+    .bp-hero-chart i:nth-child(3) { height: 27px; }
+    .bp-hero-chart i:nth-child(4) { height: 17px; }
+
+    .bp-hero-check {
+      position: absolute;
+      right: -15px;
+      bottom: 12px;
+      width: 46px;
+      height: 46px;
+      border-radius: 50%;
+      background: #6c7cf0;
+      border: 4px solid #ffffff;
+      color: #ffffff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 7px 14px rgba(61, 73, 175, .25);
+    }
+
+    .bp-hero-check svg {
+      width: 22px;
+      height: 22px;
+    }
+
+    .bp-dashboard-status-card {
+      padding: 15px 16px;
+      min-height: 235px;
+    }
+
+    .bp-dashboard-status-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .bp-dashboard-status-header h2,
+    .bp-dashboard-recent-header h2,
+    .bp-dashboard-section-heading h2 {
+      margin: 0;
+      color: #10255c;
+      font-size: 11px;
+      font-weight: 850;
+    }
+
+    .bp-dashboard-status-header p,
+    .bp-dashboard-recent-header p,
+    .bp-dashboard-section-heading p {
+      margin: 3px 0 0;
+      color: #64748b;
+      font-size: 8.5px;
+    }
+
+    .bp-mini-year {
+      height: 29px;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      border: 1px solid #dbe4f0;
+      border-radius: 6px;
+      padding: 0 6px;
+      background: #ffffff;
+      color: #64748b;
+    }
+
+    .bp-mini-year svg {
+      width: 12px;
+      height: 12px;
+    }
+
+    .bp-mini-year svg:last-child {
+      pointer-events: none;
+    }
+
+    .bp-mini-year select {
+      appearance: none;
+      border: 0;
+      outline: 0;
+      background: transparent;
+      font-size: 8.5px;
+      font-weight: 800;
+      color: #334155;
+    }
+
+    .bp-status-chart-area {
+      min-height: 176px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 18px;
+      padding-top: 4px;
+    }
+
+    .bp-donut {
+      width: 132px;
+      height: 132px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      flex: 0 0 132px;
+      position: relative;
+    }
+
+    .bp-donut::before {
+      content: '';
+      position: absolute;
+      inset: 17px;
+      border-radius: 50%;
+      background: #ffffff;
+    }
+
+    .bp-donut-center {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      line-height: 1;
+    }
+
+    .bp-donut-center strong {
+      color: #10255c;
+      font-size: 22px;
+      font-weight: 850;
+    }
+
+    .bp-donut-center span {
+      margin-top: 4px;
+      color: #64748b;
+      font-size: 8px;
+    }
+
+    .bp-status-legend {
+      min-width: 0;
+      flex: 1;
+      display: grid;
+      gap: 12px;
+    }
+
+    .bp-status-legend-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      color: #334155;
+      font-size: 8.5px;
+    }
+
+    .bp-status-legend-row span {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      min-width: 0;
+    }
+
+    .bp-status-legend-row strong {
+      color: #334155;
+      font-size: 8px;
+      white-space: nowrap;
+    }
+
+    .legend-dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      display: inline-block;
+      flex: 0 0 9px;
+    }
+
+    .dot-green { background: #10a968; }
+    .dot-orange { background: #f59e0b; }
+    .dot-red { background: #ef4444; }
+
+    .bp-dashboard-section-heading {
+      margin: 3px 0 7px;
+    }
+
+    .bp-dashboard-module-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+
+    .bp-dashboard-module-card {
+      min-width: 0;
+      min-height: 105px;
+      position: relative;
+      overflow: hidden;
+      padding: 12px;
+      border: 1px solid #e1e8f2;
+      border-radius: 9px;
+      background: #ffffff;
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      grid-template-rows: auto 27px;
+      column-gap: 9px;
+      row-gap: 7px;
+      text-align: left;
+      cursor: pointer;
+      box-shadow: 0 2px 8px rgba(15, 23, 42, .03);
+      transition: transform .15s ease, box-shadow .15s ease;
+    }
+
+    .bp-dashboard-module-card:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 14px rgba(15, 23, 42, .07);
+    }
+
+    .bp-module-icon {
+      width: 39px;
+      height: 39px;
+      border-radius: 9px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #ffffff;
+      grid-row: 1;
+    }
+
+    .module-blue .bp-module-icon { background: #2563eb; }
+    .module-green .bp-module-icon { background: #10a968; }
+    .module-purple .bp-module-icon { background: #7138d5; }
+    .module-orange .bp-module-icon { background: #f57c00; }
+
+    .bp-module-icon svg {
+      width: 20px;
+      height: 20px;
+    }
+
+    .bp-module-copy {
+      min-width: 0;
+    }
+
+    .bp-module-copy h3 {
+      margin: 1px 0 4px;
+      color: #10255c;
+      font-size: 10px;
+      font-weight: 850;
+    }
+
+    .bp-module-copy p {
+      margin: 0;
+      color: #64748b;
+      font-size: 8px;
+      line-height: 1.4;
+    }
+
+    .bp-module-action {
+      grid-column: 1 / -1;
+      height: 27px;
+      border-radius: 5px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+      font-size: 8px;
+      font-weight: 800;
+    }
+
+    .module-blue .bp-module-action { color: #2563eb; background: #edf4ff; }
+    .module-green .bp-module-action { color: #10a968; background: #ebf9f2; }
+    .module-purple .bp-module-action { color: #7138d5; background: #f3edff; }
+    .module-orange .bp-module-action { color: #f57c00; background: #fff3e7; }
+
+    .bp-module-action svg {
+      width: 12px;
+      height: 12px;
+    }
+
+    .bp-dashboard-recent-card {
+      overflow: hidden;
+    }
+
+    .bp-dashboard-recent-header {
+      padding: 12px 13px 9px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      gap: 12px;
+    }
+
+    .bp-recent-tools {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      min-width: 0;
+    }
+
+    .bp-recent-search {
+      width: 250px;
+      height: 31px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 0 8px;
+      border: 1px solid #dbe4f0;
+      border-radius: 6px;
+      background: #ffffff;
+    }
+
+    .bp-recent-search svg {
+      width: 13px;
+      height: 13px;
+      color: #94a3b8;
+      flex: 0 0 13px;
+    }
+
+    .bp-recent-search input {
+      width: 100%;
+      border: 0;
+      outline: 0;
+      color: #334155;
+      font-size: 8px;
+      background: transparent;
+    }
+
+    .bp-recent-search input::placeholder {
+      color: #94a3b8;
+    }
+
+    .bp-recent-filter {
+      height: 31px;
+      border: 1px solid #dbe4f0;
+      border-radius: 6px;
+      background: #ffffff;
+      color: #334155;
+      padding: 0 8px;
+      font-size: 8px;
+      font-weight: 700;
+      outline: 0;
+    }
+
+    .bp-view-all-button {
+      height: 31px;
+      border: 0;
+      background: transparent;
+      color: #3b6eea;
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      font-size: 8px;
+      font-weight: 800;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .bp-view-all-button svg {
+      width: 12px;
+      height: 12px;
+    }
+
+    .bp-dashboard-table-wrap {
+      width: 100%;
+      overflow-x: auto;
+      border-top: 1px solid #eef2f7;
+    }
+
+    .bp-dashboard-table {
+      width: 100%;
+      min-width: 900px;
+      border-collapse: collapse;
+      table-layout: auto;
+    }
+
+    .bp-dashboard-table th {
+      padding: 8px 9px;
+      background: #f8fafc;
+      color: #52627a;
+      border-bottom: 1px solid #e7edf5;
+      font-size: 7px;
+      font-weight: 850;
+      text-align: left;
+      white-space: nowrap;
+    }
+
+    .bp-dashboard-table td {
+      padding: 8px 9px;
+      color: #52627a;
+      border-bottom: 1px solid #edf1f6;
+      font-size: 7.8px;
+      vertical-align: middle;
+      white-space: nowrap;
+    }
+
+    .bp-dashboard-table tbody tr:hover {
+      background: #fbfdff;
+    }
+
+    .bp-table-reference {
+      color: #1d3d78 !important;
+      font-weight: 850;
+    }
+
+    .bp-table-title {
+      max-width: 220px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .bp-table-amount {
+      color: #243b6b !important;
+      font-weight: 800;
+    }
+
+    .bp-dashboard-status-pill {
+      display: inline-flex;
+      align-items: center;
+      min-height: 19px;
+      padding: 2px 7px;
+      border-radius: 999px;
+      font-size: 7px;
+      font-weight: 800;
+    }
+
+    .bp-dashboard-status-pill.bp-badge-approved {
+      color: #087a4d;
+      background: #dff7ea;
+    }
+
+    .bp-dashboard-status-pill.bp-badge-review {
+      color: #a05d00;
+      background: #fff0d6;
+    }
+
+    .bp-dashboard-status-pill.bp-badge-disapproved {
+      color: #b42318;
+      background: #fee2e2;
+    }
+
+    .bp-dashboard-status-pill.bp-badge-pending,
+    .bp-dashboard-status-pill.bp-badge-default {
+      color: #52627a;
+      background: #eef2f7;
+    }
+
+    .bp-dashboard-status-pill.bp-badge-returned {
+      color: #9f3f20;
+      background: #ffeadf;
+    }
+
+    .bp-dashboard-status-pill.bp-badge-endorsed {
+      color: #5f35b5;
+      background: #eee7ff;
+    }
+
+    .bp-table-view-button {
+      height: 23px;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 0 7px;
+      border: 1px solid #dce4ee;
+      border-radius: 5px;
+      background: #ffffff;
+      color: #475569;
+      font-size: 7px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+
+    .bp-table-view-button:hover {
+      border-color: #b8c8df;
+      color: #1d4ed8;
+      background: #f8fbff;
+    }
+
+    .bp-table-view-button svg {
+      width: 11px;
+      height: 11px;
+    }
+
+    .bp-dashboard-empty-row {
+      text-align: center !important;
+      padding: 28px 12px !important;
+      color: #94a3b8 !important;
+    }
+
+    .bp-dashboard-recent-footer {
+      min-height: 43px;
+      padding: 7px 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      color: #64748b;
+      font-size: 7.5px;
+    }
+
+    .bp-dashboard-recent-pagination {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .bp-dashboard-recent-pagination button {
+      width: 25px;
+      height: 25px;
+      border: 1px solid #dce4ee;
+      border-radius: 5px;
+      background: #ffffff;
+      color: #64748b;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 8px;
+      cursor: pointer;
+    }
+
+    .bp-dashboard-recent-pagination button.active {
+      color: #ffffff;
+      border-color: #2563eb;
+      background: #2563eb;
+      font-weight: 800;
+    }
+
+    .bp-dashboard-recent-pagination button:disabled {
+      opacity: .45;
+      cursor: default;
+    }
+
+    .bp-dashboard-recent-pagination svg {
+      width: 11px;
+      height: 11px;
+    }
+
+    @media (max-width: 1100px) {
+      .bp-dashboard-summary-grid,
+      .bp-dashboard-module-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .bp-dashboard-hero-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .bp-dashboard-hero-card {
+        min-height: 235px;
+      }
+    }
+
+    @media (max-width: 760px) {
+      .bp-dashboard-summary-grid,
+      .bp-dashboard-module-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .bp-dashboard-hero-copy {
+        width: 100%;
+      }
+
+      .bp-dashboard-hero-art {
+        opacity: .18;
+        right: -28px;
+      }
+
+      .bp-dashboard-recent-header {
+        align-items: stretch;
+        flex-direction: column;
+      }
+
+      .bp-recent-tools {
+        flex-wrap: wrap;
+      }
+
+      .bp-recent-search {
+        width: 100%;
+      }
+
+      .bp-dashboard-status-chart-area {
+        gap: 10px;
+      }
     }
 
   `;
@@ -2582,8 +4023,7 @@ export default function BudgetProposals({
             </div>
 
             <div className="bp-kpi-value">
-              {summaryData.pendingProposals +
-                summaryData.reviewProposals}
+              {summaryData.submittedProposals + summaryData.reviewProposals + summaryData.revisionProposals}
             </div>
 
             <div className="bp-kpi-note">
@@ -2825,12 +4265,11 @@ export default function BudgetProposals({
               <div>
 
                 <h3 className="bp-panel-title">
-                  Budget Status by Fund Group
+                  {overviewMode === 'status' ? 'Proposal Status Summary' : overviewMode === 'department' ? 'Proposals by Department' : overviewMode === 'fund' ? 'Proposals by Fund Group' : 'Proposal Summary by Fund Group'}
                 </h3>
 
                 <p className="bp-panel-subtitle">
-                  Reference budget, obligation,
-                  disbursement and balance
+                  Actual proposal records and proposed amounts for the selected breakdown.
                 </p>
 
               </div>
@@ -2839,7 +4278,7 @@ export default function BudgetProposals({
 
             <div className="bp-budget-table-wrap">
 
-              <table className="bp-budget-table">
+              <table className="bp-budget-table bp-table-summary">
 
                 <thead>
 
@@ -2855,7 +4294,7 @@ export default function BudgetProposals({
 
                 <tbody>
 
-                  {overviewData.map(item => (
+                  {overviewPagination.rows.map(item => (
 
                     <tr key={item.name}>
 
@@ -2945,7 +4384,7 @@ export default function BudgetProposals({
                   PS
                 </div>
                 <div className="bp-info-value">
-                  ₱0.00
+                  {formatCurrency(classificationTotals.PS)}
                 </div>
               </div>
 
@@ -2954,7 +4393,7 @@ export default function BudgetProposals({
                   MOOE
                 </div>
                 <div className="bp-info-value">
-                  ₱0.00
+                  {formatCurrency(classificationTotals.MOOE)}
                 </div>
               </div>
 
@@ -2963,7 +4402,7 @@ export default function BudgetProposals({
                   CO
                 </div>
                 <div className="bp-info-value">
-                  ₱0.00
+                  {formatCurrency(classificationTotals.CO)}
                 </div>
               </div>
 
@@ -2972,7 +4411,7 @@ export default function BudgetProposals({
                   Total
                 </div>
                 <div className="bp-info-value">
-                  ₱0.00
+                  {formatCurrency(classificationTotals.total)}
                 </div>
               </div>
 
@@ -3041,7 +4480,7 @@ export default function BudgetProposals({
 
           <div className="bp-budget-table-wrap">
 
-            <table className="bp-budget-table">
+            <table className="bp-budget-table bp-table-recent">
 
               <thead>
 
@@ -3059,7 +4498,7 @@ export default function BudgetProposals({
 
               <tbody>
 
-                {proposalRecords.slice(0, 4).map(
+                {recentPagination.rows.map(
                   proposal => (
 
                     <tr key={proposal.id}>
@@ -3073,7 +4512,7 @@ export default function BudgetProposals({
                       </td>
 
                       <td>
-                        {proposal.department}
+                        {getDepartment(proposal)}
                       </td>
 
                       <td>
@@ -3127,6 +4566,8 @@ export default function BudgetProposals({
 
           </div>
 
+          <Pagination {...recentPagination} onPageChange={setRecentPage} />
+
         </div>
 
       </div>
@@ -3141,520 +4582,479 @@ export default function BudgetProposals({
   // ==========================================================
 
   const renderCreateProposal = () => (
-
     <div className="bp-section-page">
 
       <div className="bp-screen-toolbar">
-
         <BackButton />
-
         <div className="bp-screen-toolbar-right">
-
           <span className="bp-overview-fy">
             <FileSpreadsheet />
             FY {selectedYear}
           </span>
-
         </div>
-
       </div>
-
 
       <div className="bp-screen-heading">
-
-        <h2>
-          Budget Proposal Submission
-        </h2>
-
+        <h2>Budget Proposal Submission</h2>
         <p>
-          Encode the proposed budget using the
-          fund, campus, responsibility center,
-          WFP and UACS information reflected in
-          the RBUD / RAOD structure.
+          Prepare a proposed budget before approval using the same
+          WFP, fund, PAP, MFO, UACS and allotment terminology used
+          by the budget registries.
         </p>
-
       </div>
-      {formSaved && (
 
-        <div className="bp-success-message">
-
-          <Check />
-
-          Proposal information has been prepared
-          successfully for database submission.
-
+      {proposalError && (
+        <div className="bp-error-message">
+          <AlertCircle />
+          {proposalError}
         </div>
-
       )}
 
+      {formSaved && (
+        <div className="bp-success-message">
+          <Check />
+          Budget proposal saved successfully.
+        </div>
+      )}
 
       <div className="bp-info-grid">
-
         <div className="bp-info-card">
-
-          <div className="bp-info-label">
-            Fiscal Year
-          </div>
-
-          <div className="bp-info-value">
-            {selectedYear}
-          </div>
-
+          <div className="bp-info-label">Fiscal Year</div>
+          <div className="bp-info-value">{selectedYear}</div>
         </div>
-
         <div className="bp-info-card">
-
-          <div className="bp-info-label">
-            Proposal Type
-          </div>
-
-          <div className="bp-info-value">
-            Budget Proposal
-          </div>
-
+          <div className="bp-info-label">Proposal Stage</div>
+          <div className="bp-info-value">Budget Preparation</div>
         </div>
-
         <div className="bp-info-card">
-
-          <div className="bp-info-label">
-            Workflow
-          </div>
-
+          <div className="bp-info-label">Workflow</div>
           <div className="bp-info-value">
-            Draft
+            {editingProposalId ? 'Editing Draft / Revision' : 'Draft'}
           </div>
-
         </div>
-
         <div className="bp-info-card">
-
-          <div className="bp-info-label">
-            Status
-          </div>
-
+          <div className="bp-info-label">Total Proposed</div>
           <div className="bp-info-value">
-            For Submission
+            {formatCurrency(
+              Number(proposalForm.psAmount || 0) +
+              Number(proposalForm.mooeAmount || 0) +
+              Number(proposalForm.coAmount || 0)
+            )}
           </div>
-
         </div>
-
       </div>
 
-
       <div className="bp-panel">
-
         <div className="bp-panel-header">
-
           <div>
-
-            <h3 className="bp-panel-title">
-              1. Fund Information
-            </h3>
-
+            <h3 className="bp-panel-title">1. Proposal Identification</h3>
             <p className="bp-panel-subtitle">
-              Fund Cluster, Fund Code, Campus,
-              RC, WFP Description and Source Code
+              Information about the office and the proposed budget requirement
             </p>
-
           </div>
-
         </div>
 
-
         <div className="bp-form-grid-three">
+          <div className="bp-form-group">
+            <label className="bp-form-label">Proposing Office / Department <span>*</span></label>
+            <input
+              className="bp-form-input"
+              placeholder="e.g. Information Technology Office"
+              value={proposalForm.proposingOffice}
+              onChange={event => updateProposalForm('proposingOffice', event.target.value)}
+            />
+            <span className="bp-form-help">
+              Separate from P/A/P and Responsibility Center.
+            </span>
+          </div>
 
           <div className="bp-form-group">
+            <label className="bp-form-label">Proponent</label>
+            <input
+              className="bp-form-input"
+              placeholder={user?.name || user?.username || 'Name of proposing staff'}
+              value={proposalForm.proponent}
+              onChange={event => updateProposalForm('proponent', event.target.value)}
+            />
+          </div>
 
-            <label className="bp-form-label">
-              Fund Cluster <span>*</span>
-            </label>
+          <div className="bp-form-group">
+            <label className="bp-form-label">Proposal Title <span>*</span></label>
+            <input
+              className="bp-form-input"
+              placeholder="Enter the proposed budget title"
+              value={proposalForm.title}
+              onChange={event => updateProposalForm('title', event.target.value)}
+            />
+          </div>
+        </div>
+      </div>
 
+      <div className="bp-panel">
+        <div className="bp-panel-header">
+          <div>
+            <h3 className="bp-panel-title">2. WFP / Budget Classification</h3>
+            <p className="bp-panel-subtitle">
+              Reference fields aligned with the WFP, RAOD and RBUD source files.
+            </p>
+          </div>
+        </div>
+
+        <div className="bp-form-grid-three">
+          <div className="bp-form-group">
+            <label className="bp-form-label">Fund Cluster <span>*</span></label>
             <select
               className="bp-form-select"
               value={proposalForm.fundCluster}
-              onChange={event => updateProposalForm('fundCluster', event.target.value)}
+              disabled={loadingReferenceData}
+              onChange={event => {
+                const value = event.target.value;
+                updateProposalForm('fundCluster', value);
+                const selected = fundClusters.find(item => String(item.id) === String(value));
+                if (selected?.fund_source_id) {
+                  updateProposalForm('fundCode', String(selected.fund_source_id));
+                } else if (selected?.fund_source_code) {
+                  const source = fundSources.find(item => String(item.code) === String(selected.fund_source_code));
+                  if (source) updateProposalForm('fundCode', String(source.id));
+                }
+              }}
             >
-              <option value="">Select Fund Cluster</option>
-              {fundGroupData.map(item => (
-                <option key={item.name} value={item.name}>{item.name}</option>
+              <option value="">
+                {loadingReferenceData ? 'Loading Master Data...' : 'Select Fund Cluster'}
+              </option>
+              {fundClusters.map(item => (
+                <option key={item.id} value={String(item.id)}>
+                  {item.code ? `${item.code} - ${item.name}` : item.name}
+                </option>
               ))}
             </select>
-
           </div>
 
-
           <div className="bp-form-group">
-
-            <label className="bp-form-label">
-              Fund Code <span>*</span>
-            </label>
-
-            <input
-              className="bp-form-input"
-              placeholder="Enter fund code"
+            <label className="bp-form-label">Fund Code <span>*</span></label>
+            <select
+              className="bp-form-select"
               value={proposalForm.fundCode}
+              disabled={loadingReferenceData}
               onChange={event => updateProposalForm('fundCode', event.target.value)}
-            />
-
+            >
+              <option value="">
+                {loadingReferenceData ? 'Loading Master Data...' : 'Select Fund Code'}
+              </option>
+              {fundSources.map(item => (
+                <option key={item.id} value={String(item.id)}>
+                  {item.code} - {item.name}
+                </option>
+              ))}
+            </select>
           </div>
 
-
           <div className="bp-form-group">
-
-            <label className="bp-form-label">
-              Campus <span>*</span>
-            </label>
-
+            <label className="bp-form-label">Campus <span>*</span></label>
             <select
               className="bp-form-select"
               value={proposalForm.campus}
+              disabled={loadingReferenceData}
               onChange={event => updateProposalForm('campus', event.target.value)}
             >
-
               <option value="">
-                Select Campus
+                {loadingReferenceData ? 'Loading Master Data...' : 'Select Campus'}
               </option>
-
-              <option>
-                LAGANGILANG
-              </option>
-
-              <option>
-                BANGUED
-              </option>
-
-              <option>
-                Other Campus
-              </option>
-
+              {campuses.map(item => (
+                <option key={item.id} value={String(item.id)}>
+                  {item.code ? `${item.code} - ${item.name}` : item.name}
+                </option>
+              ))}
             </select>
-
           </div>
 
-
           <div className="bp-form-group">
-
-            <label className="bp-form-label">
-              Responsibility Center (RC) <span>*</span>
-            </label>
-
-            <input
-              className="bp-form-input"
-              placeholder="e.g. III-A"
+            <label className="bp-form-label">Responsibility Center <span>*</span></label>
+            <select
+              className="bp-form-select"
               value={proposalForm.responsibilityCenter}
+              disabled={loadingReferenceData}
               onChange={event => updateProposalForm('responsibilityCenter', event.target.value)}
-            />
-
+            >
+              <option value="">
+                {loadingReferenceData ? 'Loading Master Data...' : 'Select Responsibility Center'}
+              </option>
+              {responsibilityCenters.map(item => (
+                <option key={item.id} value={String(item.id)}>
+                  {item.code ? `${item.code} - ${item.name}` : item.name}
+                </option>
+              ))}
+            </select>
           </div>
 
-
           <div className="bp-form-group">
-
-            <label className="bp-form-label">
-              WFP Description <span>*</span>
-            </label>
-
-            <input
-              className="bp-form-input"
-              placeholder="Enter WFP description"
+            <label className="bp-form-label">WFP Description <span>*</span></label>
+            <select
+              className="bp-form-select"
               value={proposalForm.wfpDescription}
-              onChange={event => updateProposalForm('wfpDescription', event.target.value)}
-            />
-
+              disabled={loadingReferenceData}
+              onChange={event => {
+                const value = event.target.value;
+                updateProposalForm('wfpDescription', value);
+                const selected = wfpOptions.find(item => String(item.id) === String(value));
+                if (selected?.source_code && !proposalForm.sourceCode) {
+                  updateProposalForm('sourceCode', selected.source_code);
+                } else if (selected?.code && !proposalForm.sourceCode) {
+                  updateProposalForm('sourceCode', selected.code);
+                }
+              }}
+            >
+              <option value="">
+                {loadingReferenceData ? 'Loading Master Data...' : 'Select WFP Description'}
+              </option>
+              {wfpOptions.map(item => (
+                <option key={item.id} value={String(item.id)}>
+                  {item.code ? `${item.code} - ${item.name}` : item.name}
+                </option>
+              ))}
+            </select>
           </div>
 
-
           <div className="bp-form-group">
-
-            <label className="bp-form-label">
-              Source Code <span>*</span>
-            </label>
-
+            <label className="bp-form-label">Source Code</label>
             <input
               className="bp-form-input"
-              placeholder="Enter source code"
+              placeholder="Enter WFP source code if applicable"
               value={proposalForm.sourceCode}
               onChange={event => updateProposalForm('sourceCode', event.target.value)}
             />
-
+            <span className="bp-form-help">
+              Separate from Fund Code because the registry files identify WFP Source Code separately.
+            </span>
           </div>
-
-        </div>
-
-      </div>
-
-
-      <div className="bp-panel">
-
-        <div className="bp-panel-header">
-
-          <div>
-
-            <h3 className="bp-panel-title">
-              2. Department / Program Information
-            </h3>
-
-            <p className="bp-panel-subtitle">
-              PAP / Department and UACS classification
-            </p>
-
-          </div>
-
-        </div>
-
-
-        <div className="bp-form-grid-three">
 
           <div className="bp-form-group">
-
-            <label className="bp-form-label">
-              PAP / Department <span>*</span>
-            </label>
-
-            <input
-              className="bp-form-input"
-              placeholder="Enter PAP / Department"
-              value={proposalForm.department}
-              onChange={event => updateProposalForm('department', event.target.value)}
-            />
-
+            <label className="bp-form-label">P/A/P <span>*</span></label>
+            <select
+              className="bp-form-select"
+              value={proposalForm.pap}
+              disabled={loadingReferenceData}
+              onChange={event => updateProposalForm('pap', event.target.value)}
+            >
+              <option value="">
+                {loadingReferenceData ? 'Loading Master Data...' : 'Select P/A/P'}
+              </option>
+              {papOptions.map(item => (
+                <option key={item.id} value={String(item.id)}>
+                  {item.code ? `${item.code} - ${item.name}` : item.name}
+                </option>
+              ))}
+            </select>
           </div>
 
+          <div className="bp-form-group">
+            <label className="bp-form-label">MFO <span>*</span></label>
+            <select
+              className="bp-form-select"
+              value={proposalForm.mfo}
+              disabled={loadingReferenceData}
+              onChange={event => updateProposalForm('mfo', event.target.value)}
+            >
+              <option value="">
+                {loadingReferenceData ? 'Loading Master Data...' : 'Select MFO'}
+              </option>
+              {mfoOptions.map(item => (
+                <option key={item.id} value={String(item.id)}>
+                  {item.code ? `${item.code} - ${item.name}` : item.name}
+                </option>
+              ))}
+            </select>
+          </div>
 
           <div className="bp-form-group">
-
-            <label className="bp-form-label">
-              UACS Code <span>*</span>
-            </label>
-
-            <input
-              className="bp-form-input"
-              placeholder="Enter UACS code"
+            <label className="bp-form-label">UACS Code <span>*</span></label>
+            <select
+              className="bp-form-select"
               value={proposalForm.uacsCode}
+              disabled={loadingReferenceData}
               onChange={event => updateProposalForm('uacsCode', event.target.value)}
-            />
-
+            >
+              <option value="">
+                {loadingReferenceData ? 'Loading Master Data...' : 'Select UACS Code'}
+              </option>
+              {uacsOptions.map(item => (
+                <option key={item.id} value={String(item.id)}>
+                  {item.code}
+                  {item.account_title ? ` - ${item.account_title}` : item.name ? ` - ${item.name}` : ''}
+                </option>
+              ))}
+            </select>
           </div>
 
+          <div className="bp-form-group">
+            <label className="bp-form-label">Object of Expenditure <span>*</span></label>
+            <select
+              className="bp-form-select"
+              value={proposalForm.objectExpenditure}
+              disabled={loadingReferenceData}
+              onChange={event => updateProposalForm('objectExpenditure', event.target.value)}
+            >
+              <option value="">
+                {loadingReferenceData ? 'Loading Master Data...' : 'Select Object of Expenditure'}
+              </option>
+              {objectExpenditureOptions.map(item => (
+                <option key={item.id} value={String(item.id)}>
+                  {item.code ? `${item.code} - ${item.name}` : item.name}
+                </option>
+              ))}
+            </select>
+          </div>
 
           <div className="bp-form-group">
-
-            <label className="bp-form-label">
-              Budget Classification
-            </label>
-
+            <label className="bp-form-label">Allotment Class <span>*</span></label>
             <select
               className="bp-form-select"
               value={proposalForm.classification}
+              disabled={loadingReferenceData}
               onChange={event => updateProposalForm('classification', event.target.value)}
             >
-
-              <option value="">
-                Select Classification
-              </option>
-
-              <option>
-                PS - Personnel Services
-              </option>
-
-              <option>
-                MOOE - Maintenance and Other
-                Operating Expenses
-              </option>
-
-              <option>
-                CO - Capital Outlay
-              </option>
-
+              <option value="">Select Allotment Class</option>
+              {allotmentClasses.map(item => (
+                <option key={item.id} value={String(item.id)}>
+                  {item.code} - {item.name}
+                </option>
+              ))}
             </select>
-
           </div>
-
         </div>
-
       </div>
 
-
       <div className="bp-panel">
-
         <div className="bp-panel-header">
-
           <div>
-
-            <h3 className="bp-panel-title">
-              3. Proposed Amounts
-            </h3>
-
+            <h3 className="bp-panel-title">3. Proposed Budget</h3>
             <p className="bp-panel-subtitle">
-              Proposed budget amount and description
+              The WFP structure separates proposed amounts into PS, MOOE and CO.
             </p>
-
           </div>
-
         </div>
 
+        <div className="bp-form-grid-three">
+          <div className="bp-form-group">
+            <label className="bp-form-label">Proposed PS</label>
+            <input type="number" min="0" step="0.01" className="bp-form-input"
+              placeholder="0.00" value={proposalForm.psAmount}
+              onChange={event => updateProposalForm('psAmount', event.target.value)} />
+          </div>
+
+          <div className="bp-form-group">
+            <label className="bp-form-label">Proposed MOOE</label>
+            <input type="number" min="0" step="0.01" className="bp-form-input"
+              placeholder="0.00" value={proposalForm.mooeAmount}
+              onChange={event => updateProposalForm('mooeAmount', event.target.value)} />
+          </div>
+
+          <div className="bp-form-group">
+            <label className="bp-form-label">Proposed CO</label>
+            <input type="number" min="0" step="0.01" className="bp-form-input"
+              placeholder="0.00" value={proposalForm.coAmount}
+              onChange={event => updateProposalForm('coAmount', event.target.value)} />
+          </div>
+
+          <div className="bp-form-group">
+            <label className="bp-form-label">Total Proposed</label>
+            <input type="text" readOnly className="bp-form-input"
+              value={formatCurrency(
+                Number(proposalForm.psAmount || 0) +
+                Number(proposalForm.mooeAmount || 0) +
+                Number(proposalForm.coAmount || 0)
+              )} />
+            <span className="bp-form-help">Automatically calculated as PS + MOOE + CO.</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="bp-panel">
+        <div className="bp-panel-header">
+          <div>
+            <h3 className="bp-panel-title">4. Proposal Details</h3>
+            <p className="bp-panel-subtitle">
+              Explain the requirement and the expected result of the proposed budget.
+            </p>
+          </div>
+        </div>
 
         <div className="bp-form-grid">
-
-          <div className="bp-form-group">
-
-            <label className="bp-form-label">
-              Proposed Amount <span>*</span>
-            </label>
-
-            <input
-              type="number"
-              className="bp-form-input"
-              placeholder="0.00"
-              value={proposalForm.amount}
-              onChange={event => updateProposalForm('amount', event.target.value)}
-            />
-
-            <span className="bp-form-help">
-              Enter the amount proposed for allocation.
-            </span>
-
-          </div>
-
-
-          <div className="bp-form-group">
-
-            <label className="bp-form-label">
-              Funding Source
-            </label>
-
-            <select
-              className="bp-form-select"
-              value={proposalForm.fundingSource}
-              onChange={event => updateProposalForm('fundingSource', event.target.value)}
-            >
-
-              <option value="">
-                Select Funding Source
-              </option>
-
-              <option>
-                New General Appropriations
-              </option>
-
-              <option>
-                Continuing Appropriations
-              </option>
-
-              <option>
-                Supplemental Appropriations
-              </option>
-
-            </select>
-
-          </div>
-
-
           <div className="bp-form-group full">
-
-            <label className="bp-form-label">
-              Particulars / Description <span>*</span>
-            </label>
-
-            <textarea
-              className="bp-form-textarea"
+            <label className="bp-form-label">Particulars / Description <span>*</span></label>
+            <textarea className="bp-form-textarea"
               placeholder="Describe the proposed budget requirement..."
               value={proposalForm.particulars}
-              onChange={event => updateProposalForm('particulars', event.target.value)}
-            />
-
+              onChange={event => updateProposalForm('particulars', event.target.value)} />
           </div>
 
-        </div>
+          <div className="bp-form-group full">
+            <label className="bp-form-label">Justification</label>
+            <textarea className="bp-form-textarea"
+              placeholder="Why is this budget requirement needed?"
+              value={proposalForm.justification}
+              onChange={event => updateProposalForm('justification', event.target.value)} />
+          </div>
 
+          <div className="bp-form-group full">
+            <label className="bp-form-label">Expected Outputs</label>
+            <textarea className="bp-form-textarea"
+              placeholder="What output/result is expected from the proposed budget?"
+              value={proposalForm.expectedOutputs}
+              onChange={event => updateProposalForm('expectedOutputs', event.target.value)} />
+          </div>
+
+          <div className="bp-form-group full">
+            <label className="bp-form-label">Remarks</label>
+            <textarea className="bp-form-textarea"
+              placeholder="Additional remarks..."
+              value={proposalForm.remarks}
+              onChange={event => updateProposalForm('remarks', event.target.value)} />
+          </div>
+        </div>
       </div>
 
-
       <div className="bp-panel">
-
         <div className="bp-panel-header">
-
           <div>
-
-            <h3 className="bp-panel-title">
-              4. Supporting Documents
-            </h3>
-
+            <h3 className="bp-panel-title">5. Supporting Documents</h3>
             <p className="bp-panel-subtitle">
-              Attach proposal supporting documents
+              Attach documents required for proposal review.
             </p>
-
           </div>
-
         </div>
-
 
         <div className="bp-form-group">
-
-          <label className="bp-form-label">
-            Supporting Document
-          </label>
-
-          <input
-            type="file"
-            className="bp-form-input"
-          />
-
+          <label className="bp-form-label">Supporting Document</label>
+          <input type="file" className="bp-form-input" onChange={handleSupportingFile} />
           <span className="bp-form-help">
-            Current database upload field only. File storage
-            will be connected during database/backend
-            integration.
+            The selected file metadata is stored with the proposal record.
           </span>
-
         </div>
-
 
         <div className="bp-form-actions">
-
-          <button
-            className="bp-secondary-button"
-            onClick={goBackToModules}
-          >
-            Cancel
-          </button>
-
-          <button
-            className="bp-primary-button"
-            onClick={() => saveProposal(false)}
-          >
-
+          <button className="bp-secondary-button" onClick={goBackToModules}>Cancel</button>
+          <button className="bp-primary-button" onClick={() => saveProposal(false)}>
             <Save />
-
             Save Proposal Draft
-
           </button>
-
-          <button
-            className="bp-primary-button"
-            onClick={() => saveProposal(true)}
-          >
-
+          <button className="bp-primary-button" onClick={() => saveProposal(true)}>
             <Send />
-
             Submit Proposal
-
           </button>
-
         </div>
-
       </div>
 
     </div>
-
   );
-
 
   // ==========================================================
   // PROPOSAL RECORDS
   // ==========================================================
 
-  const renderRecords = () => (
-
+  const renderRecords = () => {
+    const recordsPagination = paginate(filteredProposals, recordsPage);
+    return (
     <div className="bp-section-page">
 
       <div className="bp-screen-toolbar">
@@ -3743,33 +5143,7 @@ export default function BudgetProposals({
               }
             >
 
-              <option>
-                All
-              </option>
-
-              <option>
-                Pending
-              </option>
-
-              <option>
-                For Review
-              </option>
-
-              <option>
-                Endorsed
-              </option>
-
-              <option>
-                Approved
-              </option>
-
-              <option>
-                Returned
-              </option>
-
-              <option>
-                Disapproved
-              </option>
+              {['All','Draft','Submitted','Under Review','For Revision','Endorsed','Approved','Rejected'].map(status => <option key={status}>{status}</option>)}
 
             </select>
 
@@ -3798,7 +5172,7 @@ export default function BudgetProposals({
 
         <div className="bp-budget-table-wrap">
 
-          <table className="bp-budget-table">
+          <table className="bp-budget-table bp-table-records">
 
             <thead>
 
@@ -3810,7 +5184,7 @@ export default function BudgetProposals({
                 <th>Fund Code</th>
                 <th>Campus</th>
                 <th>RC</th>
-                <th>PAP / Department</th>
+                <th>Proposing Office</th>
                 <th>Amount</th>
                 <th>Status</th>
                 <th>Action</th>
@@ -3821,7 +5195,7 @@ export default function BudgetProposals({
 
             <tbody>
 
-              {filteredProposals.map(
+              {recordsPagination.rows.map(
                 proposal => (
 
                   <tr key={proposal.id}>
@@ -3853,7 +5227,7 @@ export default function BudgetProposals({
                     </td>
 
                     <td>
-                      {proposal.department}
+                      {getDepartment(proposal)}
                     </td>
 
                     <td className="amount">
@@ -3880,20 +5254,11 @@ export default function BudgetProposals({
 
                     <td>
 
-                      <button
-                        className="bp-small-button"
-                        onClick={() =>
-                          openProposal(
-                            proposal
-                          )
-                        }
-                      >
-
-                        <Eye />
-
-                        View
-
-                      </button>
+                      <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+                        <button className="bp-small-button" onClick={() => openProposal(proposal)}><Eye /> View</button>
+                        {['Draft','For Revision'].includes(proposal.status) && <button className="bp-small-button" onClick={() => editProposal(proposal)}><Pencil /> Edit</button>}
+                        {proposal.status === 'Draft' && <button className="bp-small-button" onClick={() => deleteProposal(proposal)}><XCircle /> Delete</button>}
+                      </div>
 
                     </td>
 
@@ -3934,9 +5299,11 @@ export default function BudgetProposals({
 
       </div>
 
-    </div>
+      <Pagination {...recordsPagination} onPageChange={setRecordsPage} />
 
+    </div>
   );
+  };
 
 
   // ==========================================================
@@ -3944,410 +5311,34 @@ export default function BudgetProposals({
   // ==========================================================
 
   const renderReview = () => {
-
-    const reviewRecords =
-      proposalRecords.filter(
-        item =>
-          item.status === 'Pending' ||
-          item.status === 'For Review'
-      );
-
+    const reviewRecords = proposalRecords.filter(item => ['Submitted','Under Review'].includes(item.status));
+    const reviewPagination = paginate(reviewRecords, reviewPage);
     return (
-
       <div className="bp-section-page">
-
-        <div className="bp-screen-toolbar">
-
-          <BackButton />
-
-        </div>
-
-
-        <div className="bp-screen-heading">
-
-          <h2>
-            Review &amp; Endorsement
-          </h2>
-
-          <p>
-            Review submitted budget proposals,
-            verify fund information and endorse
-            proposals to the next stage.
-          </p>
-
-        </div>
+        <div className="bp-screen-toolbar"><BackButton /></div>
+        <div className="bp-screen-heading"><h2>Review &amp; Endorsement</h2><p>Review submitted proposals, return them for revision, or endorse them for approval.</p></div>
         <div className="bp-review-layout">
-
-          <div className="bp-panel">
-
-            <div className="bp-panel-header">
-
-              <div>
-
-                <h3 className="bp-panel-title">
-                  Proposals for Review
-                </h3>
-
-                <p className="bp-panel-subtitle">
-                  Submitted proposals awaiting review
-                </p>
-
-              </div>
-
-            </div>
-
-
-            <div className="bp-budget-table-wrap">
-
-              <table className="bp-budget-table">
-
-                <thead>
-
-                  <tr>
-
-                    <th>Reference</th>
-                    <th>Department</th>
-                    <th>Fund Group</th>
-                    <th>Amount</th>
-                    <th>Status</th>
-                    <th>Action</th>
-
-                  </tr>
-
-                </thead>
-
-                <tbody>
-
-                  {reviewRecords.map(
-                    proposal => (
-
-                      <tr key={proposal.id}>
-
-                        <td>
-                          {proposal.reference}
-                        </td>
-
-                        <td>
-                          {proposal.department}
-                        </td>
-
-                        <td>
-                          {proposal.fundGroup}
-                        </td>
-
-                        <td className="amount">
-                          {formatCurrency(
-                            proposal.amount
-                          )}
-                        </td>
-
-                        <td>
-
-                          <span
-                            className={
-                              `bp-badge ${
-                                getStatusClass(
-                                  proposal.status
-                                )
-                              }`
-                            }
-                          >
-                            {proposal.status}
-                          </span>
-
-                        </td>
-
-                        <td>
-
-                          <button
-                            className="bp-small-button"
-                            onClick={() =>
-                              setSelectedProposal(
-                                proposal
-                              )
-                            }
-                          >
-
-                            <Eye />
-
-                            Review
-
-                          </button>
-
-                        </td>
-
-                      </tr>
-
-                    )
-                  )}
-
-                </tbody>
-
-              </table>
-
-            </div>
-
+          <div className="bp-panel"><div className="bp-panel-header"><div><h3 className="bp-panel-title">Proposals for Review</h3><p className="bp-panel-subtitle">Submitted and currently under review</p></div></div>
+            <div className="bp-budget-table-wrap"><table className="bp-budget-table bp-table-review"><thead><tr><th>Reference</th><th>Department</th><th>Fund</th><th>Amount</th><th>Status</th><th>Action</th></tr></thead><tbody>
+              {reviewPagination.rows.map(proposal => <tr key={proposal.id}><td>{proposal.reference}</td><td>{getDepartment(proposal)}</td><td>{proposal.fundGroup} / {proposal.fundCode}</td><td className="amount">{formatCurrency(proposal.amount)}</td><td><span className={`bp-badge ${getStatusClass(proposal.status)}`}>{proposal.status}</span></td><td><button className="bp-small-button" onClick={() => setSelectedProposal(proposal)}><Eye /> Review</button></td></tr>)}
+            </tbody></table></div>
+            <Pagination {...reviewPagination} onPageChange={setReviewPage} />
+            {!reviewRecords.length && <div className="bp-empty"><FileCheck2 /><div className="bp-empty-title">No proposals awaiting review</div><div className="bp-empty-text">Submitted proposals will appear here.</div></div>}
           </div>
-
-
-          <div className="bp-panel">
-
-            <div className="bp-panel-header">
-
-              <div>
-
-                <h3 className="bp-panel-title">
-                  Review Action
-                </h3>
-
-                <p className="bp-panel-subtitle">
-                  Select a proposal from the table
-                </p>
-
+          <div className="bp-panel"><div className="bp-panel-header"><div><h3 className="bp-panel-title">Review Action</h3><p className="bp-panel-subtitle">Select a proposal to process</p></div></div>
+            {selectedProposal ? <><div className="bp-review-item"><div className="bp-review-icon"><FileText /></div><div><div className="bp-review-label">Proposal</div><div className="bp-review-value">{selectedProposal.reference}</div></div></div><div className="bp-review-item"><div className="bp-review-icon"><Building2 /></div><div><div className="bp-review-label">Department / Unit</div><div className="bp-review-value">{getDepartment(selectedProposal)}</div></div></div><div className="bp-review-item"><div className="bp-review-icon"><WalletCards /></div><div><div className="bp-review-label">Proposed Amount</div><div className="bp-review-value">{formatCurrency(selectedProposal.amount)}</div></div></div>
+              <textarea className="bp-review-textarea" placeholder="Review remarks..." value={reviewMessage} onChange={e => setReviewMessage(e.target.value)} />
+              <div className="bp-review-actions">
+                {selectedProposal.status === 'Submitted' && <button className="bp-review-action neutral" onClick={() => changeProposalStatus('Under Review')}><Clock3 /> Start Review</button>}
+                <button className="bp-review-action return" onClick={() => changeProposalStatus('For Revision')}><RotateCcw /> Return for Revision</button>
+                <button className="bp-review-action endorse" disabled={selectedProposal.status !== 'Under Review'} onClick={() => changeProposalStatus('Endorsed')}><CheckCircle2 /> Endorse Proposal</button>
+                <button className="bp-review-action neutral" onClick={() => openProposal(selectedProposal)}><Eye /> View Full Details</button>
               </div>
-
-            </div>
-
-
-            {selectedProposal ? (
-
-              <>
-
-                <div className="bp-review-item">
-
-                  <div className="bp-review-icon">
-                    <FileText />
-                  </div>
-
-                  <div>
-
-                    <div className="bp-review-label">
-                      Proposal
-                    </div>
-
-                    <div className="bp-review-value">
-                      {selectedProposal.reference}
-                    </div>
-
-                  </div>
-
-                </div>
-
-
-                <div className="bp-review-item">
-
-                  <div className="bp-review-icon">
-                    <Building2 />
-                  </div>
-
-                  <div>
-
-                    <div className="bp-review-label">
-                      Department / Unit
-                    </div>
-
-                    <div className="bp-review-value">
-                      {selectedProposal.department}
-                    </div>
-
-                  </div>
-
-                </div>
-
-
-                <div className="bp-review-item">
-
-                  <div className="bp-review-icon">
-                    <WalletCards />
-                  </div>
-
-                  <div>
-
-                    <div className="bp-review-label">
-                      Proposed Amount
-                    </div>
-
-                    <div className="bp-review-value">
-                      {formatCurrency(
-                        selectedProposal.amount
-                      )}
-                    </div>
-
-                  </div>
-
-                </div>
-
-
-                <textarea
-                  className="bp-review-textarea"
-                  placeholder="Review remarks..."
-                  value={reviewMessage}
-                  onChange={(event) =>
-                    setReviewMessage(
-                      event.target.value
-                    )
-                  }
-                />
-
-
-                <div
-                  className="bp-review-actions"
-                  style={{
-                    marginTop: 8
-                  }}
-                >
-
-                  <button
-                    className="bp-review-action endorse"
-                    onClick={() => changeProposalStatus('Endorsed')}
-                  >
-
-                    <CheckCircle2 />
-
-                    Endorse Proposal
-
-                  </button>
-
-
-                  <button
-                    className="bp-review-action return"
-                    onClick={() => changeProposalStatus('Returned')}
-                  >
-
-                    <RotateCcw />
-
-                    Return for Revision
-
-                  </button>
-
-
-                  <button
-                    className="bp-review-action neutral"
-                    onClick={() =>
-                      openProposal(
-                        selectedProposal
-                      )
-                    }
-                  >
-
-                    <Eye />
-
-                    View Full Details
-
-                  </button>
-
-                </div>
-
-              </>
-
-            ) : (
-
-              <div className="bp-empty">
-
-                <FileCheck2 />
-
-                <div className="bp-empty-title">
-                  No Proposal Selected
-                </div>
-
-                <div className="bp-empty-text">
-                  Select a proposal from the review
-                  table to inspect its details.
-                </div>
-
-              </div>
-
-            )}
-
+            </> : <div className="bp-empty"><FileCheck2 /><div className="bp-empty-title">No Proposal Selected</div><div className="bp-empty-text">Select a proposal from the review table.</div></div>}
           </div>
-
         </div>
-
-
-        <div className="bp-panel">
-
-          <div className="bp-panel-header">
-
-            <div>
-
-              <h3 className="bp-panel-title">
-                Endorsement Checklist
-              </h3>
-
-              <p className="bp-panel-subtitle">
-                Review points before endorsement
-              </p>
-
-            </div>
-
-          </div>
-
-
-          <div className="bp-info-grid">
-
-            <div className="bp-info-card">
-
-              <div className="bp-info-label">
-                Fund Information
-              </div>
-
-              <div className="bp-info-value">
-                <Check size={13} />
-                Verified
-              </div>
-
-            </div>
-
-
-            <div className="bp-info-card">
-
-              <div className="bp-info-label">
-                UACS / PAP
-              </div>
-
-              <div className="bp-info-value">
-                <Check size={13} />
-                Reviewed
-              </div>
-
-            </div>
-
-
-            <div className="bp-info-card">
-
-              <div className="bp-info-label">
-                Proposed Amount
-              </div>
-
-              <div className="bp-info-value">
-                <Check size={13} />
-                Checked
-              </div>
-
-            </div>
-
-
-            <div className="bp-info-card">
-
-              <div className="bp-info-label">
-                Documents
-              </div>
-
-              <div className="bp-info-value">
-                <Clock3 size={13} />
-                Pending
-              </div>
-
-            </div>
-
-          </div>
-
-        </div>
-
       </div>
-
     );
-
   };
 
 
@@ -4355,543 +5346,68 @@ export default function BudgetProposals({
   // APPROVAL WORKFLOW
   // ==========================================================
 
-  const renderWorkflow = () => (
-
-    <div className="bp-section-page">
-
-      <div className="bp-screen-toolbar">
-
-        <BackButton />
-
+  const renderWorkflow = () => {
+    const activeWorkflow = proposalRecords.filter(item => !['Approved','Rejected'].includes(item.status));
+    const workflowPagination = paginate(activeWorkflow, workflowPage);
+    const selectedStatus = selectedProposal?.status || '—';
+    return (
+      <div className="bp-section-page">
+        <div className="bp-screen-toolbar"><BackButton /></div>
+        <div className="bp-screen-heading"><h2>Approval Workflow</h2><p>Process proposals through the actual database workflow: Draft → Submitted → Under Review → For Revision → Submitted → Under Review → Endorsed → Approved.</p></div>
+        <div className="bp-panel"><div className="bp-panel-header"><div><h3 className="bp-panel-title">Workflow Queue</h3><p className="bp-panel-subtitle">Select a proposal to see its allowed next actions</p></div></div>
+          <div className="bp-budget-table-wrap"><table className="bp-budget-table bp-table-workflow"><thead><tr><th>Reference</th><th>Department</th><th>Amount</th><th>Status</th><th>Action</th></tr></thead><tbody>
+            {workflowPagination.rows.map(p => <tr key={p.id}><td>{p.reference}</td><td>{getDepartment(p)}</td><td className="amount">{formatCurrency(p.amount)}</td><td><span className={`bp-badge ${getStatusClass(p.status)}`}>{p.status}</span></td><td><button className="bp-small-button" onClick={() => setSelectedProposal(p)}><Eye /> Select</button></td></tr>)}
+          </tbody></table></div>
+          <Pagination {...workflowPagination} onPageChange={setWorkflowPage} />
+        </div>
+        <div className="bp-panel"><div className="bp-panel-header"><div><h3 className="bp-panel-title">Selected Workflow</h3><p className="bp-panel-subtitle">{selectedProposal ? selectedProposal.reference : 'No proposal selected'}</p></div></div>
+          {selectedProposal ? <><div className="bp-info-grid"><div className="bp-info-card"><div className="bp-info-label">Current Status</div><div className="bp-info-value"><span className={`bp-badge ${getStatusClass(selectedStatus)}`}>{selectedStatus}</span></div></div><div className="bp-info-card"><div className="bp-info-label">Department</div><div className="bp-info-value">{getDepartment(selectedProposal)}</div></div><div className="bp-info-card"><div className="bp-info-label">Proposed Amount</div><div className="bp-info-value">{formatCurrency(selectedProposal.amount)}</div></div><div className="bp-info-card"><div className="bp-info-label">Fiscal Year</div><div className="bp-info-value">FY {selectedYear}</div></div></div>
+            <div className="bp-form-actions">
+              {selectedStatus === 'Draft' && <button className="bp-primary-button" onClick={() => changeProposalStatus('Submitted')}><Send /> Submit</button>}
+              {selectedStatus === 'Submitted' && <button className="bp-primary-button" onClick={() => changeProposalStatus('Under Review')}><Clock3 /> Start Review</button>}
+              {selectedStatus === 'Under Review' && <><button className="bp-secondary-button" onClick={() => changeProposalStatus('For Revision')}><RotateCcw /> For Revision</button><button className="bp-primary-button" onClick={() => changeProposalStatus('Endorsed')}><CheckCircle2 /> Endorse</button><button className="bp-secondary-button" onClick={() => changeProposalStatus('Rejected')}><XCircle /> Reject</button></>}
+              {selectedStatus === 'For Revision' && <button className="bp-primary-button" onClick={() => changeProposalStatus('Submitted')}><Send /> Resubmit</button>}
+              {selectedStatus === 'Endorsed' && <><button className="bp-primary-button" onClick={() => changeProposalStatus('Approved')}><CheckCircle2 /> Approve</button><button className="bp-secondary-button" onClick={() => changeProposalStatus('Rejected')}><XCircle /> Reject</button></>}
+            </div>
+          </> : <div className="bp-empty"><ListChecks /><div className="bp-empty-title">Select a proposal</div><div className="bp-empty-text">The action buttons will follow the proposal's current database status.</div></div>}
+        </div>
       </div>
-
-
-      <div className="bp-screen-heading">
-
-        <h2>
-          Approval Workflow
-        </h2>
-
-        <p>
-          Track the movement of a budget proposal
-          from preparation and submission through
-          review, endorsement and approval.
-        </p>
-
-      </div>
-
-
-      <div className="bp-panel">
-
-        <div className="bp-panel-header">
-
-          <div>
-
-            <h3 className="bp-panel-title">
-              Proposal Approval Process
-            </h3>
-
-            <p className="bp-panel-subtitle">
-              Database workflow based on the proposed
-              budget proposal process
-            </p>
-
-          </div>
-
-        </div>
-
-
-        <div className="bp-workflow">
-
-          {[
-            [
-              '1',
-              'Draft',
-              'Proposal preparation'
-            ],
-            [
-              '2',
-              'Submitted',
-              'Submitted by unit'
-            ],
-            [
-              '3',
-              'For Review',
-              'Budget review'
-            ],
-            [
-              '4',
-              'Endorsed',
-              'Endorsement'
-            ],
-            [
-              '5',
-              'For Approval',
-              'Approval review'
-            ],
-            [
-              '6',
-              'Approved',
-              'Final approval'
-            ]
-
-          ].map(
-            (step, index) => (
-
-              <React.Fragment
-                key={step[1]}
-              >
-
-                <div
-                  className={
-                    `bp-workflow-step ${
-                      index <= 2
-                        ? 'active'
-                        : ''
-                    }`
-                  }
-                >
-
-                  <div className="bp-workflow-number">
-                    {step[0]}
-                  </div>
-
-                  <div className="bp-workflow-title">
-                    {step[1]}
-                  </div>
-
-                  <div className="bp-workflow-subtitle">
-                    {step[2]}
-                  </div>
-
-                </div>
-
-                {index < 5 && (
-
-                  <div className="bp-workflow-arrow">
-                    <ArrowRight />
-                  </div>
-
-                )}
-
-              </React.Fragment>
-
-            )
-          )}
-
-        </div>
-
-
-        <div
-          className="bp-info-grid"
-          style={{
-            marginTop: 5
-          }}
-        >
-
-          <div className="bp-info-card">
-
-            <div className="bp-info-label">
-              Current Status
-            </div>
-
-            <div className="bp-info-value">
-              For Review
-            </div>
-
-          </div>
-
-          <div className="bp-info-card">
-
-            <div className="bp-info-label">
-              Current Office
-            </div>
-
-            <div className="bp-info-value">
-              Budget Office
-            </div>
-
-          </div>
-
-          <div className="bp-info-card">
-
-            <div className="bp-info-label">
-              Next Action
-            </div>
-
-            <div className="bp-info-value">
-              Review / Endorse
-            </div>
-
-          </div>
-
-          <div className="bp-info-card">
-
-            <div className="bp-info-label">
-              Fiscal Year
-            </div>
-
-            <div className="bp-info-value">
-              FY {selectedYear}
-            </div>
-
-          </div>
-
-        </div>
-
-      </div>
-
-
-      <div className="bp-panel">
-
-        <div className="bp-panel-header">
-
-          <div>
-
-            <h3 className="bp-panel-title">
-              Workflow Actions
-            </h3>
-
-            <p className="bp-panel-subtitle">
-              Current database actions for each approval stage
-            </p>
-
-          </div>
-
-        </div>
-
-
-        <div className="bp-info-grid">
-
-          <div className="bp-info-card">
-
-            <div className="bp-info-label">
-              Pending Approvals
-            </div>
-
-            <div className="bp-info-value">
-              {summaryData.reviewProposals}
-            </div>
-
-          </div>
-
-          <div className="bp-info-card">
-
-            <div className="bp-info-label">
-              Endorsed
-            </div>
-
-            <div className="bp-info-value">
-              {summaryData.endorsedProposals}
-            </div>
-
-          </div>
-
-          <div className="bp-info-card">
-
-            <div className="bp-info-label">
-              Approved
-            </div>
-
-            <div className="bp-info-value">
-              {summaryData.approvedProposals}
-            </div>
-
-          </div>
-
-          <div className="bp-info-card">
-
-            <div className="bp-info-label">
-              Returned
-            </div>
-
-            <div className="bp-info-value">
-              {summaryData.returnedProposals}
-            </div>
-
-          </div>
-
-        </div>
-
-
-        <div className="bp-form-actions">
-
-          <button
-            className="bp-secondary-button"
-            onClick={() => changeProposalStatus('Returned')}
-          >
-
-            <RotateCcw />
-
-            Return Proposal
-
-          </button>
-
-
-          <button
-            className="bp-primary-button"
-            onClick={() => changeProposalStatus('Approved')}
-          >
-
-            <CheckCircle2 />
-
-            Approve Proposal
-
-          </button>
-
-        </div>
-
-
-        {workflowAction && (
-
-          <div className="bp-success-message">
-
-            <Check />
-
-            Database workflow action applied:
-            {' '}
-            {workflowAction === 'approved'
-              ? 'Approve Proposal'
-              : 'Return Proposal'}
-
-          </div>
-
-        )}
-
-      </div>
-
-    </div>
-
-  );
+    );
+  };
 
 
   // ==========================================================
   // PROPOSAL HISTORY
   // ==========================================================
 
-  const renderHistory = () => (
-
-    <div className="bp-section-page">
-
-      <div className="bp-screen-toolbar">
-
-        <BackButton />
-
-      </div>
-
-
-      <div className="bp-screen-heading">
-
-        <h2>
-          Proposal History
-        </h2>
-
-        <p>
-          Historical record of proposal submission,
-          review, endorsement, approval and return actions.
-        </p>
-
-      </div>
-
-
-      <div className="bp-panel">
-
-        <div className="bp-panel-header">
-
-          <div>
-
-            <h3 className="bp-panel-title">
-              Proposal Action History
-            </h3>
-
-            <p className="bp-panel-subtitle">
-              Chronological workflow activity
-            </p>
-
-          </div>
-
+  const renderHistory = () => {
+    const historyRows = selectedProposal?.id
+      ? proposalHistory
+      : allHistory;
+    const historyPagination = paginate(historyRows, historyPage);
+    return (
+      <div className="bp-section-page">
+        <div className="bp-screen-toolbar"><BackButton /></div>
+        <div className="bp-screen-heading">
+          <h2>Proposal History</h2>
+          <p>Database-backed chronological record of proposal actions.</p>
         </div>
-
-
-        <div className="bp-history">
-
-          <div className="bp-history-item">
-
-            <div className="bp-history-dot" />
-
-            <div className="bp-history-date">
-              January 11, 2026 · 10:30 AM
-            </div>
-
-            <div className="bp-history-title">
-              Proposal Submitted
-            </div>
-
-            <div className="bp-history-description">
-              Budget proposal BP-2026-004 was submitted
-              by the responsible department for review.
-            </div>
-
-            <div className="bp-history-user">
-              Submitted by: Department / Unit
-            </div>
-
+        <div className="bp-panel">
+          <div className="bp-panel-header">
+            <div><h3 className="bp-panel-title">{selectedProposal ? `History — ${selectedProposal.reference}` : 'All Proposal History'}</h3><p className="bp-panel-subtitle">Actual workflow activity from the database</p></div>
+            {selectedProposal && <button className="bp-secondary-button" onClick={() => { setSelectedProposal(null); setHistoryPage(1); }}>Show All</button>}
           </div>
-
-
-          <div className="bp-history-item">
-
-            <div className="bp-history-dot" />
-
-            <div className="bp-history-date">
-              January 11, 2026 · 11:05 AM
-            </div>
-
-            <div className="bp-history-title">
-              Proposal Received for Review
-            </div>
-
-            <div className="bp-history-description">
-              The proposal was received by the Budget
-              Office for initial checking.
-            </div>
-
-            <div className="bp-history-user">
-              Action by: Budget Office
-            </div>
-
+          <div className="bp-budget-table-wrap">
+            <table className="bp-budget-table bp-table-history"><thead><tr><th>Date</th><th>Reference</th><th>Action</th><th>Status</th><th>Remarks</th><th>Actor</th></tr></thead><tbody>
+              {historyPagination.rows.map((row, index) => { const p = proposalRecords.find(x => Number(x.id) === Number(row.proposal_id)); return <tr key={`${row.id || index}-${row.created_at}`}><td>{row.created_at ? new Date(row.created_at).toLocaleString('en-PH') : '—'}</td><td>{p?.reference || `Proposal #${row.proposal_id}`}</td><td>{row.action || '—'}</td><td><span className={`bp-badge ${getStatusClass(row.status)}`}>{row.status || '—'}</span></td><td>{row.remarks || '—'}</td><td>{row.actor_name || 'System User'}</td></tr>; })}
+            </tbody></table>
           </div>
-
-
-          <div className="bp-history-item">
-
-            <div className="bp-history-dot" />
-
-            <div className="bp-history-date">
-              January 12, 2026 · 09:15 AM
-            </div>
-
-            <div className="bp-history-title">
-              Fund Information Checked
-            </div>
-
-            <div className="bp-history-description">
-              Fund cluster, fund code, campus,
-              responsibility center and WFP information
-              were checked during the review stage.
-            </div>
-
-            <div className="bp-history-user">
-              Action by: Budget Reviewer
-            </div>
-
-          </div>
-
-
-          <div className="bp-history-item">
-
-            <div className="bp-history-dot" />
-
-            <div className="bp-history-date">
-              January 12, 2026 · 02:20 PM
-            </div>
-
-            <div className="bp-history-title">
-              Proposal Pending Endorsement
-            </div>
-
-            <div className="bp-history-description">
-              Proposal is ready for endorsement after
-              the initial review process.
-            </div>
-
-            <div className="bp-history-user">
-              Current status: For Review
-            </div>
-
-          </div>
-
+          <Pagination {...historyPagination} onPageChange={setHistoryPage} />
+          {!historyRows.length && <div className="bp-empty"><History /><div className="bp-empty-title">No history records yet</div><div className="bp-empty-text">Workflow actions will appear here after a proposal is created or updated.</div></div>}
         </div>
-
       </div>
-
-
-      <div className="bp-panel">
-
-        <div className="bp-panel-header">
-
-          <div>
-
-            <h3 className="bp-panel-title">
-              Historical Status Summary
-            </h3>
-
-            <p className="bp-panel-subtitle">
-              Current database counts by workflow status
-            </p>
-
-          </div>
-
-        </div>
-
-
-        <div className="bp-info-grid">
-
-          <div className="bp-info-card">
-
-            <div className="bp-info-label">
-              Submitted
-            </div>
-
-            <div className="bp-info-value">
-              {summaryData.totalProposals}
-            </div>
-
-          </div>
-
-          <div className="bp-info-card">
-
-            <div className="bp-info-label">
-              Endorsed
-            </div>
-
-            <div className="bp-info-value">
-              {summaryData.endorsedProposals}
-            </div>
-
-          </div>
-
-          <div className="bp-info-card">
-
-            <div className="bp-info-label">
-              Approved
-            </div>
-
-            <div className="bp-info-value">
-              {summaryData.approvedProposals}
-            </div>
-
-          </div>
-
-          <div className="bp-info-card">
-
-            <div className="bp-info-label">
-              Returned / Disapproved
-            </div>
-
-            <div className="bp-info-value">
-              {summaryData.returnedProposals}
-            </div>
-
-          </div>
-
-        </div>
-
-      </div>
-
-    </div>
-
-  );
+    );
+  };
 
 
   const downloadTextFile = (filename, content, mime = 'text/plain;charset=utf-8') => {
@@ -4907,46 +5423,24 @@ export default function BudgetProposals({
   };
 
   const exportReportCsv = () => {
-    const header = [
-      'Reference','Date','Fund Group','Fund Code','Campus',
-      'Responsibility Center','PAP / Department','UACS Code',
-      'Proposed Amount','Status','Remarks'
-    ];
-
+    let header;
+    let rows;
     const escapeCsv = value => `"${String(value ?? '').replace(/"/g, '""')}"`;
-    const rows = reportFilteredRecords.map(item => [
-      item.reference,
-      item.date ? new Date(item.date).toLocaleDateString('en-PH') : '',
-      item.fundGroup,
-      item.fundCode,
-      item.campus,
-      item.responsibilityCenter,
-      item.department,
-      item.uacsCode,
-      Number(item.amount || 0).toFixed(2),
-      item.status,
-      item.remarks
-    ]);
-
-    downloadTextFile(
-      `budget-proposals-${selectedYear}.csv`,
-      [header, ...rows].map(row => row.map(escapeCsv).join(',')).join('\\n'),
-      'text/csv;charset=utf-8'
-    );
+    if (reportType === 'Proposal Summary') {
+      header = ['Reference','Date','Fund Group','Fund Code','Campus','Responsibility Center','Proposing Office','UACS Code','Proposed Amount','Status','Remarks'];
+      rows = reportFilteredRecords.map(item => [item.reference,item.date ? new Date(item.date).toLocaleDateString('en-PH') : '',item.fundGroup,item.fundCode,item.campus,item.responsibilityCenter,item.department,item.uacsCode,Number(item.amount||0).toFixed(2),item.status,item.remarks]);
+    } else {
+      header = [reportType === 'By Department' ? 'Department' : reportType === 'By Fund Source' ? 'Fund Source' : 'Status','Proposals','Total Proposed','Approved'];
+      rows = reportGroupedRows.map(item => [item.label,item.count,Number(item.total||0).toFixed(2),item.approved]);
+    }
+    downloadTextFile(`budget-proposals-${reportType.toLowerCase().replace(/[^a-z0-9]+/g,'-')}-${selectedYear}.csv`, [header,...rows].map(row => row.map(escapeCsv).join(',')).join('\n'),'text/csv;charset=utf-8');
   };
 
+
   const printReport = () => {
-    const rows = reportFilteredRecords.map(item => `
-      <tr>
-        <td>${item.reference || ''}</td>
-        <td>${item.fundGroup || ''}</td>
-        <td>${item.campus || ''}</td>
-        <td>${item.responsibilityCenter || ''}</td>
-        <td>${item.department || ''}</td>
-        <td style="text-align:right">${formatCurrency(item.amount)}</td>
-        <td>${item.status || ''}</td>
-      </tr>
-    `).join('');
+    const rows = reportType === 'Proposal Summary'
+      ? reportFilteredRecords.map(item => `<tr><td>${item.reference || ''}</td><td>${item.fundGroup || ''}</td><td>${item.fundCode || ''}</td><td>${item.campus || ''}</td><td>${item.responsibilityCenter || ''}</td><td>${item.department || ''}</td><td style="text-align:right">${formatCurrency(item.amount)}</td><td>${item.status || ''}</td></tr>`).join('')
+      : reportGroupedRows.map(item => `<tr><td colspan="2">${item.label}</td><td>${item.count}</td><td style="text-align:right">${formatCurrency(item.total)}</td><td>${item.approved}</td></tr>`).join('');
 
     const printWindow = window.open('', '_blank', 'width=1200,height=800');
     if (!printWindow) {
@@ -4954,28 +5448,124 @@ export default function BudgetProposals({
       return;
     }
 
+    const logoUrl = `${window.location.origin}/UA_logo.jpg`;
+
     printWindow.document.write(`
-      <!doctype html><html><head>
-      <title>Budget Proposal Report - FY ${selectedYear}</title>
-      <style>
-        body{font-family:Arial,sans-serif;padding:24px;color:#1e293b}
-        h1{font-size:18px;margin:0 0 5px}
-        p{font-size:12px;color:#64748b}
-        table{width:100%;border-collapse:collapse;margin-top:18px}
-        th,td{border:1px solid #cbd5e1;padding:7px;font-size:10px;text-align:left}
-        th{background:#f1f5f9}
-      </style></head><body>
-      <h1>ABRA STATE INSTITUTE OF SCIENCES AND TECHNOLOGY</h1>
-      <p>${reportType} — FY ${selectedYear}</p>
-      <table><thead><tr>
-        <th>Reference</th><th>Fund Group</th><th>Campus</th><th>RC</th>
-        <th>PAP / Department</th><th>Proposed Amount</th><th>Status</th>
-      </tr></thead><tbody>${rows}</tbody></table>
-      </body></html>
+      <!doctype html>
+      <html>
+      <head>
+        <title>Proposal Summary - FY ${selectedYear}</title>
+        <style>
+          *{box-sizing:border-box}
+          body{
+            font-family:Arial,sans-serif;
+            margin:0;
+            padding:28px;
+            color:#1e293b;
+            background:#fff
+          }
+          .report-header{
+            text-align:center;
+            border-bottom:2px solid #173b78;
+            padding-bottom:14px;
+            margin-bottom:18px
+          }
+          .report-logo{
+            display:block;
+            width:72px;
+            height:72px;
+            object-fit:contain;
+            margin:0 auto 8px
+          }
+          .university{
+            font-size:20px;
+            font-weight:700;
+            color:#173b78;
+            margin:0
+          }
+          .system-name{
+            font-size:11px;
+            color:#64748b;
+            margin:4px 0 0
+          }
+          .report-title{
+            font-size:18px;
+            font-weight:700;
+            color:#173b78;
+            margin:18px 0 4px
+          }
+          .report-subtitle{
+            font-size:12px;
+            color:#64748b;
+            margin:0
+          }
+          table{
+            width:100%;
+            border-collapse:collapse;
+            margin-top:18px
+          }
+          th,td{
+            border:1px solid #cbd5e1;
+            padding:7px;
+            font-size:10px;
+            text-align:left
+          }
+          th{
+            background:#f1f5f9;
+            color:#173b78
+          }
+          .footer{
+            text-align:center;
+            margin-top:18px;
+            font-size:9px;
+            color:#64748b
+          }
+          @media print{
+            body{padding:18mm}
+          }
+        </style>
+      </head>
+      <body>
+        <div class="report-header">
+          <img class="report-logo" src="${logoUrl}" alt="University of Abra Logo" />
+          <h1 class="university">UNIVERSITY OF ABRA</h1>
+          <p class="system-name">Budget Monitoring &amp; Allocation System</p>
+          <div class="report-title">${reportType} - FY ${selectedYear}</div>
+          <p class="report-subtitle">Budget Proposal Monitoring Report</p>
+        </div>
+
+        <table>
+          <thead>
+            <tr>
+              ${reportType === 'Proposal Summary' ? '<th>Reference</th><th>Fund Group</th><th>Fund Code</th><th>Campus</th><th>RC</th><th>Proposing Office</th><th>Proposed Amount</th><th>Status</th>' : `<th colspan="2">${reportType === 'By Department' ? 'Department' : reportType === 'By Fund Source' ? 'Fund Source' : 'Status'}</th><th>Proposals</th><th>Total Proposed</th><th>Approved</th>`}
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+
+        <div class="footer">
+          Generated from BMAS Budget Proposals - FY ${selectedYear}
+        </div>
+      </body>
+      </html>
     `);
+
     printWindow.document.close();
     printWindow.focus();
-    printWindow.print();
+
+    // Give the logo a moment to load before the browser print dialog opens.
+    const doPrint = () => {
+      printWindow.focus();
+      printWindow.print();
+    };
+
+    const logo = printWindow.document.querySelector('.report-logo');
+    if (logo && !logo.complete) {
+      logo.onload = doPrint;
+      logo.onerror = doPrint;
+    } else {
+      setTimeout(doPrint, 150);
+    }
   };
 
   // ==========================================================
@@ -5003,13 +5593,28 @@ export default function BudgetProposals({
     });
 
 
-  const reportTotalAmount =
-    reportFilteredRecords.reduce(
-      (sum, item) =>
-        sum + item.amount,
-      0
-    );
+  const reportTotalAmount = reportFilteredRecords.reduce((sum, item) => sum + Number(item.amount || 0), 0);
 
+  const reportGroupedRows = useMemo(() => {
+    const groups = new Map();
+    const keyFor = item => {
+      if (reportType === 'By Department') return getDepartment(item) || 'Unspecified';
+      if (reportType === 'By Fund Source') return item.fundCode || item.fundGroup || 'Unspecified';
+      if (reportType === 'By Status') return item.status || 'Unspecified';
+      return null;
+    };
+    if (reportType === 'Proposal Summary') return [];
+    reportFilteredRecords.forEach(item => {
+      const key = keyFor(item);
+      const row = groups.get(key) || { label:key, count:0, total:0, approved:0 };
+      row.count += 1; row.total += Number(item.amount || 0); if (item.status === 'Approved') row.approved += 1;
+      groups.set(key,row);
+    });
+    return Array.from(groups.values()).sort((a,b) => b.total-a.total);
+  }, [reportFilteredRecords, reportType]);
+
+  const reportTableRows = reportType === 'Proposal Summary' ? reportFilteredRecords : reportGroupedRows;
+  const reportPagination = paginate(reportTableRows, reportPage);
 
   const renderReports = () => (
 
@@ -5136,20 +5741,8 @@ export default function BudgetProposals({
                 Fiscal Year
               </label>
 
-              <select className="bp-form-select">
-
-                <option>
-                  FY {selectedYear}
-                </option>
-
-                <option>
-                  FY 2025
-                </option>
-
-                <option>
-                  FY 2024
-                </option>
-
+              <select className="bp-form-select" value={selectedYear} onChange={e => setSelectedYear(Number(e.target.value))}>
+                {[2026,2025,2024,2023].map(year => <option key={year} value={year}>FY {year}</option>)}
               </select>
 
             </div>
@@ -5210,13 +5803,10 @@ export default function BudgetProposals({
                   All
                 </option>
 
-                <option>
-                  Pending
-                </option>
+                <option>Draft</option>
 
-                <option>
-                  For Review
-                </option>
+                <option>Submitted</option>
+                <option>Under Review</option>
 
                 <option>
                   Endorsed
@@ -5226,13 +5816,9 @@ export default function BudgetProposals({
                   Approved
                 </option>
 
-                <option>
-                  Returned
-                </option>
+                <option>For Revision</option>
 
-                <option>
-                  Disapproved
-                </option>
+                <option>Rejected</option>
 
               </select>
 
@@ -5244,6 +5830,12 @@ export default function BudgetProposals({
           <div className="bp-report-preview">
 
             <div className="bp-report-preview-header">
+
+              <img
+                className="bp-report-preview-logo"
+                src="/UA_logo.jpg"
+                alt="University of Abra Logo"
+              />
 
               <strong>
                 ABRA STATE INSTITUTE OF SCIENCES
@@ -5320,10 +5912,8 @@ export default function BudgetProposals({
                   {
                     reportFilteredRecords.filter(
                       item =>
-                        item.status ===
-                          'Pending' ||
-                        item.status ===
-                          'For Review'
+                        item.status === 'Submitted' ||
+                        item.status === 'Under Review'
                     ).length
                   }
                 </strong>
@@ -5335,103 +5925,33 @@ export default function BudgetProposals({
 
             <div className="bp-budget-table-wrap">
 
-              <table className="bp-budget-table">
+              <table className="bp-budget-table bp-table-report">
 
                 <thead>
 
                   <tr>
-
-                    <th>
-                      Reference
-                    </th>
-
-                    <th>
-                      Fund Group
-                    </th>
-
-                    <th>
-                      Campus
-                    </th>
-
-                    <th>
-                      RC
-                    </th>
-
-                    <th>
-                      PAP / Department
-                    </th>
-
-                    <th>
-                      Proposed Amount
-                    </th>
-
-                    <th>
-                      Status
-                    </th>
-
+                    {reportType === 'Proposal Summary' ? <>
+                      <th>Reference</th><th>Fund Group</th><th>Campus</th><th>RC</th><th>Proposing Office</th><th>Proposed Amount</th><th>Status</th>
+                    </> : <>
+                      <th colSpan={2}>{reportType === 'By Department' ? 'Department' : reportType === 'By Fund Source' ? 'Fund Source' : 'Status'}</th><th>Proposals</th><th>Total Proposed</th><th>Approved</th>
+                    </>}
                   </tr>
 
                 </thead>
 
                 <tbody>
-
-                  {reportFilteredRecords.map(
-                    item => (
-
-                      <tr key={item.id}>
-
-                        <td>
-                          {item.reference}
-                        </td>
-
-                        <td>
-                          {item.fundGroup}
-                        </td>
-
-                        <td>
-                          {item.campus}
-                        </td>
-
-                        <td>
-                          {item.responsibilityCenter}
-                        </td>
-
-                        <td>
-                          {item.department}
-                        </td>
-
-                        <td className="amount">
-                          {formatCurrency(
-                            item.amount
-                          )}
-                        </td>
-
-                        <td>
-
-                          <span
-                            className={
-                              `bp-badge ${
-                                getStatusClass(
-                                  item.status
-                                )
-                              }`
-                            }
-                          >
-                            {item.status}
-                          </span>
-
-                        </td>
-
-                      </tr>
-
-                    )
-                  )}
-
+                  {reportType === 'Proposal Summary' ? reportPagination.rows.filter(item => reportType === 'Proposal Summary').map(item => (
+                    <tr key={item.id}><td>{item.reference}</td><td>{item.fundGroup}</td><td>{item.campus}</td><td>{item.responsibilityCenter}</td><td>{getDepartment(item)}</td><td className="amount">{formatCurrency(item.amount)}</td><td><span className={`bp-badge ${getStatusClass(item.status)}`}>{item.status}</span></td></tr>
+                  )) : reportPagination.rows.filter(row => reportType !== 'Proposal Summary').map(row => (
+                    <tr key={row.label}><td colSpan={2}>{row.label}</td><td>{row.count}</td><td className="amount">{formatCurrency(row.total)}</td><td>{row.approved}</td></tr>
+                  ))}
                 </tbody>
 
               </table>
 
             </div>
+
+            <Pagination {...reportPagination} onPageChange={setReportPage} />
 
 
             <div className="bp-report-actions">
@@ -5455,7 +5975,7 @@ export default function BudgetProposals({
 
                 <FileSpreadsheet />
 
-                Export Excel
+                Export CSV
 
               </button>
 
@@ -5690,7 +6210,7 @@ export default function BudgetProposals({
                   </div>
 
                   <div className="bp-detail-value">
-                    {selectedProposal.sourceCode}
+                    {selectedProposal.sourceCode || selectedProposal.raw?.source_code || '—'}
                   </div>
 
                 </div>
@@ -5699,11 +6219,18 @@ export default function BudgetProposals({
                 <div className="bp-detail-item">
 
                   <div className="bp-detail-label">
-                    PAP / Department
+                    Proposing Office / Department
                   </div>
 
                   <div className="bp-detail-value">
-                    {selectedProposal.department}
+                    {selectedProposal.department || selectedProposal.department_unit || '—'}
+                  </div>
+
+                  <div className="bp-detail-item">
+                    <div className="bp-detail-label">P/A/P</div>
+                    <div className="bp-detail-value">
+                      {selectedProposal.pap || '—'}
+                    </div>
                   </div>
 
                 </div>
@@ -5763,9 +6290,9 @@ export default function BudgetProposals({
                 {[
                   'Draft',
                   'Submitted',
-                  'For Review',
+                  'Under Review',
+                  'For Revision',
                   'Endorsed',
-                  'For Approval',
                   'Approved'
                 ].map(
                   (step, index) => (
@@ -5777,7 +6304,7 @@ export default function BudgetProposals({
                       <div
                         className={
                           `bp-workflow-step ${
-                            index <= 2
+                            ['Draft','Submitted','Under Review','For Revision','Endorsed','Approved'].indexOf(selectedProposal.status) >= index
                               ? 'active'
                               : ''
                           }`
@@ -5906,62 +6433,13 @@ export default function BudgetProposals({
 
 
               <div className="bp-review-actions">
-
-                <button
-                  className="bp-review-action neutral"
-                  onClick={() =>
-                    handleSectionClick(
-                      'create'
-                    )
-                  }
-                >
-
-                  <Pencil />
-
-                  Edit / Update
-
-                </button>
-
-
-                <button
-                  className="bp-review-action neutral"
-                  onClick={() =>
-                    handleSectionClick(
-                      'review'
-                    )
-                  }
-                >
-
-                  <FileCheck2 />
-
-                  Send to Review
-
-                </button>
-
-
-                <button
-                  className="bp-review-action endorse"
-                  onClick={() => changeProposalStatus('Endorsed')}
-                >
-
-                  <CheckCircle2 />
-
-                  Endorse
-
-                </button>
-
-
-                <button
-                  className="bp-review-action return"
-                  onClick={() => changeProposalStatus('Returned')}
-                >
-
-                  <RotateCcw />
-
-                  Return
-
-                </button>
-
+                {['Draft','For Revision'].includes(selectedProposal.status) && <button className="bp-review-action neutral" onClick={() => editProposal(selectedProposal)}><Pencil /> Edit / Update</button>}
+                {selectedProposal.status === 'Draft' && <button className="bp-review-action neutral" onClick={() => changeProposalStatus('Submitted')}><Send /> Submit</button>}
+                {selectedProposal.status === 'Submitted' && <button className="bp-review-action neutral" onClick={() => changeProposalStatus('Under Review')}><Clock3 /> Start Review</button>}
+                {selectedProposal.status === 'Under Review' && <><button className="bp-review-action endorse" onClick={() => changeProposalStatus('Endorsed')}><CheckCircle2 /> Endorse</button><button className="bp-review-action return" onClick={() => changeProposalStatus('For Revision')}><RotateCcw /> For Revision</button><button className="bp-review-action return" onClick={() => changeProposalStatus('Rejected')}><XCircle /> Reject</button></>}
+                {selectedProposal.status === 'For Revision' && <button className="bp-review-action neutral" onClick={() => changeProposalStatus('Submitted')}><Send /> Resubmit</button>}
+                {selectedProposal.status === 'Endorsed' && <><button className="bp-review-action endorse" onClick={() => changeProposalStatus('Approved')}><CheckCircle2 /> Approve</button><button className="bp-review-action return" onClick={() => changeProposalStatus('Rejected')}><XCircle /> Reject</button></>}
+                <button className="bp-review-action neutral" onClick={() => handleSectionClick('history')}><History /> View History</button>
               </div>
 
             </div>
@@ -5981,910 +6459,391 @@ export default function BudgetProposals({
   // MODULES
   // ==========================================================
 
-  const renderModules = () => (
+  const renderModules = () => {
 
-    <div className="bp-page">
+    const total = summaryData.totalProposals || 0;
+    const approved = summaryData.approvedProposals || 0;
+    const review = (summaryData.submittedProposals || 0) + (summaryData.reviewProposals || 0);
+    const rejected = summaryData.rejectedProposals || 0;
 
-      {proposalError && (
-        <div className="bp-system-note" style={{ background: '#fff1f2', borderColor: '#fecaca', color: '#991b1b' }}>
-          <AlertCircle />
-          <span>{proposalError}</span>
-        </div>
-      )}
+    const percentage = (value) => total > 0 ? ((value / total) * 100).toFixed(2) : '0.00';
 
-      {loadingProposals && (
-        <div className="bp-system-note" style={{ background: '#eff6ff', borderColor: '#bfdbfe', color: '#1d4ed8' }}>
-          <RefreshCcw />
-          <span>Loading budget proposals from the database...</span>
-        </div>
-      )}
+    const recentRecords = [...proposalRecords]
+      .sort((a, b) => {
+        const da = new Date(a.submitted_at || a.date_submitted || a.created_at || a.updated_at || 0).getTime();
+        const db = new Date(b.submitted_at || b.date_submitted || b.created_at || b.updated_at || 0).getTime();
+        return db - da;
+      })
+      .slice(0, 5);
 
-      <div className="bp-topbar">
+    const formatRecentDate = (proposal) => {
+      const raw = proposal?.submitted_at || proposal?.date_submitted || proposal?.created_at || proposal?.updated_at;
+      if (!raw) return '—';
+      const date = new Date(raw);
+      if (Number.isNaN(date.getTime())) return '—';
+      return date.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
+    };
 
-        <div className="bp-year-selector">
+    const referenceOf = (proposal) =>
+      proposal?.reference || proposal?.reference_no || proposal?.referenceNo || proposal?.proposal_reference || '—';
 
-          <FileSpreadsheet className="bp-year-icon" />
+    const titleOf = (proposal) =>
+      proposal?.title || proposal?.proposal_title || proposal?.particulars || proposal?.description || '—';
 
-          <span className="bp-year-label">
-            FY
-          </span>
+    const departmentOf = (proposal) => getDepartment(proposal);
 
-          <select
-            value={selectedYear}
-            onChange={(event) =>
-              setSelectedYear(
-                Number(event.target.value)
-              )
-            }
-            className="bp-year-select"
-          >
+    const fundOf = (proposal) =>
+      proposal?.fundGroup || proposal?.fund_group || proposal?.fund_source || proposal?.fundCode || '—';
 
-            <option value={2026}>
-              2026
-            </option>
+    const amountOf = (proposal) => Number(proposal?.amount || 0);
 
-            <option value={2025}>
-              2025
-            </option>
+    const statusLabel = (proposal) => proposal?.status || 'Draft';
 
-            <option value={2024}>
-              2024
-            </option>
+    return (
+      <div className="bp-page bp-dashboard-page">
 
-            <option value={2023}>
-              2023
-            </option>
-
-          </select>
-
-        </div>
-
-      </div>
-
-
-      <div className="bp-grid">
-
-
-        {/* =================================================
-            1. OVERVIEW
-        ================================================= */}
-
-        <div className="bp-card">
-
-          <div className="bp-card-header">
-
-            <div className="bp-card-icon bp-icon-blue">
-              <BarChart3 />
-            </div>
-
-            <div className="bp-card-title-area">
-
-              <h2 className="bp-card-title">
-                1. Overview
-              </h2>
-
-              <p className="bp-card-description">
-                View summary of budget proposals,
-                submission status, and approval progress.
-              </p>
-
-            </div>
-
+        {(proposalError || loadingProposals) && (
+          <div className="bp-dashboard-system-area">
+            {proposalError && (
+              <div className="bp-system-note bp-dashboard-note-error">
+                <AlertCircle />
+                <span>{proposalError}</span>
+              </div>
+            )}
+            {loadingProposals && (
+              <div className="bp-system-note bp-dashboard-note-loading">
+                <RefreshCcw />
+                <span>Loading budget proposals from the database...</span>
+              </div>
+            )}
           </div>
+        )}
 
-
-          <div className="bp-actions">
-
-            <button
-              className="bp-action"
-              onClick={() =>
-                handleSectionClick('overview')
-              }
+        {/* Fiscal year */}
+        <div className="bp-dashboard-toolbar">
+          <div className="bp-dashboard-year-selector">
+            <CalendarDays />
+            <span>Fiscal Year</span>
+            <select
+              value={selectedYear}
+              onChange={(event) => setSelectedYear(Number(event.target.value))}
+              aria-label="Fiscal Year"
             >
-              <FileText className="bp-action-icon" />
-              <span className="bp-action-label">
-                Summary
-              </span>
-            </button>
-
-            <button
-              className="bp-action"
-              onClick={() =>
-                handleSectionClick('overview')
-              }
-            >
-              <PieChart className="bp-action-icon" />
-              <span className="bp-action-label">
-                By Status
-              </span>
-            </button>
-
-            <button
-              className="bp-action"
-              onClick={() =>
-                handleSectionClick('overview')
-              }
-            >
-              <Users className="bp-action-icon" />
-              <span className="bp-action-label">
-                By Department
-              </span>
-            </button>
-
-            <button
-              className="bp-action"
-              onClick={() =>
-                handleSectionClick('overview')
-              }
-            >
-              <Database className="bp-action-icon" />
-              <span className="bp-action-label">
-                By Fund Group
-              </span>
-            </button>
-
+              <option value={2026}>2026</option>
+              <option value={2025}>2025</option>
+              <option value={2024}>2024</option>
+              <option value={2023}>2023</option>
+            </select>
+            <ChevronDown />
           </div>
+        </div>
 
+        {/* Summary cards */}
+        <div className="bp-dashboard-summary-grid">
 
           <button
-            className="bp-card-button"
-            onClick={() =>
-              handleSectionClick('overview')
-            }
+            type="button"
+            className="bp-dashboard-summary-card summary-blue"
+            onClick={() => handleSectionClick('overview')}
           >
+            <div className="bp-summary-icon"><ClipboardList /></div>
+            <div className="bp-summary-content">
+              <span className="bp-summary-label">TOTAL PROPOSALS</span>
+              <strong>{total}</strong>
+              <span>for FY {selectedYear}</span>
+            </div>
+            <span className="bp-summary-arrow"><ArrowRight /></span>
+          </button>
 
-            Go to Overview
+          <button
+            type="button"
+            className="bp-dashboard-summary-card summary-green"
+            onClick={() => {
+              setStatusFilter('Approved');
+              handleSectionClick('records');
+            }}
+          >
+            <div className="bp-summary-icon"><CheckCircle2 /></div>
+            <div className="bp-summary-content">
+              <span className="bp-summary-label">APPROVED</span>
+              <strong>{approved}</strong>
+              <span>{percentage(approved)}% of total</span>
+            </div>
+            <span className="bp-summary-arrow"><ArrowRight /></span>
+          </button>
 
-            <ArrowRight />
+          <button
+            type="button"
+            className="bp-dashboard-summary-card summary-orange"
+            onClick={() => {
+              setStatusFilter('Under Review');
+              handleSectionClick('records');
+            }}
+          >
+            <div className="bp-summary-icon"><Clock3 /></div>
+            <div className="bp-summary-content">
+              <span className="bp-summary-label">FOR REVIEW</span>
+              <strong>{review}</strong>
+              <span>{percentage(review)}% of total</span>
+            </div>
+            <span className="bp-summary-arrow"><ArrowRight /></span>
+          </button>
 
+          <button
+            type="button"
+            className="bp-dashboard-summary-card summary-red"
+            onClick={() => {
+              setStatusFilter('Rejected');
+              handleSectionClick('records');
+            }}
+          >
+            <div className="bp-summary-icon"><XCircle /></div>
+            <div className="bp-summary-content">
+              <span className="bp-summary-label">REJECTED</span>
+              <strong>{rejected}</strong>
+              <span>{percentage(rejected)}% of total</span>
+            </div>
+            <span className="bp-summary-arrow"><ArrowRight /></span>
           </button>
 
         </div>
 
+        {/* Hero + status chart */}
+        <div className="bp-dashboard-hero-grid">
 
-        {/* =================================================
-            2. CREATE PROPOSAL
-        ================================================= */}
-
-        <div className="bp-card">
-
-          <div className="bp-card-header">
-
-            <div className="bp-card-icon bp-icon-green">
-              <Plus />
-            </div>
-
-            <div className="bp-card-title-area">
-
-              <h2 className="bp-card-title">
-                2. Create Proposal
-              </h2>
-
-              <p className="bp-card-description">
-                Encode and submit a new budget proposal
-                by department and fund source.
+          <div className="bp-dashboard-hero-card">
+            <div className="bp-dashboard-hero-copy">
+              <span className="bp-dashboard-eyebrow">BUDGET PROPOSALS</span>
+              <h1>Plan, Submit, and Track<br />Budget Proposals</h1>
+              <p>
+                Create and submit budget proposals, manage records,
+                track approval status, and generate summaries for better
+                financial planning and decision-making.
               </p>
-
+              <button
+                type="button"
+                className="bp-dashboard-primary-button"
+                onClick={() => handleSectionClick('create')}
+              >
+                Create New Proposal <ArrowRight />
+              </button>
             </div>
 
+            <div className="bp-dashboard-hero-art" aria-hidden="true">
+              <div className="bp-hero-orbit orbit-one"></div>
+              <div className="bp-hero-orbit orbit-two"></div>
+              <div className="bp-hero-document">
+                <FileText />
+                <div className="bp-hero-lines">
+                  <span></span><span></span><span></span><span></span>
+                </div>
+                <div className="bp-hero-chart">
+                  <i></i><i></i><i></i><i></i>
+                </div>
+                <div className="bp-hero-check"><Check /></div>
+              </div>
+            </div>
           </div>
 
+          <div className="bp-dashboard-status-card">
+            <div className="bp-dashboard-status-header">
+              <div>
+                <h2>PROPOSALS BY STATUS</h2>
+                <p>Distribution of budget proposals for FY {selectedYear}.</p>
+              </div>
+              <div className="bp-mini-year">
+                <CalendarDays />
+                <select
+                  value={selectedYear}
+                  onChange={(event) => setSelectedYear(Number(event.target.value))}
+                  aria-label="Status fiscal year"
+                >
+                  <option value={2026}>2026</option>
+                  <option value={2025}>2025</option>
+                  <option value={2024}>2024</option>
+                  <option value={2023}>2023</option>
+                </select>
+                <ChevronDown />
+              </div>
+            </div>
 
-          <div className="bp-actions">
+            <div className="bp-status-chart-area">
+              <div
+                className="bp-donut"
+                style={{
+                  background: `conic-gradient(#10a968 0% ${percentage(approved)}%, #f59e0b ${percentage(approved)}% ${percentage(approved + review)}%, #ef4444 ${percentage(approved + review)}% ${percentage(approved + review + rejected)}%, #e2e8f0 ${percentage(approved + review + rejected)}% 100%)`
+                }}
+              >
+                <div className="bp-donut-center">
+                  <strong>{total}</strong>
+                  <span>Total</span>
+                </div>
+              </div>
 
-            <button
-              className="bp-action"
-              onClick={() =>
-                handleSectionClick(
-                  'create'
-                )
-              }
-            >
-              <FileText className="bp-action-icon" />
-              <span className="bp-action-label">
-                New Proposal
-              </span>
-            </button>
-
-            <button
-              className="bp-action"
-              onClick={() =>
-                handleSectionClick(
-                  'create'
-                )
-            }
-            >
-              <Database className="bp-action-icon" />
-              <span className="bp-action-label">
-                Fund Information
-              </span>
-            </button>
-
-            <button
-              className="bp-action"
-              onClick={() =>
-                handleSectionClick(
-                  'create'
-                )
-              }
-            >
-              <ClipboardList className="bp-action-icon" />
-              <span className="bp-action-label">
-                Proposed Amounts
-              </span>
-            </button>
-
-            <button
-              className="bp-action"
-              onClick={() =>
-                handleSectionClick(
-                  'create'
-                )
-              }
-            >
-              <Paperclip className="bp-action-icon" />
-              <span className="bp-action-label">
-                Supporting
-                <br />
-                Documents
-              </span>
-            </button>
-
+              <div className="bp-status-legend">
+                <div className="bp-status-legend-row">
+                  <span><i className="legend-dot dot-green"></i>Approved</span>
+                  <strong>{approved} ({percentage(approved)}%)</strong>
+                </div>
+                <div className="bp-status-legend-row">
+                  <span><i className="legend-dot dot-orange"></i>For Review</span>
+                  <strong>{review} ({percentage(review)}%)</strong>
+                </div>
+                <div className="bp-status-legend-row">
+                  <span><i className="legend-dot dot-red"></i>Rejected</span>
+                  <strong>{rejected} ({percentage(rejected)}%)</strong>
+                </div>
+              </div>
+            </div>
           </div>
-
-
-          <button
-            className="bp-card-button bp-button-green"
-            onClick={() =>
-              handleSectionClick(
-                'create'
-              )
-            }
-          >
-
-            Create Proposal
-
-            <ArrowRight />
-
-          </button>
 
         </div>
 
-
-        {/* =================================================
-            3. PROPOSAL RECORDS
-        ================================================= */}
-
-        <div className="bp-card">
-
-          <div className="bp-card-header">
-
-            <div className="bp-card-icon bp-icon-purple">
-              <FileText />
-            </div>
-
-            <div className="bp-card-title-area">
-
-              <h2 className="bp-card-title">
-                3. Proposal Records
-              </h2>
-
-              <p className="bp-card-description">
-                View and manage budget proposal
-                records with their status and details.
-              </p>
-
-            </div>
-
-          </div>
-
-
-          <div className="bp-actions">
-
-            <button
-              className="bp-action"
-              onClick={() =>
-                handleSectionClick(
-                  'records'
-                )
-              }
-            >
-              <ClipboardList className="bp-action-icon" />
-              <span className="bp-action-label">
-                All Proposals
-              </span>
-            </button>
-
-            <button
-              className="bp-action"
-              onClick={() =>
-                handleSectionClick(
-                  'records'
-                )
-              }
-            >
-              <Search className="bp-action-icon" />
-              <span className="bp-action-label">
-                Search / Filter
-              </span>
-            </button>
-
-            <button
-              className="bp-action"
-              onClick={() =>
-                handleSectionClick(
-                  'records'
-                )
-              }
-            >
-              <Eye className="bp-action-icon" />
-              <span className="bp-action-label">
-                View Details
-              </span>
-            </button>
-
-            <button
-              className="bp-action"
-              onClick={() =>
-                handleSectionClick(
-                  'records'
-                )
-              }
-            >
-              <Pencil className="bp-action-icon" />
-              <span className="bp-action-label">
-                Edit / Update
-              </span>
-            </button>
-
-          </div>
-
-
-          <button
-            className="bp-card-button bp-button-purple"
-            onClick={() =>
-              handleSectionClick(
-                'records'
-              )
-            }
-          >
-
-            View Records
-
-            <ArrowRight />
-
-          </button>
-
-        </div>
-
-
-        {/* =================================================
-            4. REVIEW & ENDORSEMENT
-        ================================================= */}
-
-        <div className="bp-card">
-
-          <div className="bp-card-header">
-
-            <div className="bp-card-icon bp-icon-orange">
-              <Users />
-            </div>
-
-            <div className="bp-card-title-area">
-
-              <h2 className="bp-card-title">
-                4. Review &amp; Endorsement
-              </h2>
-
-              <p className="bp-card-description">
-                Review proposed budgets and endorse
-                them to the next stage.
-              </p>
-
-            </div>
-
-          </div>
-
-
-          <div className="bp-actions">
-
-            <button
-              className="bp-action"
-              onClick={() =>
-                handleSectionClick(
-                  'review'
-                )
-              }
-            >
-              <FolderOpen className="bp-action-icon" />
-              <span className="bp-action-label">
-                For Review
-              </span>
-            </button>
-
-            <button
-              className="bp-action"
-              onClick={() =>
-                handleSectionClick(
-                  'review'
-                )
-              }
-            >
-              <Send className="bp-action-icon" />
-              <span className="bp-action-label">
-                Endorse
-              </span>
-            </button>
-
-            <button
-              className="bp-action"
-              onClick={() =>
-                handleSectionClick(
-                  'review'
-                )
-              }
-            >
-              <RotateCcw className="bp-action-icon" />
-              <span className="bp-action-label">
-                Return
-              </span>
-            </button>
-
-            <button
-              className="bp-action"
-              onClick={() =>
-                handleSectionClick(
-                  'history'
-                )
-              }
-            >
-              <History className="bp-action-icon" />
-              <span className="bp-action-label">
-                Endorsement
-                <br />
-                History
-              </span>
-            </button>
-
-          </div>
-
-
-          <button
-            className="bp-card-button bp-button-orange"
-            onClick={() =>
-              handleSectionClick(
-                'review'
-              )
-            }
-          >
-
-            Go to Review
-
-            <ArrowRight />
-
-          </button>
-
-        </div>
-
-
-        {/* =================================================
-            5. APPROVAL WORKFLOW
-        ================================================= */}
-
-        <div className="bp-card">
-
-          <div className="bp-card-header">
-
-            <div className="bp-card-icon bp-icon-teal">
-              <CheckCircle2 />
-            </div>
-
-            <div className="bp-card-title-area">
-
-              <h2 className="bp-card-title">
-                5. Approval Workflow
-              </h2>
-
-              <p className="bp-card-description">
-                Track the approval status and process
-                of budget proposals.
-              </p>
-
-            </div>
-
-          </div>
-
-
-          <div className="bp-actions">
-
-            <button
-              className="bp-action"
-              onClick={() =>
-                handleSectionClick(
-                  'workflow'
-                )
-              }
-            >
-              <Clock3 className="bp-action-icon" />
-              <span className="bp-action-label">
-                Pending
-                <br />
-                Approvals
-              </span>
-            </button>
-
-            <button
-              className="bp-action"
-              onClick={() =>
-                handleSectionClick(
-                  'workflow'
-                )
-              }
-            >
-              <CheckCircle2 className="bp-action-icon" />
-              <span className="bp-action-label">
-                Approve
-              </span>
-            </button>
-
-            <button
-              className="bp-action"
-              onClick={() =>
-                handleSectionClick(
-                  'workflow'
-                )
-              }
-            >
-              <XCircle className="bp-action-icon" />
-              <span className="bp-action-label">
-                Return /
-                <br />
-                Disapprove
-              </span>
-            </button>
-
-            <button
-              className="bp-action"
-              onClick={() =>
-                handleSectionClick(
-                  'history'
-                )
-              }
-            >
-              <FileCheck2 className="bp-action-icon" />
-              <span className="bp-action-label">
-                Approval
-                <br />
-                History
-              </span>
-            </button>
-
-          </div>
-
-
-          <button
-            className="bp-card-button bp-button-teal"
-            onClick={() =>
-              handleSectionClick(
-                'workflow'
-              )
-            }
-          >
-
-            View Workflow
-
-            <ArrowRight />
-
-          </button>
-
-        </div>
-
-
-        {/* =================================================
-            6. PROPOSAL HISTORY
-        ================================================= */}
-
-        <div className="bp-card">
-
-          <div className="bp-card-header">
-
-            <div className="bp-card-icon bp-icon-yellow">
-              <Clock3 />
-            </div>
-
-            <div className="bp-card-title-area">
-
-              <h2 className="bp-card-title">
-                6. Proposal History
-              </h2>
-
-              <p className="bp-card-description">
-                View historical records of submitted,
-                endorsed, approved, returned, and
-                disapproved proposals.
-              </p>
-
-            </div>
-
-          </div>
-
-
-          <div className="bp-actions">
-
-            <button
-              className="bp-action"
-              onClick={() =>
-                handleSectionClick(
-                  'history'
-                )
-              }
-            >
-              <FileText className="bp-action-icon" />
-              <span className="bp-action-label">
-                Submitted
-              </span>
-            </button>
-
-            <button
-              className="bp-action"
-              onClick={() =>
-                handleSectionClick(
-                  'history'
-                )
-              }
-            >
-              <Send className="bp-action-icon" />
-              <span className="bp-action-label">
-                Endorsed
-              </span>
-            </button>
-
-            <button
-              className="bp-action"
-              onClick={() =>
-                handleSectionClick(
-                  'history'
-                )
-              }
-            >
-              <CheckCircle2 className="bp-action-icon" />
-              <span className="bp-action-label">
-                Approved
-              </span>
-            </button>
-
-            <button
-              className="bp-action"
-              onClick={() =>
-                handleSectionClick(
-                  'history'
-                )
-              }
-            >
-              <XCircle className="bp-action-icon" />
-              <span className="bp-action-label">
-                Returned /
-                <br />
-                Disapproved
-              </span>
-            </button>
-
-          </div>
-
-
-          <button
-            className="bp-card-button bp-button-yellow"
-            onClick={() =>
-              handleSectionClick(
-                'history'
-              )
-            }
-          >
-
-            View History
-
-            <ArrowRight />
-
-          </button>
-
-        </div>
-
-
-        {/* =================================================
-            7. REPORTS
-        ================================================= */}
-
-        <div className="bp-card">
-
-          <div className="bp-card-header">
-
-            <div className="bp-card-icon bp-icon-red">
-              <BarChart3 />
-            </div>
-
-            <div className="bp-card-title-area">
-
-              <h2 className="bp-card-title">
-                7. Proposal Reports &amp; Export
-              </h2>
-
-              <p className="bp-card-description">
-                Generate reports related to budget
-                proposals and proposal status.
-              </p>
-
-            </div>
-
-          </div>
-
-
-          <div className="bp-actions">
-
-            <button
-              className="bp-action"
-              onClick={() =>
-                handleSectionClick(
-                  'reports'
-                )
-              }
-            >
-              <FileText className="bp-action-icon" />
-              <span className="bp-action-label">
-                Proposal
-                <br />
-                Summary
-              </span>
-            </button>
-
-            <button
-              className="bp-action"
-              onClick={() =>
-                handleSectionClick(
-                  'reports'
-                )
-              }
-            >
-              <Users className="bp-action-icon" />
-              <span className="bp-action-label">
-                By Department
-              </span>
-            </button>
-
-            <button
-              className="bp-action"
-              onClick={() =>
-                handleSectionClick(
-                  'reports'
-                )
-              }
-            >
-              <Database className="bp-action-icon" />
-              <span className="bp-action-label">
-                By Fund Source
-              </span>
-            </button>
-
-            <button
-              className="bp-action"
-              onClick={() =>
-                handleSectionClick(
-                  'reports'
-                )
-              }
-            >
-              <PieChart className="bp-action-icon" />
-              <span className="bp-action-label">
-                By Status
-              </span>
-            </button>
-
-          </div>
-
-
-          <button
-            className="bp-card-button bp-button-red"
-            onClick={() =>
-              handleSectionClick(
-                'reports'
-              )
-            }
-          >
-
-            Generate Reports
-
-            <ArrowRight />
-
-          </button>
-
-        </div>
-
-      </div>
-
-
-      <div
-        className="bp-panel"
-        style={{
-          marginTop: 14
-        }}
-      >
-
-        <div className="bp-panel-header">
-
+        {/* Module shortcuts */}
+        <div className="bp-dashboard-section-heading">
           <div>
-
-            <h3 className="bp-panel-title">
-              Proposal Module Summary — FY {selectedYear}
-            </h3>
-
-            <p className="bp-panel-subtitle">
-              Current database workflow totals
-            </p>
-
+            <h2>MODULES</h2>
+            <p>Quick access to budget proposal functions.</p>
           </div>
+        </div>
+
+        <div className="bp-dashboard-module-grid">
+
+          <button type="button" className="bp-dashboard-module-card module-blue" onClick={() => { setOverviewMode('summary'); handleSectionClick('overview'); }}>
+            <div className="bp-module-icon"><BarChart3 /></div>
+            <div className="bp-module-copy">
+              <h3>1. Overview</h3>
+              <p>View proposal summary, status, and recent submissions.</p>
+            </div>
+            <span className="bp-module-action">View Overview <ArrowRight /></span>
+          </button>
+
+          <button type="button" className="bp-dashboard-module-card module-green" onClick={() => handleSectionClick('create')}>
+            <div className="bp-module-icon"><Plus /></div>
+            <div className="bp-module-copy">
+              <h3>2. Create Proposal</h3>
+              <p>Create a new budget proposal and enter required information.</p>
+            </div>
+            <span className="bp-module-action">Create Proposal <ArrowRight /></span>
+          </button>
+
+          <button type="button" className="bp-dashboard-module-card module-purple" onClick={() => handleSectionClick('records')}>
+            <div className="bp-module-icon"><ClipboardList /></div>
+            <div className="bp-module-copy">
+              <h3>3. Manage &amp; Review</h3>
+              <p>View, edit, and process proposals through the approval workflow.</p>
+            </div>
+            <span className="bp-module-action">Manage Proposals <ArrowRight /></span>
+          </button>
+
+          <button type="button" className="bp-dashboard-module-card module-orange" onClick={() => handleSectionClick('reports')}>
+            <div className="bp-module-icon"><History /></div>
+            <div className="bp-module-copy">
+              <h3>4. History &amp; Reports</h3>
+              <p>View proposal history and generate summaries and reports.</p>
+            </div>
+            <span className="bp-module-action">View Reports <ArrowRight /></span>
+          </button>
 
         </div>
 
-
-        <div className="bp-info-grid">
-
-          <div className="bp-info-card">
-
-            <div className="bp-info-label">
-              Total Proposals
+        {/* Recent proposals */}
+        <div className="bp-dashboard-recent-card">
+          <div className="bp-dashboard-recent-header">
+            <div>
+              <h2>RECENT BUDGET PROPOSALS</h2>
+              <p>Latest submitted budget proposals for FY {selectedYear}.</p>
             </div>
-
-            <div className="bp-info-value">
-              {summaryData.totalProposals}
+            <div className="bp-recent-tools">
+              <label className="bp-recent-search">
+                <Search />
+                <input
+                  value={searchTerm}
+                  onChange={(event) => setSearchTerm(event.target.value)}
+                  placeholder="Search reference no., department, or title..."
+                />
+              </label>
+              <select
+                value={statusFilter}
+                onChange={(event) => setStatusFilter(event.target.value)}
+                className="bp-recent-filter"
+              >
+                <option value="All">All Status</option>
+                <option value="Draft">Draft</option>
+                <option value="Submitted">Submitted</option>
+                <option value="Under Review">Under Review</option>
+                <option value="For Revision">For Revision</option>
+                <option value="Endorsed">Endorsed</option>
+                <option value="Approved">Approved</option>
+                <option value="Rejected">Rejected</option>
+              </select>
+              <button type="button" className="bp-view-all-button" onClick={() => handleSectionClick('records')}>
+                View All <ArrowRight />
+              </button>
             </div>
-
           </div>
 
+          <div className="bp-dashboard-table-wrap">
+            <table className="bp-dashboard-table">
+              <thead>
+                <tr>
+                  <th>REFERENCE NO.</th>
+                  <th>DATE SUBMITTED</th>
+                  <th>DEPARTMENT</th>
+                  <th>FUND</th>
+                  <th>TITLE / PARTICULARS</th>
+                  <th>AMOUNT</th>
+                  <th>STATUS</th>
+                  <th>ACTIONS</th>
+                </tr>
+              </thead>
+              <tbody>
+                {recentRecords.map((proposal) => (
+                  <tr key={proposal.id || referenceOf(proposal)}>
+                    <td className="bp-table-reference">{referenceOf(proposal)}</td>
+                    <td>{formatRecentDate(proposal)}</td>
+                    <td>{departmentOf(proposal)}</td>
+                    <td>{fundOf(proposal)}</td>
+                    <td className="bp-table-title" title={titleOf(proposal)}>{titleOf(proposal)}</td>
+                    <td className="bp-table-amount">{formatCurrency(amountOf(proposal))}</td>
+                    <td>
+                      <span className={`bp-dashboard-status-pill ${getStatusClass(statusLabel(proposal))}`}>
+                        {statusLabel(proposal)}
+                      </span>
+                    </td>
+                    <td>
+                      <button type="button" className="bp-table-view-button" onClick={() => openProposal(proposal)}>
+                        <Eye /> View
+                      </button>
+                    </td>
+                  </tr>
+                ))}
 
-          <div className="bp-info-card">
-
-            <div className="bp-info-label">
-              For Review
-            </div>
-
-            <div className="bp-info-value">
-              {summaryData.reviewProposals}
-            </div>
-
+                {recentRecords.length === 0 && (
+                  <tr>
+                    <td colSpan="8" className="bp-dashboard-empty-row">
+                      No budget proposals found for FY {selectedYear}.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
           </div>
 
-
-          <div className="bp-info-card">
-
-            <div className="bp-info-label">
-              Endorsed
+          <div className="bp-dashboard-recent-footer">
+            <span>Showing {recentRecords.length ? 1 : 0} to {recentRecords.length} of {proposalRecords.length} entries</span>
+            <div className="bp-dashboard-recent-pagination">
+              <button type="button" disabled><ArrowLeft /></button>
+              <button type="button" className="active">1</button>
+              {proposalRecords.length > 5 && <button type="button" onClick={() => handleSectionClick('records')}>2</button>}
+              <button type="button" onClick={() => handleSectionClick('records')}><ArrowRight /></button>
             </div>
-
-            <div className="bp-info-value">
-              {summaryData.endorsedProposals}
-            </div>
-
           </div>
-
-
-          <div className="bp-info-card">
-
-            <div className="bp-info-label">
-              Approved
-            </div>
-
-            <div className="bp-info-value">
-              {summaryData.approvedProposals}
-            </div>
-
-          </div>
-
         </div>
 
       </div>
-
-    </div>
-
-  );
+    );
+  };
 
 
   // ==========================================================

@@ -243,7 +243,6 @@ export default function Header({
       <div className="flex items-center gap-4 sm:gap-6">
         <div className="hidden md:flex items-center gap-2 text-sm text-gray-600">
           <span>{currentDate}</span>
-          <ChevronDown className="w-4 h-4" />
         </div>
 
         {/* Notification Bell */}

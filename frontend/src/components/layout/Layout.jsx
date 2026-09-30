@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, LogOut, ChevronDown } from 'lucide-react';
+import { X, LogOut, ChevronDown, Database } from 'lucide-react';
 import Sidebar from './Sidebar';
 import Header from './Header';
 import Footer from './Footer';
@@ -18,6 +18,36 @@ export default function Layout({ children, user, onLogout, activePath = '/', onN
     'RAOD Registry-3. General Fund Registry': false,
     'RAOD Registry-4. Transactions': false,
   });
+
+  // Restore the standalone Master Data item in the mobile menu too.
+  // This mirrors the desktop Sidebar without changing the existing navigation structure.
+  const mobileNavItems = (() => {
+    const items = Array.isArray(navItems) ? [...navItems] : [];
+
+    const alreadyExists = items.some(
+      (item) => item?.path === '/master-data'
+    );
+
+    if (alreadyExists) return items;
+
+    const masterDataItem = {
+      label: 'Master Data',
+      path: '/master-data',
+      icon: Database,
+    };
+
+    const userIndex = items.findIndex(
+      (item) => item?.path === '/user-management'
+    );
+
+    if (userIndex >= 0) {
+      items.splice(userIndex, 0, masterDataItem);
+    } else {
+      items.push(masterDataItem);
+    }
+
+    return items;
+  })();
 
   const toggleCollapse = () => setCollapsed(!collapsed);
   const openSidebar = () => setSidebarOpen(true);
@@ -317,7 +347,7 @@ export default function Layout({ children, user, onLogout, activePath = '/', onN
             </div>
 
             <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
-              {renderMobileNav(navItems)}
+              {renderMobileNav(mobileNavItems)}
 
               <div className="pt-4 mt-6 border-t border-blue-900/50">
                 <button

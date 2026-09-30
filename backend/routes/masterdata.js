@@ -2667,68 +2667,7 @@ const OTHER_CONFIG = {
     },
   },
 
-  users: {
-    table: 'users',
 
-    select: `
-      id,
-      username,
-      full_name,
-      email,
-      role,
-      is_active,
-      created_at,
-      updated_at
-    `,
-
-    searchColumns: [
-      'username',
-      'full_name',
-      'email',
-      'role',
-    ],
-
-    transform: (row) => ({
-      id: row.id,
-
-      code:
-        row.username || '',
-
-      username:
-        row.username || '',
-
-      name:
-        row.full_name ||
-        row.username ||
-        '',
-
-      full_name:
-        row.full_name || '',
-
-      description:
-        row.email || '',
-
-      email:
-        row.email || '',
-
-      role:
-        row.role || '',
-
-      status:
-        row.is_active
-          ? 'Active'
-          : 'Inactive',
-
-      is_active:
-        row.is_active,
-
-      created_at:
-        row.created_at,
-
-      updated_at:
-        row.updated_at,
-    }),
-  },
 };
 
 
@@ -2870,6 +2809,472 @@ router.get(
 );
 
 
+
+// ============================================================
+// OTHERS CRUD
+// MFO / UACS / CAMPUSES / PAP / WFP SOURCES
+// ============================================================
+// These reference tables are managed from the Master Data > Others
+// selector. Users are intentionally excluded; user management remains
+// in the dedicated User Management module.
+// ============================================================
+
+const EDITABLE_OTHER_TYPES = {
+  mfo: {
+    table: 'mfo',
+    codeColumn: 'code',
+    nameColumn: 'name',
+    descriptionColumn: 'description',
+    extraColumns: [],
+    select: `
+      id, code, name, description, is_active,
+      created_at, updated_at
+    `,
+    transform: (row) => ({
+      id: row.id,
+      code: row.code || '',
+      name: row.name || '',
+      description: row.description || '',
+      status: row.is_active ? 'Active' : 'Inactive',
+      is_active: row.is_active,
+      created_at: row.created_at,
+      updated_at: row.updated_at,
+    }),
+  },
+
+  uacs: {
+    table: 'uacs_codes',
+    codeColumn: 'code',
+    nameColumn: 'account_title',
+    descriptionColumn: 'revised_description',
+    extraColumns: ['old_code', 'account_description', 'category'],
+    select: `
+      id, code, old_code, account_title,
+      revised_description, account_description,
+      category, is_active, created_at, updated_at
+    `,
+    transform: (row) => ({
+      id: row.id,
+      code: row.code || '',
+      old_code: row.old_code || '',
+      name: row.account_title || '',
+      account_title: row.account_title || '',
+      description:
+        row.revised_description ||
+        row.account_description ||
+        '',
+      revised_description: row.revised_description || '',
+      account_description: row.account_description || '',
+      category: row.category || '',
+      status: row.is_active ? 'Active' : 'Inactive',
+      is_active: row.is_active,
+      created_at: row.created_at,
+      updated_at: row.updated_at,
+    }),
+  },
+
+  campuses: {
+    table: 'campuses',
+    codeColumn: 'code',
+    nameColumn: 'name',
+    descriptionColumn: 'abbreviation',
+    extraColumns: ['abbreviation'],
+    select: `
+      id, code, name, abbreviation,
+      is_active, created_at, updated_at
+    `,
+    transform: (row) => ({
+      id: row.id,
+      code: row.code || '',
+      name: row.name || '',
+      description: row.abbreviation || '',
+      abbreviation: row.abbreviation || '',
+      status: row.is_active ? 'Active' : 'Inactive',
+      is_active: row.is_active,
+      created_at: row.created_at,
+      updated_at: row.updated_at,
+    }),
+  },
+
+  pap: {
+    table: 'pap',
+    codeColumn: 'code',
+    nameColumn: 'name',
+    descriptionColumn: 'description',
+    extraColumns: [],
+    select: `
+      id, code, name, description,
+      is_active, created_at, updated_at
+    `,
+    transform: (row) => ({
+      id: row.id,
+      code: row.code || '',
+      name: row.name || '',
+      description: row.description || '',
+      status: row.is_active ? 'Active' : 'Inactive',
+      is_active: row.is_active,
+      created_at: row.created_at,
+      updated_at: row.updated_at,
+    }),
+  },
+
+  wfp: {
+    table: 'wfp_sources',
+    codeColumn: 'code',
+    nameColumn: 'name',
+    descriptionColumn: 'description',
+    extraColumns: [],
+    select: `
+      id, code, name, description,
+      is_active, created_at, updated_at
+    `,
+    transform: (row) => ({
+      id: row.id,
+      code: row.code || '',
+      name: row.name || '',
+      description: row.description || '',
+      status: row.is_active ? 'Active' : 'Inactive',
+      is_active: row.is_active,
+      created_at: row.created_at,
+      updated_at: row.updated_at,
+    }),
+  },
+};
+
+const getEditableOtherConfig = (req, res) => {
+  const type = String(req.query.type || '').trim().toLowerCase();
+  const config = EDITABLE_OTHER_TYPES[type];
+
+  if (!config) {
+    res.status(400).json({
+      error:
+        'Invalid editable reference type. Allowed types: mfo, uacs, campuses, pap, wfp.',
+    });
+    return null;
+  }
+
+  return { type, config };
+};
+
+const buildOtherPayload = (type, body) => {
+  const clean = (value) =>
+    value === undefined ||
+    value === null ||
+    String(value).trim() === ''
+      ? null
+      : String(value).trim();
+
+  const code = clean(body.code);
+  const status =
+    normalizeStatus(body.status) === 'Active';
+
+  if (type === 'uacs') {
+    const accountTitle =
+      clean(body.account_title) ||
+      clean(body.name);
+
+    return {
+      code,
+      old_code: clean(body.old_code),
+      account_title: accountTitle,
+      revised_description:
+        clean(body.revised_description) ||
+        clean(body.description),
+      account_description:
+        clean(body.account_description),
+      category: clean(body.category),
+      is_active: status,
+    };
+  }
+
+  if (type === 'campuses') {
+    return {
+      code,
+      name: clean(body.name),
+      abbreviation:
+        clean(body.abbreviation) ||
+        clean(body.description),
+      is_active: status,
+    };
+  }
+
+  return {
+    code,
+    name: clean(body.name),
+    description: clean(body.description),
+    is_active: status,
+  };
+};
+
+router.post(
+  '/others',
+  async (req, res) => {
+    try {
+      const resolved =
+        getEditableOtherConfig(req, res);
+
+      if (!resolved) return;
+
+      const { type, config } = resolved;
+      const payload =
+        buildOtherPayload(type, req.body || {});
+
+      if (
+        !payload.code ||
+        (type === 'uacs'
+          ? !payload.account_title
+          : !payload.name)
+      ) {
+        return res.status(400).json({
+          error:
+            type === 'uacs'
+              ? 'UACS Code and Account Title are required.'
+              : 'Code and Name are required.',
+        });
+      }
+
+      const duplicate =
+        await pool.query(
+          `
+            SELECT id
+            FROM ${config.table}
+            WHERE LOWER(code) = LOWER($1)
+            LIMIT 1
+          `,
+          [payload.code]
+        );
+
+      if (duplicate.rowCount > 0) {
+        return res.status(409).json({
+          error:
+            'A record with this code already exists.',
+        });
+      }
+
+      const columns =
+        Object.keys(payload);
+      const values =
+        Object.values(payload);
+
+      const placeholders =
+        columns.map(
+          (_, index) => `$${index + 1}`
+        );
+
+      const result =
+        await pool.query(
+          `
+            INSERT INTO ${config.table}
+              (${columns.join(', ')})
+            VALUES
+              (${placeholders.join(', ')})
+            RETURNING ${config.select}
+          `,
+          values
+        );
+
+      return res.status(201).json({
+        message:
+          `${type.toUpperCase()} record created successfully.`,
+        item:
+          config.transform(
+            result.rows[0]
+          ),
+      });
+    } catch (error) {
+      if (error.code === '23505') {
+        return res.status(409).json({
+          error:
+            'A record with the same code already exists.',
+        });
+      }
+
+      return sendDatabaseError(
+        res,
+        error,
+        'Failed to create reference record.'
+      );
+    }
+  }
+);
+
+router.put(
+  '/others/:id',
+  async (req, res) => {
+    try {
+      const resolved =
+        getEditableOtherConfig(req, res);
+
+      if (!resolved) return;
+
+      const { type, config } = resolved;
+      const id = parseId(req.params.id);
+
+      if (!id) {
+        return res.status(400).json({
+          error:
+            'Invalid reference record ID.',
+        });
+      }
+
+      const payload =
+        buildOtherPayload(type, req.body || {});
+
+      if (
+        !payload.code ||
+        (type === 'uacs'
+          ? !payload.account_title
+          : !payload.name)
+      ) {
+        return res.status(400).json({
+          error:
+            type === 'uacs'
+              ? 'UACS Code and Account Title are required.'
+              : 'Code and Name are required.',
+        });
+      }
+
+      const duplicate =
+        await pool.query(
+          `
+            SELECT id
+            FROM ${config.table}
+            WHERE LOWER(code) = LOWER($1)
+              AND id <> $2
+            LIMIT 1
+          `,
+          [payload.code, id]
+        );
+
+      if (duplicate.rowCount > 0) {
+        return res.status(409).json({
+          error:
+            'Another record already uses this code.',
+        });
+      }
+
+      const columns =
+        Object.keys(payload);
+
+      const values =
+        Object.values(payload);
+
+      const assignments =
+        columns.map(
+          (column, index) =>
+            `${column} = $${index + 1}`
+        );
+
+      values.push(id);
+
+      const result =
+        await pool.query(
+          `
+            UPDATE ${config.table}
+            SET
+              ${assignments.join(', ')},
+              updated_at = NOW()
+            WHERE id = $${values.length}
+            RETURNING ${config.select}
+          `,
+          values
+        );
+
+      if (
+        result.rowCount === 0
+      ) {
+        return res.status(404).json({
+          error:
+            'Reference record not found.',
+        });
+      }
+
+      return res.json({
+        message:
+          `${type.toUpperCase()} record updated successfully.`,
+        item:
+          config.transform(
+            result.rows[0]
+          ),
+      });
+    } catch (error) {
+      if (error.code === '23505') {
+        return res.status(409).json({
+          error:
+            'Another record already uses this code.',
+        });
+      }
+
+      return sendDatabaseError(
+        res,
+        error,
+        'Failed to update reference record.'
+      );
+    }
+  }
+);
+
+router.delete(
+  '/others/:id',
+  async (req, res) => {
+    try {
+      const resolved =
+        getEditableOtherConfig(req, res);
+
+      if (!resolved) return;
+
+      const { type, config } = resolved;
+      const id = parseId(req.params.id);
+
+      if (!id) {
+        return res.status(400).json({
+          error:
+            'Invalid reference record ID.',
+        });
+      }
+
+      const result =
+        await pool.query(
+          `
+            DELETE FROM ${config.table}
+            WHERE id = $1
+            RETURNING id, code
+          `,
+          [id]
+        );
+
+      if (
+        result.rowCount === 0
+      ) {
+        return res.status(404).json({
+          error:
+            'Reference record not found.',
+        });
+      }
+
+      return res.json({
+        message:
+          `${type.toUpperCase()} record deleted successfully.`,
+        item:
+          result.rows[0],
+      });
+    } catch (error) {
+      if (error.code === '23503') {
+        return res.status(409).json({
+          error:
+            'This reference record cannot be deleted because it is already being used by another record.',
+        });
+      }
+
+      return sendDatabaseError(
+        res,
+        error,
+        'Failed to delete reference record.'
+      );
+    }
+  }
+);
+
 // ============================================================
 // DEFAULT ROUTE CHECK
 // ============================================================
@@ -2888,7 +3293,11 @@ router.get(
         '/objects',
         '/sources',
         '/allotments',
-        '/others',
+        '/others?type=mfo',
+        '/others?type=uacs',
+        '/others?type=campuses',
+        '/others?type=pap',
+        '/others?type=wfp',
       ],
     });
   }

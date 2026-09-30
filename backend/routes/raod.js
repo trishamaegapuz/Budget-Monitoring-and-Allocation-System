@@ -91,7 +91,7 @@ function buildFilters(req, startIndex = 1) {
        OR COALESCE(r.dv_payroll_no,'') ILIKE $${i}
        OR COALESCE(r.account_title,'') ILIKE $${i}
        OR COALESCE(r.po_no,'') ILIKE $${i}
-       OR COALESCE(r.po_status,'') ILIKE $${i}
+       OR COALESCE(r.status_of_po,'') ILIKE $${i}
       OR COALESCE(r.payee,'') ILIKE $${i}
       OR COALESCE(r.particulars,'') ILIKE $${i}
       OR COALESCE(r.ref_no,'') ILIKE $${i}
@@ -183,8 +183,11 @@ function entrySelect() {
       mfo.code AS mfo_code,
       mfo.name AS mfo_name,
 
-      r.wfp_source AS wfp_source,
-      r.wfp_source_code AS wfp_source_code
+      r.wfp_source_id AS wfp_source_id,
+      r.wfp_source_code AS wfp_source_code,
+      ws.code AS wfp_source_code_ref,
+      ws.name AS wfp_source_name,
+      r.status_of_po AS po_status
     FROM raod_entries r
     LEFT JOIN fund_clusters fc ON fc.id = r.fund_cluster_id
     LEFT JOIN fund_sources fs ON fs.id = r.fund_source_id
@@ -195,7 +198,7 @@ function entrySelect() {
     LEFT JOIN object_expenditures oe ON oe.id = r.object_expenditure_id
     LEFT JOIN allotment_classes ac ON ac.id = r.allotment_class_id
     LEFT JOIN mfo ON mfo.id = r.mfo_id
-    
+    LEFT JOIN wfp_sources ws ON ws.id = r.wfp_source_id
   `;
 }
 
@@ -517,6 +520,59 @@ router.get("/", async (req, res) => {
   }
 });
 
+/* GET /api/raod/department-summary
+   Real Department / Responsibility Center summary for General Fund 101. */
+router.get("/department-summary", async (req, res) => {
+  const fiscalYear = n(req.query.fiscal_year, FY);
+  try {
+    const ids = await getGeneralIds();
+    if (!ids.cluster) return res.status(404).json({ error: "General Fund / Fund Cluster 101 was not found." });
+
+    const result = await pool.query(
+      `WITH budgets AS (
+         SELECT bi.responsibility_center_id,
+                COALESCE(SUM(bi.approved_budget),0) allotment,
+                COALESCE(SUM(bi.ps_amount),0) ps,
+                COALESCE(SUM(bi.mooe_amount),0) mooe,
+                COALESCE(SUM(bi.co_amount),0) co
+         FROM budget_items bi
+         WHERE bi.fiscal_year=$1 AND bi.fund_cluster_id=$2
+         GROUP BY bi.responsibility_center_id
+       ), actuals AS (
+         SELECT r.responsibility_center_id,
+                COUNT(*)::int records,
+                COALESCE(SUM(r.obligation_amount),0) obligation,
+                COALESCE(SUM(r.disbursement_amount),0) disbursement,
+                COALESCE(SUM(r.unpaid_obligation),0) unpaid_obligation
+         FROM raod_entries r
+         WHERE r.fiscal_year=$1 AND r.fund_cluster_id=$2
+         GROUP BY r.responsibility_center_id
+       )
+       SELECT rc.id, rc.code, rc.name, rc.description, rc.category,
+              COALESCE(b.allotment,0) allotment,
+              COALESCE(b.ps,0) ps,
+              COALESCE(b.mooe,0) mooe,
+              COALESCE(b.co,0) co,
+              COALESCE(a.records,0) raod_records,
+              COALESCE(a.obligation,0) obligation,
+              COALESCE(a.disbursement,0) disbursement,
+              GREATEST(0,COALESCE(b.allotment,0)-COALESCE(a.obligation,0)) unobligated,
+              COALESCE(a.unpaid_obligation,0) unpaid_obligation
+       FROM responsibility_centers rc
+       LEFT JOIN budgets b ON b.responsibility_center_id=rc.id
+       LEFT JOIN actuals a ON a.responsibility_center_id=rc.id
+       WHERE COALESCE(rc.is_active,TRUE)=TRUE
+       ORDER BY rc.name`,
+      [fiscalYear, ids.cluster.id]
+    );
+
+    res.json({ success: true, fiscal_year: fiscalYear, fund: ids.cluster, rows: result.rows });
+  } catch (e) {
+    console.error("RAOD department-summary:", e);
+    res.status(500).json({ error: "Failed to load Department / Responsibility Center summary.", details: e.message });
+  }
+});
+
 /* GET /api/raod/module/:view
    Provides database-driven data for the nine clickable RAOD module views. */
 router.get("/module/:view", async (req, res) => {
@@ -616,6 +672,25 @@ router.get("/module/:view", async (req, res) => {
 });
 
 
+/* GET /api/raod/department/:id/entries */
+router.get("/department/:id/entries", async (req, res) => {
+  const rcId = nullableInt(req.params.id);
+  const fiscalYear = n(req.query.fiscal_year, FY);
+  const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+  const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 10));
+  const offset = (page - 1) * limit;
+  if (rcId === null) return res.status(400).json({ error: "Invalid responsibility center ID." });
+  try {
+    const countResult = await pool.query(`SELECT COUNT(*)::int AS total FROM raod_entries r JOIN fund_clusters fc ON fc.id=r.fund_cluster_id WHERE r.fiscal_year=$1 AND r.responsibility_center_id=$2 AND fc.code='101'`, [fiscalYear, rcId]);
+    const totalItems = Number(countResult.rows[0]?.total || 0);
+    const result = await pool.query(`${entrySelect()} WHERE r.fiscal_year=$1 AND r.responsibility_center_id=$2 AND fc.code='101' ORDER BY r.entry_date DESC,r.id DESC LIMIT $3 OFFSET $4`, [fiscalYear, rcId, limit, offset]);
+    res.json({ success:true, fiscal_year:fiscalYear, entries:result.rows, totalItems, totalPages:Math.max(1, Math.ceil(totalItems/limit)), currentPage:page, limit });
+  } catch (e) {
+    console.error("RAOD department entries:", e);
+    res.status(500).json({ error:"Failed to load Department / Responsibility Center RAOD entries.", details:e.message });
+  }
+});
+
 /* GET /api/raod/:id */
 router.get("/:id", async (req, res) => {
   try {
@@ -687,20 +762,21 @@ const columns = [
   "responsibility_center_id","pap_id","uacs_code_id","ref_no",
   "allotment_class_id","uacs_funding_source_code","fiscal_year","month",
   "series","series2","quarter","object_expenditure_id","mfo_id",
-  "old_uacs_code_id","account_title",
-  "obligation_amount","wfp_source","wfp_source_code","dv_payroll_no",
-  "disbursement_amount","running_balance","remarks","unpaid_obligation",
-  "po_no","po_status","created_by","updated_by"
+  "wfp_source_id","wfp_source_code","allotment_amount",
+  "obligation_amount","disbursement_amount","ps_amount","mooe_amount","co_amount",
+  "dv_no","po_no","burs_serial_no","remarks","created_by","updated_by",
+  "status","old_uacs_code_id","account_title","unpaid_obligation","status_of_po","dv_payroll_no"
 ];
 
 const idFields = [
   "fund_cluster_id","fund_source_id","campus_id","responsibility_center_id",
   "pap_id","uacs_code_id","allotment_class_id",
-  "object_expenditure_id","mfo_id","old_uacs_code_id","quarter","month"
+  "object_expenditure_id","mfo_id","old_uacs_code_id","quarter","month","wfp_source_id"
 ];
 
 const moneyFields = [
-  "obligation_amount","disbursement_amount","running_balance","unpaid_obligation"
+  "allotment_amount","obligation_amount","disbursement_amount",
+  "ps_amount","mooe_amount","co_amount","unpaid_obligation"
 ];
 
 function payload(body, userId) {
@@ -726,25 +802,91 @@ function payload(body, userId) {
   return p;
 }
 
+async function getBudgetForResponsibilityCenter(responsibilityCenterId, fiscalYear) {
+  const rcId = nullableInt(responsibilityCenterId);
+  if (rcId === null) return null;
+
+  const result = await pool.query(
+    `SELECT
+       COALESCE(SUM(bi.approved_budget),0) AS allocation,
+       COALESCE(SUM(bi.ps_amount),0) AS ps,
+       COALESCE(SUM(bi.mooe_amount),0) AS mooe,
+       COALESCE(SUM(bi.co_amount),0) AS co
+     FROM budget_items bi
+     JOIN fund_clusters fc ON fc.id=bi.fund_cluster_id
+     WHERE bi.fiscal_year=$1
+       AND bi.responsibility_center_id=$2
+       AND fc.code='101'`,
+    [n(fiscalYear, FY), rcId]
+  );
+
+  return result.rows[0] || { allocation: 0, ps: 0, mooe: 0, co: 0 };
+}
+
 /* POST /api/raod */
 router.post("/", async (req, res) => {
   const body = req.body || {};
   const ids = await getGeneralIds().catch(() => ({ cluster: null, source: null }));
 
-  if (!body.entry_date) return res.status(400).json({ error: "Entry Date is required." });
-  if (!ids.cluster) return res.status(400).json({ error: "General Fund cluster 101 was not found." });
-  if (!ids.source) {
-    return res.status(400).json({
-      error: "General Fund source MAIN was not found.",
-    });
+  if (!body.registry_no || !String(body.registry_no).trim()) {
+    return res.status(400).json({ error: "Registry No. is required. Please enter it manually." });
   }
-
-  const p = payload(body);
-  p.registry_no = String(body.registry_no || "").trim() || `RAOD-${p.fiscal_year}-${Date.now()}`;
-  p.fund_cluster_id = ids.cluster.id;
-  p.fund_source_id = ids.source.id;
+  if (!body.entry_date) return res.status(400).json({ error: "Entry Date is required." });
+  if (body.month !== undefined && body.month !== "" && (!Number.isInteger(Number(body.month)) || Number(body.month) < 1 || Number(body.month) > 12)) {
+    return res.status(400).json({ error: "Month must be between 1 and 12." });
+  }
+  if (body.quarter !== undefined && body.quarter !== "" && (!Number.isInteger(Number(body.quarter)) || Number(body.quarter) < 1 || Number(body.quarter) > 4)) {
+    return res.status(400).json({ error: "Quarter must be between 1 and 4." });
+  }
+  if (!body.responsibility_center_id) return res.status(400).json({ error: "Responsibility Center is required." });
+  if (!ids.cluster) return res.status(400).json({ error: "General Fund cluster 101 was not found." });
+  if (!ids.source) return res.status(400).json({ error: "General Fund source MAIN was not found." });
 
   try {
+    const budget = await getBudgetForResponsibilityCenter(body.responsibility_center_id, body.fiscal_year);
+    const allocation = n(budget?.allocation, 0);
+    const obligation = amount(body.obligation_amount);
+    const disbursement = amount(body.disbursement_amount);
+
+    if (allocation <= 0) {
+      return res.status(400).json({ error: "No approved budget/allotment was found for the selected Responsibility Center for FY 2026." });
+    }
+    if (disbursement > obligation) {
+      return res.status(400).json({ error: "Disbursement cannot be greater than Obligation." });
+    }
+
+    const existing = await pool.query(
+      `SELECT COALESCE(SUM(obligation_amount),0) AS obligation
+       FROM raod_entries
+       WHERE fiscal_year=$1 AND responsibility_center_id=$2 AND fund_cluster_id=$3`,
+      [n(body.fiscal_year, FY), nullableInt(body.responsibility_center_id), ids.cluster.id]
+    );
+    const existingObligation = n(existing.rows[0]?.obligation, 0);
+    if (existingObligation + obligation > allocation) {
+      return res.status(400).json({
+        error: `Obligation of ${obligation.toFixed(2)} exceeds the available allotment of ${Math.max(0, allocation - existingObligation).toFixed(2)} for this Responsibility Center.`
+      });
+    }
+
+    const p = payload({
+      ...body,
+      fund_cluster_id: ids.cluster.id,
+      fund_source_id: ids.source.id,
+      allotment_amount: allocation,
+      ps_amount: n(budget?.ps),
+      mooe_amount: n(budget?.mooe),
+      co_amount: n(budget?.co),
+      obligation_amount: obligation,
+      disbursement_amount: disbursement,
+      unpaid_obligation: Math.max(0, obligation - disbursement),
+      status_of_po: body.status_of_po ?? body.po_status,
+      status: body.status || "Pending",
+    });
+
+    p.registry_no = String(body.registry_no).trim();
+    p.fund_cluster_id = ids.cluster.id;
+    p.fund_source_id = ids.source.id;
+
     const vals = columns.map((c) => p[c]);
     const placeholders = vals.map((_, i) => `$${i + 1}`).join(",");
     const result = await pool.query(
@@ -752,9 +894,12 @@ router.post("/", async (req, res) => {
        VALUES(${placeholders}) RETURNING *`,
       vals
     );
+
     res.status(201).json({ success: true, message: "RAOD record created successfully.", entry: result.rows[0] });
   } catch (e) {
+    console.error("RAOD create:", e);
     if (e.code === "23505") return res.status(409).json({ error: "Registry No. already exists.", details: e.detail });
+    if (e.code === "23503") return res.status(400).json({ error: "One of the selected reference records is invalid.", details: e.detail || e.message });
     res.status(500).json({ error: "Failed to create RAOD entry.", details: e.message });
   }
 });
@@ -762,21 +907,65 @@ router.post("/", async (req, res) => {
 /* PUT /api/raod/:id */
 router.put("/:id", async (req, res) => {
   const body = req.body || {};
-  if (!body.registry_no) return res.status(400).json({ error: "Registry No. is required." });
+  if (!body.registry_no || !String(body.registry_no).trim()) return res.status(400).json({ error: "Registry No. is required." });
   if (!body.entry_date) return res.status(400).json({ error: "Entry Date is required." });
+  if (body.month !== undefined && body.month !== "" && (!Number.isInteger(Number(body.month)) || Number(body.month) < 1 || Number(body.month) > 12)) return res.status(400).json({ error: "Month must be between 1 and 12." });
+  if (body.quarter !== undefined && body.quarter !== "" && (!Number.isInteger(Number(body.quarter)) || Number(body.quarter) < 1 || Number(body.quarter) > 4)) return res.status(400).json({ error: "Quarter must be between 1 and 4." });
 
   try {
-    const p = payload(body);
+    const ids = await getGeneralIds();
+    if (!ids.cluster || !ids.source) return res.status(400).json({ error: "General Fund 101 / MAIN reference data was not found." });
+
+    const budget = await getBudgetForResponsibilityCenter(body.responsibility_center_id, body.fiscal_year);
+    const allocation = n(budget?.allocation, 0);
+    const obligation = amount(body.obligation_amount);
+    const disbursement = amount(body.disbursement_amount);
+
+    if (allocation <= 0) return res.status(400).json({ error: "No approved budget/allotment was found for the selected Responsibility Center for FY 2026." });
+    if (disbursement > obligation) return res.status(400).json({ error: "Disbursement cannot be greater than Obligation." });
+
+    const current = await pool.query(`SELECT obligation_amount FROM raod_entries WHERE id=$1 LIMIT 1`, [req.params.id]);
+    if (!current.rows.length) return res.status(404).json({ error: "RAOD entry not found." });
+    const oldObligation = n(current.rows[0].obligation_amount, 0);
+
+    const existing = await pool.query(
+      `SELECT COALESCE(SUM(obligation_amount),0) AS obligation
+       FROM raod_entries
+       WHERE fiscal_year=$1 AND responsibility_center_id=$2 AND fund_cluster_id=$3 AND id<>$4`,
+      [n(body.fiscal_year, FY), nullableInt(body.responsibility_center_id), ids.cluster.id, req.params.id]
+    );
+    const existingObligation = n(existing.rows[0]?.obligation, 0);
+    if (existingObligation + obligation > allocation) {
+      return res.status(400).json({ error: `Obligation of ${obligation.toFixed(2)} exceeds the available allotment of ${Math.max(0, allocation - existingObligation).toFixed(2)} for this Responsibility Center.` });
+    }
+
+    const p = payload({
+      ...body,
+      fund_cluster_id: ids.cluster.id,
+      fund_source_id: ids.source.id,
+      allotment_amount: allocation,
+      ps_amount: n(budget?.ps),
+      mooe_amount: n(budget?.mooe),
+      co_amount: n(budget?.co),
+      obligation_amount: obligation,
+      disbursement_amount: disbursement,
+      unpaid_obligation: Math.max(0, obligation - disbursement),
+      status_of_po: body.status_of_po ?? body.po_status,
+      status: body.status || "Pending",
+    });
+
     const sets = columns.map((c, i) => `${c}=$${i + 1}`).join(",");
     const values = columns.map((c) => p[c]);
     const result = await pool.query(
       `UPDATE raod_entries SET ${sets},updated_at=CURRENT_TIMESTAMP WHERE id=$${values.length + 1} RETURNING *`,
       [...values, req.params.id]
     );
-    if (!result.rows.length) return res.status(404).json({ error: "RAOD entry not found." });
+
     res.json({ success: true, message: "RAOD record updated successfully.", entry: result.rows[0] });
   } catch (e) {
+    console.error("RAOD update:", e);
     if (e.code === "23505") return res.status(409).json({ error: "Registry No. already exists.", details: e.detail });
+    if (e.code === "23503") return res.status(400).json({ error: "One of the selected reference records is invalid.", details: e.detail || e.message });
     res.status(500).json({ error: "Failed to update RAOD entry.", details: e.message });
   }
 });

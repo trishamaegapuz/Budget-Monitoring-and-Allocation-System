@@ -33,20 +33,24 @@ const normalizeStatus = (value) => {
   const map = {
     draft: 'Draft',
     submitted: 'Submitted',
-    pending: 'Pending',
-    'for review': 'For Review',
+    pending: 'Submitted',
+    'for review': 'Under Review',
+    'under review': 'Under Review',
     endorsed: 'Endorsed',
+    'for approval': 'Endorsed',
     approved: 'Approved',
-    returned: 'Returned',
-    disapproved: 'Disapproved'
+    returned: 'For Revision',
+    'for revision': 'For Revision',
+    disapproved: 'Rejected',
+    rejected: 'Rejected'
   };
   return map[raw.toLowerCase()] || raw;
 };
 
 const amountKeys = [
+  'requested_amount',
   'proposed_amount',
   'proposal_amount',
-  'requested_amount',
   'amount',
   'budget_amount',
   'appropriation',
@@ -56,7 +60,22 @@ const amountKeys = [
 
 function normalizeProposal(row) {
   const d = row?.data || row || {};
-  const amount = number(pick(d, amountKeys, 0));
+
+  // IMPORTANT: budget_proposals.requested_amount is the authoritative
+  // total proposal amount. proposed_ps/proposed_mooe/proposed_co are
+  // only the breakdown. This prevents a zero-valued legacy alias from
+  // overriding the actual requested amount.
+  const requestedAmount = number(d.requested_amount);
+  const breakdownAmount =
+    number(d.proposed_ps) +
+    number(d.proposed_mooe) +
+    number(d.proposed_co);
+
+  const amount = requestedAmount > 0
+    ? requestedAmount
+    : (breakdownAmount > 0
+        ? breakdownAmount
+        : number(pick(d, amountKeys, 0)));
 
   const dateValue = pick(d, [
     'proposal_date',
@@ -66,18 +85,11 @@ function normalizeProposal(row) {
     'created_at'
   ], null);
 
-  const fundCluster = pick(d, [
-    'fund_cluster',
-    'fund_cluster_name',
-    'fund_group',
-    'fund_name'
-  ], 'Other Funds');
+  const fundClusterCode = pick(d, ['fund_cluster_code'], null);
+  const fundClusterName = pick(d, ['fund_cluster_name', 'fund_cluster', 'fund_group', 'fund_name'], 'Other Funds');
+  const fundCluster = fundClusterCode ? `${fundClusterCode} - ${fundClusterName}` : fundClusterName;
 
-  const fundCode = pick(d, [
-    'fund_code',
-    'fund_source_code',
-    'code'
-  ], '');
+  const fundCode = pick(d, ['fund_source_code', 'fund_code', 'code'], '');
 
   const rc = pick(d, [
     'responsibility_center',
@@ -86,10 +98,12 @@ function normalizeProposal(row) {
   ], '');
 
   const department = pick(d, [
+    'department_unit',
     'department',
     'department_name',
     'office_name',
     'pap_department',
+    'department_name_from_pap',
     'pap'
   ], '');
 
@@ -120,23 +134,47 @@ function normalizeProposal(row) {
     fund_group: fundCluster,
     fundCode,
     fund_code: fundCode,
-    campus: pick(d, ['campus', 'campus_name'], ''),
-    responsibilityCenter: rc,
+    campus: pick(d, ['campus_code'], null) ? `${pick(d, ['campus_code'], '')} - ${pick(d, ['campus_name', 'campus'], '')}` : pick(d, ['campus_name', 'campus'], ''),
+    responsibilityCenter: pick(d, ['responsibility_center_code'], null) ? `${pick(d, ['responsibility_center_code'], '')} - ${pick(d, ['responsibility_center_name', 'responsibility_center', 'rc'], '')}` : rc,
     responsibility_center: rc,
-    wfpDescription: pick(d, ['wfp_description', 'wfp_description_name', 'wfp'], ''),
+    wfpDescription: pick(d, ['wfp_description_name', 'wfp_description', 'wfp'], ''),
     sourceCode: pick(d, ['source_code', 'uacs_funding_source_code'], ''),
     department,
+    department_name: department,
+    office_name: department,
+    proposing_office: department,
+    department_unit: department,
     proponent: pick(d, ['proponent', 'prepared_by', 'requested_by', 'created_by_name'], ''),
     title: pick(d, ['title', 'proposal_title'], particulars),
     description: pick(d, ['description', 'proposal_description'], particulars),
-    uacsCode: pick(d, ['uacs_code', 'uacs'], ''),
-    pap: pick(d, ['pap', 'pap_department', 'program'], department),
+    uacsCode: pick(d, ['uacs_code', 'uacs'], '') || pick(d, ['uacs_account_title'], ''),
+    mfo_id: pick(d, ['mfo_id'], null),
+    mfo: pick(d, ['mfo_name', 'mfo'], ''),
+    object_expenditure_id: pick(d, ['object_expenditure_id'], null),
+    object_expenditure: pick(d, ['object_expenditure_name', 'object_expenditure'], ''),
+    pap: pick(d, ['pap_name', 'pap', 'pap_department', 'program'], ''),
     particulars,
     amount,
+    proposed_ps: number(d.proposed_ps),
+    proposed_mooe: number(d.proposed_mooe),
+    proposed_co: number(d.proposed_co),
+    requested_amount: requestedAmount,
     status: normalizeStatus(pick(d, ['status', 'proposal_status'], 'Draft')),
     fund_source: pick(d, ['fund_source', 'fund_source_name', 'funding_source'], fundCluster),
     funding_source: pick(d, ['funding_source', 'fund_source_name', 'fund_source'], ''),
-    budget_classification: pick(d, ['budget_classification', 'classification'], ''),
+    budget_classification: pick(d, ['budget_classification', 'classification', 'category'], ''),
+    category: pick(d, ['category', 'budget_classification', 'classification'], ''),
+    fund_cluster_id: pick(d, ['fund_cluster_id'], null),
+    fund_source_id: pick(d, ['fund_source_id'], null),
+    campus_id: pick(d, ['campus_id'], null),
+    responsibility_center_id: pick(d, ['responsibility_center_id'], null),
+    wfp_source_id: pick(d, ['wfp_source_id'], null),
+    pap_id: pick(d, ['pap_id'], null),
+    uacs_code_id: pick(d, ['uacs_code_id'], null),
+    allotment_class_id: pick(d, ['allotment_class_id'], null),
+    sourceCode: pick(d, ['source_code'], ''),
+    supporting_documents: pick(d, ['supporting_documents'], null),
+    appropriation_type: pick(d, ['appropriation_type'], ''),
     remarks: pick(d, ['remarks', 'review_remarks'], ''),
     submitted_at: pick(d, ['submitted_at', 'submission_date'], null),
     created_at: pick(d, ['created_at'], null),
@@ -191,13 +229,41 @@ async function readRows(year) {
   if (!(await tableExists())) return [];
 
   const result = await pool.query(`
-    SELECT to_jsonb(bp) AS data
+    SELECT
+      to_jsonb(bp) || jsonb_build_object(
+        'fund_cluster_name', fc.name,
+        'fund_cluster_code', fc.code,
+        'fund_source_name', fs.name,
+        'fund_source_code', fs.code,
+        'campus_name', c.name,
+        'campus_code', c.code,
+        'responsibility_center_name', rc.name,
+        'responsibility_center_code', rc.code,
+        'wfp_description_name', ws.name,
+        'wfp_source_code', ws.code,
+        'pap_name', pap.name,
+        'pap_code', pap.code,
+        'department_name_from_pap', pap.name,
+        'uacs_account_title', uacs.account_title,
+        'allotment_class_name', ac.name,
+        'allotment_class_code', ac.code
+      ) AS data
     FROM budget_proposals bp
-  `);
+    LEFT JOIN fund_clusters fc ON fc.id = bp.fund_cluster_id
+    LEFT JOIN fund_sources fs ON fs.id = bp.fund_source_id
+    LEFT JOIN campuses c ON c.id = bp.campus_id
+    LEFT JOIN responsibility_centers rc ON rc.id = bp.responsibility_center_id
+    LEFT JOIN wfp_sources ws ON ws.id = bp.wfp_source_id
+    LEFT JOIN pap ON pap.id = bp.pap_id
+    LEFT JOIN uacs_codes uacs ON uacs.id = bp.uacs_code_id
+    LEFT JOIN mfo ON mfo.id = bp.mfo_id
+    LEFT JOIN object_expenditures oe ON oe.id = bp.object_expenditure_id
+    LEFT JOIN allotment_classes ac ON ac.id = bp.allotment_class_id
+    WHERE bp.fiscal_year = $1
+    ORDER BY bp.created_at DESC NULLS LAST, bp.proposal_id DESC
+  `, [year]);
 
-  return result.rows
-    .map(normalizeProposal)
-    .filter(row => row.fiscal_year === year);
+  return result.rows.map(normalizeProposal);
 }
 
 function buildSearchable(row) {
@@ -212,9 +278,132 @@ function buildSearchable(row) {
     row.campus,
     row.responsibilityCenter,
     row.wfpDescription,
+    row.mfo,
+    row.object_expenditure,
     row.pap,
     row.particulars
   ].join(' ').toLowerCase();
+}
+
+
+async function resolveReferenceIds(input) {
+  const body = { ...input };
+
+  // Master-data repair for older proposals. New proposals already contain IDs,
+  // while older records may contain only codes/names. Resolve both forms safely.
+  async function lookupId(table, value) {
+    const text = clean(value);
+    if (!text) return null;
+
+    const candidates = new Set([text]);
+    const parts = text.split(/\s+-\s+/);
+    if (parts.length >= 2) {
+      candidates.add(parts[0].trim());
+      candidates.add(parts.slice(1).join(' - ').trim());
+    }
+
+    for (const candidate of candidates) {
+      const result = await pool.query(
+        `SELECT id, code, name FROM ${table}
+         WHERE LOWER(TRIM(COALESCE(code, ''))) = LOWER(TRIM($1))
+            OR LOWER(TRIM(COALESCE(name, ''))) = LOWER(TRIM($1))
+            OR LOWER(TRIM(COALESCE(code, '') || ' - ' || COALESCE(name, ''))) = LOWER(TRIM($1))
+         ORDER BY id LIMIT 1`,
+        [candidate]
+      );
+      if (result.rows[0]?.id) return result.rows[0].id;
+    }
+
+    // Last fallback: match a code/name appearing at the beginning of a stored
+    // label such as "RC-005 — Budget Office" or "PAP-007 - Student Development Program".
+    const result = await pool.query(
+      `SELECT id FROM ${table}
+       WHERE LOWER(TRIM(COALESCE(code, ''))) = LOWER(TRIM(SPLIT_PART($1, '—', 1)))
+          OR LOWER(TRIM(COALESCE(code, ''))) = LOWER(TRIM(SPLIT_PART($1, '-', 1)))
+       ORDER BY id LIMIT 1`,
+      [text]
+    );
+    return result.rows[0]?.id ?? null;
+  }
+
+  if (!body.fund_cluster_id) {
+    body.fund_cluster_id = await lookupId(
+      'fund_clusters',
+      pick(body, ['fund_cluster', 'fund_cluster_code', 'fund_group', 'fund_group_code'])
+    );
+  }
+
+  if (!body.fund_source_id) {
+    body.fund_source_id = await lookupId(
+      'fund_sources',
+      pick(body, ['fund_code', 'fund_source_code', 'fund_source', 'fund_source_name'])
+    );
+  }
+
+  if (!body.campus_id) {
+    body.campus_id = await lookupId(
+      'campuses',
+      pick(body, ['campus', 'campus_code', 'campus_name'])
+    );
+  }
+
+  if (!body.responsibility_center_id) {
+    body.responsibility_center_id = await lookupId(
+      'responsibility_centers',
+      pick(body, ['responsibility_center', 'responsibility_center_code', 'responsibility_center_name', 'rc'])
+    );
+  }
+
+  if (!body.wfp_source_id) {
+    body.wfp_source_id = await lookupId(
+      'wfp_sources',
+      pick(body, ['wfp_description', 'wfp_description_name', 'wfp', 'wfp_source_code', 'source_code'])
+    );
+  }
+
+  if (!body.pap_id) {
+    body.pap_id = await lookupId(
+      'pap',
+      pick(body, [
+        'pap', 'pap_name', 'pap_code', 'program', 'program_project_activity',
+        'pap_department', 'program_name'
+      ])
+    );
+  }
+
+  if (!body.mfo_id) {
+    body.mfo_id = await lookupId(
+      'mfo',
+      pick(body, ['mfo', 'mfo_name', 'mfo_code'])
+    );
+  }
+
+  if (!body.uacs_code_id) {
+    body.uacs_code_id = await lookupId(
+      'uacs_codes',
+      pick(body, ['uacs_code', 'uacs', 'uacs_account_title', 'uacs_code_value'])
+    );
+  }
+
+  if (!body.object_expenditure_id) {
+    body.object_expenditure_id = await lookupId(
+      'object_expenditures',
+      pick(body, [
+        'object_expenditure', 'object_expenditure_name',
+        'object_expenditure_code', 'object_expenditure_title'
+      ])
+    );
+  }
+
+  if (!body.allotment_class_id) {
+    const classification = pick(body, [
+      'budget_classification', 'classification', 'category',
+      'allotment_class', 'allotment_class_name', 'allotment_code'
+    ]);
+    body.allotment_class_id = await lookupId('allotment_classes', classification);
+  }
+
+  return body;
 }
 
 function valueForColumn(column, body, generated) {
@@ -226,9 +415,10 @@ function valueForColumn(column, body, generated) {
     fiscal_year: generated.year,
     year: generated.year,
 
-    department: clean(body.department),
-    department_name: clean(body.department),
-    office_name: clean(body.department),
+    department_unit: clean(body.department || body.proposing_office),
+    department: clean(body.department || body.proposing_office),
+    department_name: clean(body.department || body.proposing_office),
+    office_name: clean(body.department || body.proposing_office),
 
     proponent: clean(body.proponent),
     prepared_by: clean(body.proponent),
@@ -243,6 +433,14 @@ function valueForColumn(column, body, generated) {
     fund_source: clean(body.fund_source),
     fund_source_name: clean(body.fund_source),
     funding_source: clean(body.fund_source),
+    fund_cluster_id: body.fund_cluster_id !== undefined ? Number(body.fund_cluster_id) || null : undefined,
+    fund_source_id: body.fund_source_id !== undefined ? Number(body.fund_source_id) || null : undefined,
+    campus_id: body.campus_id !== undefined ? Number(body.campus_id) || null : undefined,
+    responsibility_center_id: body.responsibility_center_id !== undefined ? Number(body.responsibility_center_id) || null : undefined,
+    wfp_source_id: body.wfp_source_id !== undefined ? Number(body.wfp_source_id) || null : undefined,
+    pap_id: body.pap_id !== undefined ? Number(body.pap_id) || null : undefined,
+    uacs_code_id: body.uacs_code_id !== undefined ? Number(body.uacs_code_id) || null : undefined,
+    allotment_class_id: body.allotment_class_id !== undefined ? Number(body.allotment_class_id) || null : undefined,
 
     proposed_amount: number(body.amount),
     proposal_amount: number(body.amount),
@@ -273,6 +471,12 @@ function valueForColumn(column, body, generated) {
     fund_cluster_name: clean(body.fund_cluster),
     fund_group: clean(body.fund_cluster),
 
+    mfo_id: body.mfo_id !== undefined ? Number(body.mfo_id) || null : undefined,
+    object_expenditure_id: body.object_expenditure_id !== undefined ? Number(body.object_expenditure_id) || null : undefined,
+    proposed_ps: number(body.proposed_ps),
+    proposed_mooe: number(body.proposed_mooe),
+    proposed_co: number(body.proposed_co),
+
     fund_code: clean(body.fund_code),
     fund_source_code: clean(body.fund_code),
 
@@ -289,12 +493,15 @@ function valueForColumn(column, body, generated) {
     uacs_code: clean(body.uacs_code),
     uacs: clean(body.uacs_code),
 
-    pap: clean(body.department),
+    pap: clean(body.pap || body.pap_name || body.program || body.program_project_activity),
     pap_department: clean(body.department),
-    program: clean(body.department),
+    program: clean(body.pap || body.pap_name || body.program || body.program_project_activity),
 
     budget_classification: clean(body.budget_classification),
-    classification: clean(body.budget_classification)
+    classification: clean(body.budget_classification),
+    category: clean(body.budget_classification),
+    supporting_documents: clean(body.supporting_documents),
+    appropriation_type: clean(body.appropriation_type)
   };
 
   return Object.prototype.hasOwnProperty.call(aliases, column)
@@ -322,7 +529,217 @@ async function findStatusColumn(columns) {
     .find(name => columns.some(c => c.column_name === name));
 }
 
+const STATUS_TRANSITIONS = {
+  Draft: ['Submitted'],
+  Submitted: ['Under Review'],
+  'Under Review': ['For Revision', 'Endorsed', 'Rejected'],
+  'For Revision': ['Submitted'],
+  Endorsed: ['Approved', 'Rejected'],
+  Approved: [],
+  Rejected: []
+};
+
+async function ensureBudgetItemForProposal(db, proposalId) {
+  // Lock only the parent budget_proposals row. PostgreSQL does not allow
+  // FOR UPDATE on the nullable side of a LEFT JOIN.
+  const lockResult = await db.query(
+    `SELECT proposal_id FROM budget_proposals WHERE proposal_id = $1 FOR UPDATE`,
+    [proposalId]
+  );
+
+  if (!lockResult.rows.length) {
+    throw new Error('Approved proposal was not found.');
+  }
+
+  const result = await db.query(`
+    SELECT
+      bp.proposal_id, bp.proposal_no, bp.fiscal_year, bp.requested_amount,
+      bp.fund_cluster_id, bp.fund_source_id, bp.campus_id,
+      bp.responsibility_center_id, bp.wfp_source_id, bp.pap_id,
+      bp.uacs_code_id, bp.allotment_class_id, bp.source_code,
+      bp.fund_source, bp.department_unit, bp.category,
+      bp.program_project_activity,
+      bp.mfo_id, bp.object_expenditure_id,
+      bp.proposed_ps, bp.proposed_mooe, bp.proposed_co,
+      to_jsonb(bp) AS proposal_data,
+      fc.code AS fund_cluster_code,
+      fc.name AS fund_cluster_name,
+      fs.code AS fund_code,
+      fs.name AS fund_source_name,
+      c.code AS campus_code,
+      c.name AS campus_name,
+      rc.code AS responsibility_center_code,
+      rc.name AS responsibility_center_name,
+      ws.code AS wfp_code,
+      ws.name AS wfp_name,
+      pap.code AS pap_code,
+      pap.name AS pap_name,
+      mfo.code AS mfo_code,
+      mfo.name AS mfo_name,
+      uacs.code AS uacs_code_value,
+      uacs.account_title AS uacs_account_title,
+      oe.code AS object_expenditure_code,
+      oe.name AS object_expenditure_name,
+      ac.code AS allotment_code,
+      ac.name AS allotment_class_name
+    FROM budget_proposals bp
+    LEFT JOIN fund_clusters fc ON fc.id = bp.fund_cluster_id
+    LEFT JOIN fund_sources fs ON fs.id = bp.fund_source_id
+    LEFT JOIN campuses c ON c.id = bp.campus_id
+    LEFT JOIN responsibility_centers rc ON rc.id = bp.responsibility_center_id
+    LEFT JOIN wfp_sources ws ON ws.id = bp.wfp_source_id
+    LEFT JOIN pap ON pap.id = bp.pap_id
+    LEFT JOIN mfo ON mfo.id = bp.mfo_id
+    LEFT JOIN uacs_codes uacs ON uacs.id = bp.uacs_code_id
+    LEFT JOIN object_expenditures oe ON oe.id = bp.object_expenditure_id
+    LEFT JOIN allotment_classes ac ON ac.id = bp.allotment_class_id
+    WHERE bp.proposal_id = $1
+  `, [proposalId]);
+
+  const row = result.rows[0];
+  // Merge the actual stored proposal JSON with the joined Master Data aliases.
+  // This lets legacy proposals be repaired from their existing text/code values
+  // without assuming every historical column still exists as a dedicated field.
+  let p = { ...(row.proposal_data || {}), ...row };
+  delete p.proposal_data;
+
+  const resolved = await resolveReferenceIds(p);
+  const repaired = {
+    fund_cluster_id: Number(resolved.fund_cluster_id) || null,
+    fund_source_id: Number(resolved.fund_source_id) || null,
+    campus_id: Number(resolved.campus_id) || null,
+    responsibility_center_id: Number(resolved.responsibility_center_id) || null,
+    wfp_source_id: Number(resolved.wfp_source_id) || null,
+    pap_id: Number(resolved.pap_id) || null,
+    uacs_code_id: Number(resolved.uacs_code_id) || null,
+    allotment_class_id: Number(resolved.allotment_class_id) || null,
+    mfo_id: Number(resolved.mfo_id) || null,
+    object_expenditure_id: Number(resolved.object_expenditure_id) || null
+  };
+
+  const repairPairs = Object.entries(repaired).filter(([, value]) => value !== null);
+  if (repairPairs.length) {
+    const setParts = repairPairs.map(([column], index) => `"${column}" = $${index + 1}`);
+    const repairValues = repairPairs.map(([, value]) => value);
+    const proposalColumns = await getColumns('budget_proposals');
+
+    if (proposalColumns.some(c => c.column_name === 'updated_at')) {
+      setParts.push('updated_at = CURRENT_TIMESTAMP');
+    }
+
+    repairValues.push(proposalId);
+
+    await db.query(
+      `UPDATE budget_proposals
+       SET ${setParts.join(', ')}
+       WHERE proposal_id = $${repairValues.length}`,
+      repairValues
+    );
+
+    p = { ...p, ...repaired };
+  }
+
+  const required = [
+    ['Fund Cluster', p.fund_cluster_id],
+    ['Fund Source', p.fund_source_id],
+    ['Campus', p.campus_id],
+    ['Responsibility Center', p.responsibility_center_id],
+    ['WFP Source', p.wfp_source_id],
+    ['PAP', p.pap_id],
+    ['MFO', p.mfo_id],
+    ['UACS Code', p.uacs_code_id],
+    ['Object of Expenditure', p.object_expenditure_id],
+    ['Allotment Class', p.allotment_class_id]
+  ];
+
+  const missing = required
+    .filter(([, value]) => value === null || value === undefined)
+    .map(([name]) => name);
+
+  if (missing.length) {
+    throw new Error(`Cannot approve proposal. Missing Master Data: ${missing.join(', ')}.`);
+  }
+
+  const amount = Number(p.requested_amount || 0);
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw new Error('Cannot approve proposal with an invalid proposed amount.');
+  }
+
+  const code = String(p.allotment_code || '').toUpperCase();
+  const storedPs = Number(p.proposed_ps || 0);
+  const storedMooe = Number(p.proposed_mooe || 0);
+  const storedCo = Number(p.proposed_co || 0);
+  const hasStoredBreakdown = storedPs + storedMooe + storedCo > 0;
+
+  const ps = hasStoredBreakdown ? storedPs : (code === 'PS' ? amount : 0);
+  const mooe = hasStoredBreakdown ? storedMooe : (code === 'MOOE' ? amount : 0);
+  const co = hasStoredBreakdown ? storedCo : (code === 'CO' ? amount : 0);
+
+  const columns = await getColumns('budget_items');
+  const names = columns.map(x => x.column_name);
+
+  if (!names.includes('budget_proposal_id')) {
+    throw new Error('budget_items.budget_proposal_id is required for Proposal → RBUD integration.');
+  }
+
+  const existing = await db.query(
+    'SELECT id FROM budget_items WHERE budget_proposal_id = $1 LIMIT 1',
+    [proposalId]
+  );
+
+  // These are the actual BMAS budget_items fields. Do not reference
+  // proposal-only aliases such as fund_code or appropriation_type here.
+  const fieldValues = {
+    fiscal_year: p.fiscal_year,
+    fund_cluster_id: p.fund_cluster_id,
+    fund_source_id: p.fund_source_id,
+    campus_id: p.campus_id,
+    responsibility_center_id: p.responsibility_center_id,
+    mfo_id: p.mfo_id,
+    pap_id: p.pap_id,
+    uacs_code_id: p.uacs_code_id,
+    object_expenditure_id: p.object_expenditure_id,
+    allotment_class_id: p.allotment_class_id,
+    wfp_source_id: p.wfp_source_id,
+    approved_budget: amount,
+    ps_amount: ps,
+    mooe_amount: mooe,
+    co_amount: co,
+    status: 'Approved',
+    notes: `Created from approved Budget Proposal ${p.proposal_no}`,
+    budget_proposal_id: proposalId
+  };
+
+  const supported = Object.keys(fieldValues).filter(name => names.includes(name));
+
+  if (existing.rows.length) {
+    const updateColumns = supported.filter(name => name !== 'budget_proposal_id');
+    const setParts = updateColumns.map((name, index) => `"${name}" = $${index + 1}`);
+
+    if (names.includes('updated_at')) {
+      setParts.push('updated_at = CURRENT_TIMESTAMP');
+    }
+
+    await db.query(
+      `UPDATE budget_items
+       SET ${setParts.join(', ')}
+       WHERE budget_proposal_id = $${updateColumns.length + 1}`,
+      [...updateColumns.map(name => fieldValues[name]), proposalId]
+    );
+    return;
+  }
+
+  const placeholders = supported.map((_, index) => `$${index + 1}`);
+
+  await db.query(
+    `INSERT INTO budget_items (${supported.map(name => `"${name}"`).join(', ')})
+     VALUES (${placeholders.join(', ')})`,
+    supported.map(name => fieldValues[name])
+  );
+}
+
 async function insertProposal(body, status) {
+  body = await resolveReferenceIds(body);
   const columnRows = await getColumns();
 
   if (!columnRows.length) {
@@ -453,12 +870,11 @@ router.get('/summary', async (req, res) => {
         totalProposals: rows.length,
         draft: rows.filter(r => r.status === 'Draft').length,
         submitted: rows.filter(r => r.status === 'Submitted').length,
-        pending: rows.filter(r => r.status === 'Pending').length,
-        forReview: rows.filter(r => r.status === 'For Review').length,
+        underReview: rows.filter(r => r.status === 'Under Review').length,
+        forRevision: rows.filter(r => r.status === 'For Revision').length,
         endorsed: rows.filter(r => r.status === 'Endorsed').length,
         approved: rows.filter(r => r.status === 'Approved').length,
-        returned: rows.filter(r => r.status === 'Returned').length,
-        disapproved: rows.filter(r => r.status === 'Disapproved').length,
+        rejected: rows.filter(r => r.status === 'Rejected').length,
         totalAmount: rows.reduce((sum, row) => sum + number(row.amount), 0)
       }
     });
@@ -508,6 +924,28 @@ router.get('/', async (req, res) => {
 
 // ============================================================
 // HISTORY
+// GET /api/budget-proposals/history?year=2026
+// ============================================================
+
+router.get('/history', async (req, res) => {
+  try {
+    const year = Number(req.query.year) || new Date().getFullYear();
+    await ensureHistoryTable();
+    const result = await pool.query(`
+      SELECT h.id, h.proposal_id, bp.proposal_no, h.action, h.status, h.remarks,
+             h.actor_id, h.actor_name, h.created_at
+      FROM budget_proposal_history h
+      LEFT JOIN budget_proposals bp ON bp.proposal_id = h.proposal_id
+      WHERE bp.fiscal_year = $1
+      ORDER BY h.created_at DESC, h.id DESC
+    `, [year]);
+    res.json({ success:true, fiscalYear:year, history:result.rows });
+  } catch (error) {
+    console.error('Budget Proposal All History Error:', error);
+    res.status(500).json({ success:false, error:error.message });
+  }
+});
+
 // GET /api/budget-proposals/:id/history
 // ============================================================
 
@@ -564,9 +1002,30 @@ router.get('/:id', async (req, res) => {
     }
 
     const result = await pool.query(
-      `SELECT to_jsonb(bp) AS data
+      `SELECT
+         to_jsonb(bp) || jsonb_build_object(
+           'fund_cluster_name', fc.name, 'fund_cluster_code', fc.code,
+           'fund_source_name', fs.name, 'fund_source_code', fs.code,
+           'campus_name', c.name, 'campus_code', c.code,
+           'responsibility_center_name', rc.name, 'responsibility_center_code', rc.code,
+           'wfp_description_name', ws.name, 'wfp_source_code', ws.code,
+           'pap_name', pap.name, 'pap_code', pap.code,
+           'department_name_from_pap', pap.name,
+           'uacs_account_title', uacs.account_title,
+           'allotment_class_name', ac.name, 'allotment_class_code', ac.code
+         ) AS data
        FROM budget_proposals bp
-       WHERE "${idColumn}" = $1`,
+       LEFT JOIN fund_clusters fc ON fc.id=bp.fund_cluster_id
+       LEFT JOIN fund_sources fs ON fs.id=bp.fund_source_id
+       LEFT JOIN campuses c ON c.id=bp.campus_id
+       LEFT JOIN responsibility_centers rc ON rc.id=bp.responsibility_center_id
+       LEFT JOIN wfp_sources ws ON ws.id=bp.wfp_source_id
+       LEFT JOIN pap ON pap.id=bp.pap_id
+       LEFT JOIN uacs_codes uacs ON uacs.id=bp.uacs_code_id
+       LEFT JOIN mfo ON mfo.id=bp.mfo_id
+       LEFT JOIN object_expenditures oe ON oe.id=bp.object_expenditure_id
+       LEFT JOIN allotment_classes ac ON ac.id=bp.allotment_class_id
+       WHERE bp."${idColumn}" = $1`,
       [id]
     );
 
@@ -593,12 +1052,12 @@ router.get('/:id', async (req, res) => {
 
 router.post('/', async (req, res) => {
   try {
-    const body = req.body || {};
+    let body = req.body || {};
 
     if (!clean(body.department)) {
       return res.status(400).json({
         success: false,
-        error: 'PAP / Department is required.'
+        error: 'Proposing Office / Department is required.'
       });
     }
 
@@ -608,6 +1067,11 @@ router.post('/', async (req, res) => {
         error: 'Particulars / Description is required.'
       });
     }
+
+    body = await resolveReferenceIds(body);
+    const requiredRefs = ['fund_cluster_id','fund_source_id','campus_id','responsibility_center_id','wfp_source_id','pap_id','mfo_id','uacs_code_id','object_expenditure_id','allotment_class_id'];
+    const missingRefs = requiredRefs.filter(key => !Number(body[key]));
+    if (missingRefs.length) return res.status(400).json({ success:false, error:`Please complete the required Master Data fields: ${missingRefs.join(', ')}` });
 
     const amount = number(body.amount);
     if (amount <= 0) {
@@ -655,7 +1119,15 @@ router.put('/:id', async (req, res) => {
       });
     }
 
-    const body = req.body || {};
+    const currentResult = await pool.query(`SELECT status FROM budget_proposals WHERE "${idColumn}" = $1`, [id]);
+    if (!currentResult.rows.length) return res.status(404).json({ success:false, error:'Budget proposal not found.' });
+    const currentStatus = normalizeStatus(currentResult.rows[0].status);
+    if (!['Draft','For Revision'].includes(currentStatus)) {
+      return res.status(409).json({ success:false, error:`Only Draft or For Revision proposals can be edited. Current status: ${currentStatus}.` });
+    }
+
+    let body = req.body || {};
+    body = await resolveReferenceIds(body);
     const generated = {
       proposalNo: null,
       year: Number(body.fiscal_year) || new Date().getFullYear(),
@@ -757,122 +1229,64 @@ router.put('/:id', async (req, res) => {
 // ============================================================
 
 router.patch('/:id/status', async (req, res) => {
+  const client = await pool.connect();
   try {
-    if (!(await tableExists())) {
-      return res.status(404).json({
-        success: false,
-        error: 'Budget proposal table not found.'
-      });
-    }
-
+    if (!(await tableExists())) return res.status(404).json({ success:false, error:'Budget proposal table not found.' });
     const id = Number(req.params.id);
-    const status = clean(req.body?.status);
-
-    const allowed = [
-      'Draft',
-      'Submitted',
-      'Pending',
-      'For Review',
-      'Endorsed',
-      'Approved',
-      'Returned',
-      'Disapproved'
-    ];
-
-    if (!Number.isInteger(id)) {
-      return res.status(400).json({
-        success: false,
-        error: 'Invalid proposal ID.'
-      });
-    }
-
-    if (!allowed.includes(status)) {
-      return res.status(400).json({
-        success: false,
-        error: 'Invalid proposal status.'
-      });
-    }
+    const requestedStatus = normalizeStatus(req.body?.status);
+    if (!Number.isInteger(id)) return res.status(400).json({ success:false, error:'Invalid proposal ID.' });
+    const allowedStatuses = ['Draft','Submitted','Under Review','For Revision','Endorsed','Approved','Rejected'];
+    if (!allowedStatuses.includes(requestedStatus)) return res.status(400).json({ success:false, error:'Invalid proposal status.' });
 
     const columns = await getColumns();
     const idColumn = await findIdColumn(columns);
     const statusColumn = await findStatusColumn(columns);
+    if (!idColumn || !statusColumn) return res.status(500).json({ success:false, error:'The budget_proposals table does not contain a supported ID/status column.' });
 
-    if (!idColumn || !statusColumn) {
-      return res.status(500).json({
-        success: false,
-        error: 'The budget_proposals table does not contain a supported ID/status column.'
-      });
+    await ensureHistoryTable();
+    await client.query('BEGIN');
+    const current = await client.query(`SELECT status FROM budget_proposals WHERE "${idColumn}" = $1 FOR UPDATE`, [id]);
+    if (!current.rows.length) { await client.query('ROLLBACK'); return res.status(404).json({ success:false, error:'Budget proposal not found.' }); }
+    const currentStatus = normalizeStatus(current.rows[0].status);
+    if (!(STATUS_TRANSITIONS[currentStatus] || []).includes(requestedStatus)) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ success:false, error:`Invalid workflow transition: ${currentStatus} → ${requestedStatus}.` });
     }
 
     const setParts = [`"${statusColumn}" = $1`];
-    const values = [status];
+    const values = [requestedStatus];
     let index = 2;
-
-    if (columns.some(c => c.column_name === 'submitted_at') && status === 'Submitted') {
-      setParts.push(`"submitted_at" = CURRENT_TIMESTAMP`);
-    }
-
-    if (columns.some(c => c.column_name === 'submission_date') && status === 'Submitted') {
-      setParts.push(`"submission_date" = CURRENT_TIMESTAMP`);
-    }
-
-    if (columns.some(c => c.column_name === 'updated_at')) {
-      setParts.push(`"updated_at" = CURRENT_TIMESTAMP`);
-    }
-
+    const timestampMap = { Submitted:'submitted_at', 'Under Review':'reviewed_at', Endorsed:'endorsed_at', Approved:'approved_at', 'For Revision':'returned_at' };
+    const userMap = { 'Under Review':'reviewed_by', Endorsed:'endorsed_by', Approved:'approved_by' };
+    const timeColumn = timestampMap[requestedStatus];
+    if (timeColumn && columns.some(c=>c.column_name===timeColumn)) setParts.push(`"${timeColumn}" = CURRENT_TIMESTAMP`);
+    const actorId = req.body?.actor_id ? Number(req.body.actor_id) : null;
+    const actorName = clean(req.body?.actor_name) || 'System User';
+    const userColumn = userMap[requestedStatus];
+    if (userColumn && columns.some(c=>c.column_name===userColumn) && actorId) { setParts.push(`"${userColumn}" = $${index++}`); values.push(actorId); }
     const remarks = clean(req.body?.remarks);
-    if (columns.some(c => c.column_name === 'remarks') && remarks) {
-      setParts.push(`"remarks" = $${index++}`);
-      values.push(remarks);
-    }
-
+    if (columns.some(c=>c.column_name==='remarks') && remarks) { setParts.push(`"remarks" = $${index++}`); values.push(remarks); }
+    if (requestedStatus === 'Rejected' && columns.some(c=>c.column_name==='rejection_reason') && remarks) { setParts.push(`"rejection_reason" = $${index++}`); values.push(remarks); }
+    if (columns.some(c=>c.column_name==='updated_at')) setParts.push('"updated_at" = CURRENT_TIMESTAMP');
     values.push(id);
 
-    const result = await pool.query(
-      `
-      UPDATE budget_proposals
-      SET ${setParts.join(', ')}
-      WHERE "${idColumn}" = $${index}
-      RETURNING to_jsonb(budget_proposals) AS data
-      `,
-      values
-    );
+    const result = await client.query(`UPDATE budget_proposals SET ${setParts.join(', ')} WHERE "${idColumn}" = $${index} RETURNING to_jsonb(budget_proposals) AS data`, values);
+    if (!result.rows.length) { await client.query('ROLLBACK'); return res.status(404).json({success:false,error:'Budget proposal not found.'}); }
 
-    if (!result.rows.length) {
-      return res.status(404).json({
-        success: false,
-        error: 'Budget proposal not found.'
-      });
-    }
+    if (requestedStatus === 'Approved') await ensureBudgetItemForProposal(client, id);
 
     const proposal = normalizeProposal(result.rows[0]);
-    await ensureHistoryTable();
+    await client.query(`INSERT INTO budget_proposal_history (proposal_id, action, status, remarks, actor_id, actor_name) VALUES ($1,$2,$3,$4,$5,$6)`, [proposal.id, requestedStatus, requestedStatus, remarks, actorId, actorName]);
+    await client.query('COMMIT');
+    const refreshedRows = await readRows(proposal.fiscal_year);
+    const refreshedProposal = refreshedRows.find(row => Number(row.id) === Number(id)) || proposal;
 
-    await pool.query(
-      `
-      INSERT INTO budget_proposal_history
-        (proposal_id, action, status, remarks, actor_id, actor_name)
-      VALUES ($1, $2, $3, $4, $5, $6)
-      `,
-      [
-        proposal.id,
-        status,
-        status,
-        remarks,
-        req.body?.actor_id ? Number(req.body.actor_id) : null,
-        clean(req.body?.actor_name)
-      ]
-    );
-
-    res.json({
-      success: true,
-      message: `Proposal status updated to ${status}.`,
-      proposal
-    });
+    res.json({success:true,message:`Proposal status updated to ${requestedStatus}.`,proposal:refreshedProposal});
   } catch (error) {
+    try { await client.query('ROLLBACK'); } catch {}
     console.error('Update Proposal Status Error:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
+    res.status(500).json({success:false,error:error.message});
+  } finally { client.release(); }
 });
 
 // ============================================================
@@ -904,6 +1318,14 @@ router.delete('/:id', async (req, res) => {
         success: false,
         error: 'No proposal ID column exists in budget_proposals.'
       });
+    }
+
+    const current = await pool.query(
+      `SELECT status FROM budget_proposals WHERE "${idColumn}" = $1`,
+      [id]
+    );
+    if (current.rows.length && ['Approved','Endorsed','Under Review','Submitted'].includes(normalizeStatus(current.rows[0].status))) {
+      return res.status(409).json({ success:false, error:'Only Draft or For Revision proposals can be deleted.' });
     }
 
     const result = await pool.query(
