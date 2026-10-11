@@ -18,7 +18,6 @@ import {
   ListOrdered,
   PieChart,
   Flower2,
-  MoreHorizontal,
   Plus,
   Edit2,
   Trash2,
@@ -31,6 +30,7 @@ import {
   RefreshCw,
   Eye,
   AlertTriangle,
+  FileText,
   Users,
 } from 'lucide-react';
 
@@ -45,31 +45,11 @@ const DEFAULT_FORM = {
   old_code: '',
   account_title: '',
   abbreviation: '',
+  campus_id: '',
   status: 'Active',
 };
 
-const OTHER_TYPES = [
-  {
-    value: 'mfo',
-    label: 'MFO',
-  },
-  {
-    value: 'uacs',
-    label: 'UACS Codes',
-  },
-  {
-    value: 'campuses',
-    label: 'Campuses',
-  },
-  {
-    value: 'pap',
-    label: 'PAP',
-  },
-  {
-    value: 'wfp',
-    label: 'WFP Sources',
-  },
-];
+
 
 export default function MasterData({
   user,
@@ -88,7 +68,7 @@ export default function MasterData({
   // ==========================================================
 
   const [activeTab, setActiveTab] =
-    useState('fundGroups');
+    useState('fundClusters');
 
   const [loading, setLoading] =
     useState(false);
@@ -102,17 +82,6 @@ export default function MasterData({
   const [toast, setToast] =
     useState(null);
 
-  const [stats, setStats] =
-    useState({
-      fundGroups: 0,
-      funds: 0,
-      centers: 0,
-      objects: 0,
-      sources: 0,
-      allotments: 0,
-      users: 0,
-    });
-
   const [items, setItems] =
     useState([]);
 
@@ -122,7 +91,7 @@ export default function MasterData({
   const [pagination, setPagination] =
     useState({
       page: 1,
-      limit: 10,
+      limit: 30,
       totalItems: 0,
       totalPages: 1,
     });
@@ -147,8 +116,12 @@ export default function MasterData({
       ...DEFAULT_FORM,
     });
 
-  const [othersType, setOthersType] =
-    useState('mfo');
+  const [campusOptions, setCampusOptions] =
+    useState([]);
+
+  const [fundSourceOptions, setFundSourceOptions] =
+    useState([]);
+
 
   // ==========================================================
   // TAB CONFIGURATION
@@ -157,45 +130,41 @@ export default function MasterData({
   const tabs = useMemo(
     () => [
       {
-        id: 'fundGroups',
-        label: 'Fund Groups',
+        id: 'fundClusters',
+        label: 'Fund Codes / Clusters',
         icon: Layers,
-        endpoint: 'fund-groups',
-        description:
-          'Manage fund groups used throughout the system.',
-        canEdit: true,
-      },
-
-      {
-        id: 'funds',
-        label: 'Funds',
-        icon: BookOpen,
         endpoint: 'funds',
         description:
-          'Manage fund clusters and their reference information.',
+          'Manage official fund codes/clusters and their funding source relationship.',
         canEdit: true,
       },
-
       {
-        id: 'centers',
+        id: 'departments',
+        label: 'Departments',
+        icon: Building2,
+        endpoint: 'departments',
+        description:
+          'Manage departments used by budget and working-document workflows.',
+        canEdit: true,
+      },
+      {
+        id: 'responsibilityCenters',
         label: 'Responsibility Centers',
         icon: Building2,
         endpoint: 'centers',
         description:
-          'Manage units, offices, and responsibility centers.',
+          'Manage responsibility centers referenced by RBUD, RAOD, IGP, and budget records.',
         canEdit: true,
       },
-
       {
         id: 'objects',
-        label: 'Object Codes',
+        label: 'Object of Expenditure',
         icon: ListOrdered,
         endpoint: 'objects',
         description:
-          'Manage expenditure object codes.',
+          'Manage expenditure object classifications used by budget records.',
         canEdit: true,
       },
-
       {
         id: 'sources',
         label: 'Funding Sources',
@@ -205,7 +174,6 @@ export default function MasterData({
           'Manage government and other funding sources.',
         canEdit: true,
       },
-
       {
         id: 'allotments',
         label: 'Allotment Classes',
@@ -215,15 +183,55 @@ export default function MasterData({
           'Manage allotment classification references.',
         canEdit: true,
       },
-
       {
-        id: 'others',
-        label: 'Others',
-        icon: MoreHorizontal,
+        id: 'mfo',
+        label: 'MFO',
+        icon: Layers,
         endpoint: 'others',
+        referenceType: 'mfo',
         description:
-          'View other reference data used by the system.',
-        canEdit: false,
+          'Manage Major Final Outputs used throughout the system.',
+        canEdit: true,
+      },
+      {
+        id: 'uacs',
+        label: 'UACS Codes',
+        icon: ListOrdered,
+        endpoint: 'others',
+        referenceType: 'uacs',
+        description:
+          'Manage UACS codes and account classifications.',
+        canEdit: true,
+      },
+      {
+        id: 'campuses',
+        label: 'Campuses',
+        icon: Building2,
+        endpoint: 'others',
+        referenceType: 'campuses',
+        description:
+          'Manage campuses used throughout the system.',
+        canEdit: true,
+      },
+      {
+        id: 'pap',
+        label: 'PAP',
+        icon: BookOpen,
+        endpoint: 'others',
+        referenceType: 'pap',
+        description:
+          'Manage Programs, Activities, and Projects.',
+        canEdit: true,
+      },
+      {
+        id: 'wfp',
+        label: 'WFP / Activity Sources',
+        icon: FileText,
+        endpoint: 'others',
+        referenceType: 'wfp',
+        description:
+          'Manage Work and Financial Plan/activity reference sources.',
+        canEdit: true,
       },
     ],
     []
@@ -244,6 +252,12 @@ export default function MasterData({
     activeTab,
   ]);
 
+  const activeReferenceType =
+    activeTabConfig.referenceType || '';
+
+  const isOtherReference =
+    Boolean(activeReferenceType);
+
   const isReadOnly = false;
 
   // ==========================================================
@@ -252,53 +266,20 @@ export default function MasterData({
 
   const getSingularLabel = useCallback(() => {
     const labels = {
-      fundGroups: 'Fund Group',
-      funds: 'Fund',
-      centers: 'Responsibility Center',
+      fundClusters: 'Fund Cluster',
+      departments: 'Department',
       objects: 'Object Code',
       sources: 'Funding Source',
       allotments: 'Allotment Class',
+      mfo: 'MFO',
+      uacs: 'UACS Code',
+      campuses: 'Campus',
+      pap: 'PAP',
+      wfp: 'WFP Source',
     };
 
-    if (activeTab === 'others') {
-      const otherLabels = {
-        mfo: 'MFO',
-        uacs: 'UACS Code',
-        campuses: 'Campus',
-        pap: 'PAP',
-        wfp: 'WFP Source',
-      };
-
-      return (
-        otherLabels[othersType] ||
-        'Reference Data'
-      );
-    }
-
-    return (
-      labels[activeTab] ||
-      'Master Data'
-    );
-  }, [
-    activeTab,
-    othersType,
-  ]);
-
-  const getOthersLabel = useCallback(() => {
-    const found =
-      OTHER_TYPES.find(
-        (type) =>
-          type.value ===
-          othersType
-      );
-
-    return (
-      found?.label ||
-      'Others'
-    );
-  }, [
-    othersType,
-  ]);
+    return labels[activeTab] || 'Master Data';
+  }, [activeTab]);
 
   // ==========================================================
   // TOAST
@@ -363,81 +344,6 @@ export default function MasterData({
   );
 
   // ==========================================================
-  // FETCH STATS
-  // ==========================================================
-
-  const fetchStats =
-    useCallback(
-      async () => {
-        try {
-          const response =
-            await fetch(
-              `${API_URL}/masterdata/stats`,
-              {
-                headers:
-                  getAuthHeaders(),
-              }
-            );
-
-          const data =
-            await response
-              .json()
-              .catch(
-                () => ({})
-              );
-
-          if (
-            !response.ok
-          ) {
-            throw new Error(
-              data.error ||
-                'Failed to load Master Data statistics.'
-            );
-          }
-
-          setStats({
-            fundGroups:
-              Number(
-                data.fundGroups
-              ) || 0,
-
-            funds:
-              Number(
-                data.funds
-              ) || 0,
-
-            centers:
-              Number(
-                data.centers
-              ) || 0,
-
-            objects:
-              Number(
-                data.objects
-              ) || 0,
-
-            sources:
-              Number(
-                data.sources
-              ) || 0,
-
-            allotments:
-              Number(
-                data.allotments
-              ) || 0,
-
-          });
-        } catch (err) {
-          console.error(
-            'Master Data stats error:',
-            err
-          );
-        }
-      },
-      [getAuthHeaders]
-    );
-
-  // ==========================================================
   // FETCH DATA
   // ==========================================================
 
@@ -480,12 +386,11 @@ export default function MasterData({
           }
 
           if (
-            activeTab ===
-            'others'
+            isOtherReference
           ) {
             params.set(
               'type',
-              othersType
+              activeReferenceType
             );
           }
 
@@ -567,21 +472,99 @@ export default function MasterData({
         activeTab,
         activeTabConfig.endpoint,
         getAuthHeaders,
-        othersType,
+        activeReferenceType,
         pagination.limit,
         searchTerm,
       ]
     );
 
   // ==========================================================
+  // LOAD ACTIVE CAMPUSES FOR DEPARTMENT FORM
+  // ==========================================================
+
+  const fetchFundSourceOptions = useCallback(
+    async () => {
+      try {
+        const response = await fetch(
+          `${API_URL}/masterdata/sources?page=1&limit=100`,
+          { headers: getAuthHeaders() }
+        );
+
+        const data = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+          throw new Error(
+            data.error ||
+              data.details ||
+              'Failed to load funding sources.'
+          );
+        }
+
+        const options = Array.isArray(data.items)
+          ? data.items
+              .filter((item) => item.is_active !== false)
+              .sort((a, b) =>
+                String(a.code || '').localeCompare(String(b.code || ''))
+              )
+          : [];
+
+        setFundSourceOptions(options);
+      } catch (err) {
+        console.error('Funding source options error:', err);
+        setFundSourceOptions([]);
+      }
+    },
+    [getAuthHeaders]
+  );
+
+  const fetchCampusOptions = useCallback(
+    async () => {
+      try {
+        const response = await fetch(
+          `${API_URL}/masterdata/others?type=campuses&page=1&limit=100`,
+          { headers: getAuthHeaders() }
+        );
+
+        const data = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+          throw new Error(
+            data.error ||
+              data.details ||
+              'Failed to load campuses.'
+          );
+        }
+
+        const options = Array.isArray(data.items)
+          ? data.items
+              .filter((item) => item.is_active !== false)
+              .sort((a, b) =>
+                String(a.name || '').localeCompare(String(b.name || ''))
+              )
+          : [];
+
+        setCampusOptions(options);
+      } catch (err) {
+        console.error('Campus options error:', err);
+        setCampusOptions([]);
+      }
+    },
+    [getAuthHeaders]
+  );
+
+  // ==========================================================
   // INITIAL LOAD
   // ==========================================================
 
   useEffect(() => {
-    fetchStats();
-  }, [
-    fetchStats,
-  ]);
+    if (activeTab === 'departments') {
+      fetchCampusOptions();
+    }
+
+    if (activeTab === 'fundClusters') {
+      fetchFundSourceOptions();
+    }
+  }, [activeTab, fetchCampusOptions, fetchFundSourceOptions]);
 
   // ==========================================================
   // FETCH DATA WHEN TAB / SEARCH CHANGES
@@ -591,7 +574,7 @@ export default function MasterData({
     fetchData(1);
   }, [
     activeTab,
-    othersType,
+    activeReferenceType,
     searchTerm,
     fetchData,
   ]);
@@ -655,6 +638,11 @@ export default function MasterData({
         abbreviation:
           item.abbreviation ||
           '',
+
+        campus_id:
+          item.campus_id != null
+            ? String(item.campus_id)
+            : '',
 
         fund_source_id:
           item.fund_source_id !=
@@ -762,6 +750,15 @@ export default function MasterData({
         return;
       }
 
+      if (activeTab === 'departments' && !formData.campus_id) {
+        showToast(
+          'Please select a Campus.',
+          'error'
+        );
+
+        return;
+      }
+
       setSaving(true);
 
       try {
@@ -769,8 +766,8 @@ export default function MasterData({
           activeTabConfig.endpoint;
 
         const typeQuery =
-          activeTab === 'others'
-            ? `?type=${encodeURIComponent(othersType)}`
+          isOtherReference
+            ? `?type=${encodeURIComponent(activeReferenceType)}`
             : '';
 
         const url =
@@ -797,13 +794,23 @@ export default function MasterData({
             formData.status,
         };
 
+        if (activeTab === 'departments') {
+          payload.campus_id = formData.campus_id
+            ? Number(formData.campus_id)
+            : null;
+        }
+
+        if (activeTab === 'responsibilityCenters') {
+          payload.category = formData.category.trim();
+        }
+
         // ----------------------------------------------------
         // FUND CLUSTER REFERENCES
         // ----------------------------------------------------
 
         if (
           activeTab ===
-          'funds'
+          'fundClusters'
         ) {
           payload.fund_source_id =
             formData.fund_source_id
@@ -811,40 +818,18 @@ export default function MasterData({
                   formData.fund_source_id
                 )
               : null;
-
-          payload.fund_group_id =
-            formData.fund_group_id
-              ? Number(
-                  formData.fund_group_id
-                )
-              : null;
-        }
-
-        // ----------------------------------------------------
-        // RESPONSIBILITY CENTER
-        // ----------------------------------------------------
-
-        if (
-          activeTab ===
-          'centers'
-        ) {
-          payload.category =
-            formData.category.trim();
         }
 
         // ----------------------------------------------------
         // OTHER REFERENCE DATA
         // ----------------------------------------------------
 
-        if (
-          activeTab ===
-          'others'
-        ) {
+        if (isOtherReference) {
           payload.type =
-            othersType;
+            activeReferenceType;
 
           if (
-            othersType ===
+            activeReferenceType ===
             'uacs'
           ) {
             payload.old_code =
@@ -858,7 +843,7 @@ export default function MasterData({
           }
 
           if (
-            othersType ===
+            activeReferenceType ===
             'campuses'
           ) {
             payload.abbreviation =
@@ -917,8 +902,6 @@ export default function MasterData({
         setFormData({
           ...DEFAULT_FORM,
         });
-
-        await fetchStats();
 
         await fetchData(
           editingId
@@ -993,8 +976,8 @@ export default function MasterData({
           activeTabConfig.endpoint;
 
         const typeQuery =
-          activeTab === 'others'
-            ? `?type=${encodeURIComponent(othersType)}`
+          isOtherReference
+            ? `?type=${encodeURIComponent(activeReferenceType)}`
             : '';
 
         const response =
@@ -1032,8 +1015,6 @@ export default function MasterData({
         );
 
         closeDeleteModal();
-
-        await fetchStats();
 
         const currentPage =
           pagination.page;
@@ -1163,14 +1144,6 @@ export default function MasterData({
         })
       );
 
-      if (
-        tabId ===
-        'others'
-      ) {
-        setOthersType(
-          'mfo'
-        );
-      }
     };
 
   // ==========================================================
@@ -1180,8 +1153,6 @@ export default function MasterData({
   const handleRefresh =
     async () => {
       setError('');
-
-      await fetchStats();
 
       await fetchData(
         pagination.page
@@ -1242,68 +1213,6 @@ export default function MasterData({
     };
 
   // ==========================================================
-  // STATS CARDS
-  // ==========================================================
-
-  const statsCards =
-    [
-      {
-        label:
-          'FUND GROUPS',
-        value:
-          stats.fundGroups,
-        sub:
-          'Total Fund Groups',
-        icon:
-          Layers,
-      },
-
-      {
-        label:
-          'FUNDS',
-        value:
-          stats.funds,
-        sub:
-          'Total Funds',
-        icon:
-          BookOpen,
-      },
-
-      {
-        label:
-          'RESPONSIBILITY CENTERS',
-        value:
-          stats.centers,
-        sub:
-          'Total Units / Offices',
-        icon:
-          Building2,
-      },
-
-      {
-        label:
-          'OBJECT CODES',
-        value:
-          stats.objects,
-        sub:
-          'Total Object Codes',
-        icon:
-          ListOrdered,
-      },
-
-      {
-        label:
-          'USERS',
-        value:
-          stats.users,
-        sub:
-          'Total Users',
-        icon:
-          Users,
-              },
-    ];
-
-  // ==========================================================
   // RENDER
   // ==========================================================
 
@@ -1314,7 +1223,7 @@ export default function MasterData({
       activePath={activePath}
       onNavigate={onNavigate}
     >
-      <div className="space-y-6 pb-8">
+      <div className="space-y-5 pb-8">
 
         {/* ====================================================
             ERROR
@@ -1353,60 +1262,11 @@ export default function MasterData({
         )}
 
         {/* ====================================================
-            STATS
-        ==================================================== */}
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-
-          {statsCards.map(
-            (card) => {
-              const Icon =
-                card.icon;
-
-              return (
-                <div
-                  key={
-                    card.label
-                  }
-                  className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex items-center justify-between"
-                >
-
-                  <div>
-                    <span className="text-[10px] font-bold text-gray-400 tracking-wider block uppercase">
-                      {
-                        card.label
-                      }
-                    </span>
-
-                    <span className="text-2xl font-extrabold text-gray-900 my-0.5 block">
-                      {formatNumber(
-                        card.value
-                      )}
-                    </span>
-
-                    <span className="text-[11px] text-gray-500">
-                      {
-                        card.sub
-                      }
-                    </span>
-                  </div>
-
-                  <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center text-white shrink-0">
-                    <Icon className="w-5 h-5" />
-                  </div>
-
-                </div>
-              );
-            }
-          )}
-
-        </div>
-
-        {/* ====================================================
             TABS
         ==================================================== */}
 
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-1.5 flex flex-wrap gap-1 overflow-x-auto">
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-2">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-1.5">
 
           {tabs.map(
             (tab) => {
@@ -1428,7 +1288,7 @@ export default function MasterData({
                       tab.id
                     )
                   }
-                  className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold transition whitespace-nowrap ${
+                  className={`w-full min-h-9 flex items-center justify-center gap-1.5 px-2.5 py-2 rounded-lg text-[11px] font-semibold transition ${
                     isActive
                       ? 'bg-blue-50 text-blue-600 border border-blue-100'
                       : 'text-gray-600 hover:bg-gray-50'
@@ -1436,7 +1296,7 @@ export default function MasterData({
                 >
 
                   <Icon
-                    className={`w-4 h-4 ${
+                    className={`w-3.5 h-3.5 shrink-0 ${
                       isActive
                         ? 'text-blue-600'
                         : 'text-gray-400'
@@ -1454,23 +1314,21 @@ export default function MasterData({
             }
           )}
 
+          </div>
         </div>
 
         {/* ====================================================
             SECTION HEADER
         ==================================================== */}
 
-        <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
 
           <div>
 
             <div className="flex items-center gap-2">
 
               <h2 className="text-base font-bold text-gray-900">
-                {activeTab ===
-                'others'
-                  ? getOthersLabel()
-                  : activeTabConfig.label}
+{activeTabConfig.label}
               </h2>
 
               {isReadOnly && (
@@ -1483,52 +1341,12 @@ export default function MasterData({
             </div>
 
             <p className="text-xs text-gray-500 mt-0.5">
-              {activeTab ===
-              'others'
-                ? `Manage ${getOthersLabel()} reference records used throughout the system.`
-                : activeTabConfig.description}
+{activeTabConfig.description}
             </p>
 
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
-
-            {/* Others */}
-
-            {activeTab ===
-              'others' && (
-              <select
-                value={
-                  othersType
-                }
-                onChange={(event) =>
-                  setOthersType(
-                    event.target
-                      .value
-                  )
-                }
-                className="bg-gray-50 border border-gray-200 text-xs text-gray-700 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              >
-
-                {OTHER_TYPES.map(
-                  (type) => (
-                    <option
-                      key={
-                        type.value
-                      }
-                      value={
-                        type.value
-                      }
-                    >
-                      {
-                        type.label
-                      }
-                    </option>
-                  )
-                )}
-
-              </select>
-            )}
 
             {/* Search */}
 
@@ -1538,12 +1356,7 @@ export default function MasterData({
 
               <input
                 type="text"
-                placeholder={
-                  activeTab ===
-                  'others'
-                    ? `Search ${getOthersLabel()}...`
-                    : `Search ${activeTabConfig.label}...`
-                }
+                placeholder={`Search ${activeTabConfig.label}...`}
                 value={
                   searchTerm
                 }
@@ -1646,6 +1459,24 @@ export default function MasterData({
                     Name
                   </th>
 
+                  {activeTab === 'fundClusters' && (
+                    <th className="px-4 py-3.5">
+                      Funding Source
+                    </th>
+                  )}
+
+                  {activeTab === 'departments' && (
+                    <th className="px-4 py-3.5">
+                      Campus
+                    </th>
+                  )}
+
+                  {activeTab === 'responsibilityCenters' && (
+                    <th className="px-4 py-3.5">
+                      Category
+                    </th>
+                  )}
+
                   <th className="px-4 py-3.5">
                     Description
                   </th>
@@ -1666,7 +1497,7 @@ export default function MasterData({
                 {loading ? (
                   <tr>
                     <td
-                      colSpan="6"
+                      colSpan={(activeTab === 'departments' || activeTab === 'fundClusters' || activeTab === 'responsibilityCenters') ? 7 : 6}
                       className="px-4 py-10 text-center text-gray-400"
                     >
                       <div className="flex flex-col items-center gap-2">
@@ -1684,7 +1515,7 @@ export default function MasterData({
                   0 ? (
                   <tr>
                     <td
-                      colSpan="6"
+                      colSpan={(activeTab === 'departments' || activeTab === 'fundClusters' || activeTab === 'responsibilityCenters') ? 7 : 6}
                       className="px-4 py-10 text-center"
                     >
 
@@ -1755,6 +1586,26 @@ export default function MasterData({
                               )
                             }
                           </td>
+
+                          {activeTab === 'fundClusters' && (
+                            <td className="px-4 py-3.5 text-gray-700 font-medium">
+                              {item.fund_source_code
+                                ? `${item.fund_source_code}${item.fund_source_name ? ` — ${item.fund_source_name}` : ''}`
+                                : '-'}
+                            </td>
+                          )}
+
+                          {activeTab === 'departments' && (
+                            <td className="px-4 py-3.5 text-gray-700 font-medium">
+                              {item.campus_name || item.campus_code || '-'}
+                            </td>
+                          )}
+
+                          {activeTab === 'responsibilityCenters' && (
+                            <td className="px-4 py-3.5 text-gray-700 font-medium">
+                              {item.category || '-'}
+                            </td>
+                          )}
 
                           <td className="px-4 py-3.5 text-gray-500 max-w-[280px]">
                             <span
@@ -2002,7 +1853,7 @@ export default function MasterData({
         {modalOpen && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
 
-            <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl overflow-hidden">
+            <div className="bg-white rounded-2xl max-w-lg w-full shadow-2xl overflow-hidden">
 
               <div className="px-6 py-5 border-b border-gray-100 flex justify-between items-center">
 
@@ -2071,7 +1922,7 @@ export default function MasterData({
                 <div>
 
                   <label className="block text-xs font-semibold text-gray-700 mb-1">
-                    {activeTab === 'others' && othersType === 'uacs'
+                    {isOtherReference && activeReferenceType === 'uacs'
                       ? 'Account Title *'
                       : 'Name *'}
                   </label>
@@ -2092,11 +1943,41 @@ export default function MasterData({
 
                 </div>
 
+                {/* DEPARTMENT CAMPUS */}
+
+                {activeTab === 'departments' && (
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-700 mb-1">
+                      Campus *
+                    </label>
+
+                    <select
+                      name="campus_id"
+                      value={formData.campus_id}
+                      onChange={handleFormChange}
+                      required
+                      className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-xs bg-white focus:outline-none focus:ring-1 focus:ring-blue-600 focus:border-blue-600"
+                    >
+                      <option value="">Select Campus</option>
+                      {campusOptions.map((campus) => (
+                        <option key={campus.id} value={campus.id}>
+                          {campus.code} — {campus.name}
+                        </option>
+                      ))}
+                    </select>
+
+                    {campusOptions.length === 0 && (
+                      <p className="text-[11px] text-amber-600 mt-1">
+                        No active campuses found. Add/activate a Campus in the Campuses tab first.
+                      </p>
+                    )}
+                  </div>
+                )}
+
                 {/* UACS-SPECIFIC FIELDS */}
 
-                {activeTab ===
-                  'others' &&
-                  othersType ===
+                {isOtherReference &&
+                  activeReferenceType ===
                     'uacs' && (
                   <>
                     <div>
@@ -2141,9 +2022,8 @@ export default function MasterData({
 
                 {/* CAMPUS-SPECIFIC FIELDS */}
 
-                {activeTab ===
-                  'others' &&
-                  othersType ===
+                {isOtherReference &&
+                  activeReferenceType ===
                     'campuses' && (
                   <div>
                     <label className="block text-xs font-semibold text-gray-700 mb-1">
@@ -2167,79 +2047,48 @@ export default function MasterData({
 
                 {/* FUND SOURCE */}
 
-                {activeTab ===
-                  'funds' && (
+                {activeTab === 'fundClusters' && (
                   <div>
-
                     <label className="block text-xs font-semibold text-gray-700 mb-1">
-                      Fund Source ID
+                      Funding Source *
                     </label>
 
-                    <input
-                      type="number"
+                    <select
                       name="fund_source_id"
-                      value={
-                        formData.fund_source_id
-                      }
-                      onChange={
-                        handleFormChange
-                      }
-                      placeholder="Optional"
-                      className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-blue-600 focus:border-blue-600"
-                    />
+                      value={formData.fund_source_id}
+                      onChange={handleFormChange}
+                      required
+                      className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-xs bg-white focus:outline-none focus:ring-1 focus:ring-blue-600 focus:border-blue-600"
+                    >
+                      <option value="">Select Funding Source</option>
+                      {fundSourceOptions.map((source) => (
+                        <option key={source.id} value={source.id}>
+                          {source.code} — {source.name}
+                        </option>
+                      ))}
+                    </select>
 
+                    {fundSourceOptions.length === 0 && (
+                      <p className="text-[11px] text-amber-600 mt-1">
+                        No active Funding Sources found. Add/activate one in Funding Sources first.
+                      </p>
+                    )}
                   </div>
                 )}
 
-                {/* FUND GROUP */}
-
-                {activeTab ===
-                  'funds' && (
+                {activeTab === 'responsibilityCenters' && (
                   <div>
-
-                    <label className="block text-xs font-semibold text-gray-700 mb-1">
-                      Fund Group ID
-                    </label>
-
-                    <input
-                      type="number"
-                      name="fund_group_id"
-                      value={
-                        formData.fund_group_id
-                      }
-                      onChange={
-                        handleFormChange
-                      }
-                      placeholder="Optional"
-                      className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-blue-600 focus:border-blue-600"
-                    />
-
-                  </div>
-                )}
-
-                {/* CATEGORY */}
-
-                {activeTab ===
-                  'centers' && (
-                  <div>
-
                     <label className="block text-xs font-semibold text-gray-700 mb-1">
                       Category
                     </label>
-
                     <input
                       type="text"
                       name="category"
-                      value={
-                        formData.category
-                      }
-                      onChange={
-                        handleFormChange
-                      }
-                      placeholder="e.g. Office, Campus, Unit"
+                      value={formData.category}
+                      onChange={handleFormChange}
+                      placeholder="e.g. Responsibility Center"
                       className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-blue-600 focus:border-blue-600"
                     />
-
                   </div>
                 )}
 

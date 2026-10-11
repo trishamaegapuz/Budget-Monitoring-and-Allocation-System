@@ -55,12 +55,12 @@ export default function UserManagement({ user: currentUser, onLogout, onNavigate
   const [deleteTargetId, setDeleteTargetId] = useState(null);
 
   const [addForm, setAddForm] = useState({
-    full_name: '', username: '', email: '', password: '', role: 'Budget Staff', status: 'pending'
+    full_name: '', username: '', email: '', password: '', role: 'Budget', status: 'pending'
   });
   const [editForm, setEditForm] = useState({});
 
-  // Determine if current user is Administrator
-  const isAdmin = currentUser?.role === 'Administrator';
+  // Determine if current user is Administration
+  const isAdmin = currentUser?.role === 'Administration';
 
   // --- Data Fetching ---
   const fetchStats = async () => {
@@ -129,11 +129,11 @@ export default function UserManagement({ user: currentUser, onLogout, onNavigate
     setFilters({ search: '', role: '', status: '', page: 1, limit: 8 });
   };
 
-  // Only Admin can add
+  // Only Administration can add
   const handleAddSubmit = async (e) => {
     e.preventDefault();
     if (!isAdmin) {
-      showToast('Only Administrators can add users.', 'error');
+      showToast('Only Administration users can add users.', 'error');
       return;
     }
     try {
@@ -159,11 +159,11 @@ export default function UserManagement({ user: currentUser, onLogout, onNavigate
     }
   };
 
-  // Only Admin can edit
+  // Only Administration can edit
   const handleEditSubmit = async (e) => {
     e.preventDefault();
     if (!isAdmin) {
-      showToast('Only Administrators can edit users.', 'error');
+      showToast('Only Administration users can edit users.', 'error');
       return;
     }
     try {
@@ -187,10 +187,10 @@ export default function UserManagement({ user: currentUser, onLogout, onNavigate
     }
   };
 
-  // Only Admin can delete
+  // Only Administration can delete
   const handleDeleteClick = (id) => {
     if (!isAdmin) {
-      showToast('Only Administrators can delete users.', 'error');
+      showToast('Only Administration users can delete users.', 'error');
       return;
     }
     setDeleteTargetId(id);
@@ -234,10 +234,10 @@ export default function UserManagement({ user: currentUser, onLogout, onNavigate
   // --- UI Helpers ---
   const getRoleBadge = (role) => {
     const styles = {
-      Administrator: 'bg-blue-100 text-blue-600',
-      'Budget Officer': 'bg-blue-100 text-blue-600',
-      'Budget Staff': 'bg-blue-100 text-blue-600',
-      'Budget Viewer': 'bg-teal-100 text-teal-700',
+      Administration: 'bg-blue-100 text-blue-600',
+      Budget: 'bg-blue-100 text-blue-600',
+      Procurement: 'bg-amber-100 text-amber-700',
+      Accountant: 'bg-emerald-100 text-emerald-700',
     };
     return (
       <span className={`px-2.5 py-1 rounded text-[11px] font-semibold ${styles[role] || 'bg-gray-100 text-gray-700'}`}>
@@ -340,10 +340,10 @@ export default function UserManagement({ user: currentUser, onLogout, onNavigate
               onChange={(e) => setFilters({ ...filters, role: e.target.value, page: 1 })}
             >
               <option value="">All Roles</option>
-              <option value="Administrator">Administrator</option>
-              <option value="Budget Officer">Budget Officer</option>
-              <option value="Budget Staff">Budget Staff</option>
-              <option value="Budget Viewer">Budget Viewer</option>
+              <option value="Administration">Administration</option>
+              <option value="Budget">Budget</option>
+              <option value="Procurement">Procurement</option>
+              <option value="Accountant">Accountant</option>
             </select>
           </div>
 
@@ -368,7 +368,7 @@ export default function UserManagement({ user: currentUser, onLogout, onNavigate
               <span>Reset Filters</span>
             </button>
 
-            {/* Only Admin can see Add button */}
+            {/* Only Administration can see Add button */}
             {isAdmin && (
               <button
                 onClick={() => setShowAddModal(true)}
@@ -530,7 +530,7 @@ export default function UserManagement({ user: currentUser, onLogout, onNavigate
 
       {/* ====== MODALS ====== */}
 
-      {/* ADD USER MODAL â€“ only Admin sees it, but keep as is */}
+      {/* ADD USER MODAL â€“ only Administration sees it, but keep as is */}
       {showAddModal && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
@@ -558,10 +558,10 @@ export default function UserManagement({ user: currentUser, onLogout, onNavigate
               <div>
                 <label className="block font-medium text-gray-700 mb-1">Role</label>
                 <select className="w-full px-3 py-2 border rounded-lg" value={addForm.role} onChange={(e) => setAddForm({ ...addForm, role: e.target.value })}>
-                  <option value="Administrator">Administrator</option>
-                  <option value="Budget Officer">Budget Officer</option>
-                  <option value="Budget Staff">Budget Staff</option>
-                  <option value="Budget Viewer">Budget Viewer</option>
+                  <option value="Administration">Administration</option>
+                  <option value="Budget">Budget</option>
+                  <option value="Procurement">Procurement</option>
+                  <option value="Accountant">Accountant</option>
                 </select>
               </div>
               <div>
@@ -601,7 +601,7 @@ export default function UserManagement({ user: currentUser, onLogout, onNavigate
         </div>
       )}
 
-      {/* EDIT MODAL â€“ only Admin sees it, but keep as is */}
+      {/* EDIT MODAL â€“ only Administration sees it, but keep as is */}
       {showEditModal && selectedUser && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
@@ -620,11 +620,11 @@ export default function UserManagement({ user: currentUser, onLogout, onNavigate
               </div>
               <div>
                 <label className="block font-medium text-gray-700 mb-1">Role</label>
-                <select className="w-full px-3 py-2 border rounded-lg" value={editForm.role || 'Budget Staff'} onChange={(e) => setEditForm({ ...editForm, role: e.target.value })}>
-                  <option value="Administrator">Administrator</option>
-                  <option value="Budget Officer">Budget Officer</option>
-                  <option value="Budget Staff">Budget Staff</option>
-                  <option value="Budget Viewer">Budget Viewer</option>
+                <select className="w-full px-3 py-2 border rounded-lg" value={editForm.role || 'Budget'} onChange={(e) => setEditForm({ ...editForm, role: e.target.value })}>
+                  <option value="Administration">Administration</option>
+                  <option value="Budget">Budget</option>
+                  <option value="Procurement">Procurement</option>
+                  <option value="Accountant">Accountant</option>
                 </select>
               </div>
               <div>
@@ -644,7 +644,7 @@ export default function UserManagement({ user: currentUser, onLogout, onNavigate
         </div>
       )}
 
-      {/* DELETE CONFIRMATION MODAL â€“ only Admin sees it */}
+      {/* DELETE CONFIRMATION MODAL â€“ only Administration sees it */}
       {showDeleteModal && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl text-center space-y-4">

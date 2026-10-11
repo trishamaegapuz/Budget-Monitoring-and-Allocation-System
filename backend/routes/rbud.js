@@ -1,5 +1,6 @@
 const express = require("express");
 const router = express.Router();
+const { verifyToken } = require("../middleware/auth");
 
 
 /*
@@ -7,6 +8,9 @@ const router = express.Router();
 | DATABASE
 |--------------------------------------------------------------------------
 */
+
+// RBUD uses the same authenticated JWT context as the rest of BMAS.
+router.use(verifyToken);
 
 const pool = require("../db");
 
@@ -24,6 +28,53 @@ function num(value) {
 function int(value, fallback = 0) {
   const n = parseInt(value, 10);
   return Number.isFinite(n) ? n : fallback;
+}
+
+async function generateRegistryNo(client, fiscalYear) {
+  const resolvedYear = Number(fiscalYear) || new Date().getFullYear();
+  await client.query(`CREATE SEQUENCE IF NOT EXISTS bmas_rbud_registry_seq START 1`);
+
+  const maxResult = await client.query(`
+    SELECT COALESCE(MAX((regexp_match(registry_no, 'RBUD-\\d{4}-(\\d+)$'))[1]::BIGINT), 0) AS max_no
+    FROM rbud_entries
+    WHERE registry_no ~ '^RBUD-\\d{4}-\\d+$'
+  `);
+  const maxNo = Number(maxResult.rows[0]?.max_no || 0);
+  await client.query(`SELECT setval('bmas_rbud_registry_seq', $1, false)`, [maxNo + 1]);
+
+  const nextResult = await client.query(`SELECT nextval('bmas_rbud_registry_seq') AS registry_no`);
+  return `RBUD-${resolvedYear}-${String(nextResult.rows[0].registry_no).padStart(4, "0")}`;
+}
+
+async function generateBursSerialNo(client, entryDate, fiscalYear) {
+  const date = entryDate ? new Date(entryDate) : new Date();
+  const resolvedYear = Number(fiscalYear) || date.getFullYear();
+  const month = String((date.getMonth() + 1)).padStart(2, "0");
+
+  // The workbook confirms the institutional BURS shape as XX-XXXXXXX-YYYY-MM-NNNN,
+  // but it contains both 01-5206441 and 02-5206441 prefixes. The prefix must therefore
+  // remain configurable rather than being inferred from incomplete data.
+  const prefix = String(process.env.BURS_SERIAL_PREFIX || "02-5206441").trim();
+  if (!/^\d{2}-\d{7}$/.test(prefix)) {
+    throw new Error("BURS_SERIAL_PREFIX must use the format XX-XXXXXXX.");
+  }
+
+  await client.query(`CREATE SEQUENCE IF NOT EXISTS bmas_burs_serial_seq START 1`);
+
+  // Keep the sequence ahead of any existing numeric BURS suffixes to avoid collisions
+  // when this feature is introduced into an existing database.
+  const maxResult = await client.query(`
+    SELECT COALESCE(MAX((regexp_match(burs_serial_no, '-(\\d{4})$'))[1]::INTEGER), 0) AS max_no
+    FROM rbud_entries
+    WHERE burs_serial_no ~ '^\\d{2}-\\d{7}-\\d{4}-\\d{2}-\\d{4}$'
+  `);
+  const maxNo = Number(maxResult.rows[0]?.max_no || 0);
+  await client.query(`SELECT setval('bmas_burs_serial_seq', $1, false)`, [maxNo + 1]);
+
+  const nextResult = await client.query(`SELECT nextval('bmas_burs_serial_seq') AS serial_no`);
+  const serialNo = String(nextResult.rows[0].serial_no).padStart(4, "0");
+
+  return `${prefix}-${resolvedYear}-${month}-${serialNo}`;
 }
 
 function year(value) {
@@ -125,9 +176,6 @@ END
 
 const STATUS_CASE = `
 CASE
-  WHEN NULLIF(TRIM(COALESCE(r.po_status, '')), '') IS NOT NULL
-    THEN TRIM(r.po_status)
-
   WHEN COALESCE(r.disbursement_amount, 0) > 0
     THEN 'Disbursed'
 
@@ -149,6 +197,7 @@ router.get("/references", async (req, res) => {
     const [
       fundSources,
       fundClusters,
+      fundCodes,
       campuses,
       responsibilityCenters,
       mfo,
@@ -176,6 +225,30 @@ router.get("/references", async (req, res) => {
         WHERE fc.is_active = TRUE
         ORDER BY fc.code, fc.name
       `),
+
+      // Fund Codes are a separate master-data level linked to Fund Cluster.
+      // Keep this query optional so the RBUD module remains bootable until
+      // the new fund_codes migration has been applied.
+      pool.query(`
+        SELECT
+          fcd.id,
+          fcd.fund_cluster_id,
+          fcd.code,
+          fcd.name,
+          fcd.description,
+          fcd.is_active,
+          fc.code AS fund_cluster_code,
+          fc.name AS fund_cluster_name
+        FROM fund_codes fcd
+        INNER JOIN fund_clusters fc
+          ON fc.id = fcd.fund_cluster_id
+        WHERE fcd.is_active = TRUE
+          AND fc.is_active = TRUE
+        ORDER BY fc.code, fc.name, fcd.code, fcd.name
+      `).catch((error) => {
+        if (error?.code === "42P01") return { rows: [] };
+        throw error;
+      }),
 
       pool.query(`
         SELECT *
@@ -237,6 +310,9 @@ router.get("/references", async (req, res) => {
     const result = {
       fundSources: fundSources.rows,
       fund_sources: fundSources.rows,
+
+      fundCodes: fundCodes.rows,
+      fund_codes: fundCodes.rows,
 
       fundClusters: fundClusters.rows,
       fund_clusters: fundClusters.rows,
@@ -437,17 +513,23 @@ router.get("/", async (req, res) => {
         r.co_utilization,
         r.disbursement_amount,
         r.running_balance,
+        GREATEST(
+          COALESCE(r.utilization_amount, 0) - COALESCE(r.disbursement_amount, 0),
+          0
+        ) AS calculated_unpaid_utilization,
         r.unpaid_utilization,
-        r.po_no,
-        r.po_status,
         r.status AS record_status,
         r.burs_serial_no,
-        r.dv_payroll_no,
         r.ref_no,
         r.remarks,
+        r.created_by_name,
+        r.created_by_role,
+        r.updated_by_name,
+        r.updated_by_role,
         r.fund_cluster_id,
         r.fund_source_id,
         r.campus_id,
+        r.fund_code,
         r.responsibility_center_id,
         r.pap_id,
         r.uacs_code_id,
@@ -467,13 +549,49 @@ router.get("/", async (req, res) => {
         pap.name AS pap_name,
         mfo.code AS mfo_code,
         mfo.name AS mfo_name,
-        oe.code AS object_expenditure_code,
-        oe.name AS object_expenditure_name,
+        ac.code AS allotment_class_code,
+        ac.name AS allotment_class_name,
         ws.code AS wfp_source_master_code,
+        ws.code AS wfp_source_code,
+        ws.name AS wfp_source_name,
         ws.name AS wfp_source,
         uacs.code AS uacs_code,
+        uacs.old_code AS uacs_old_code,
+        uacs.account_title AS uacs_account_title,
         uacs.account_title,
         (${FUND_GROUP_CASE}) AS fund_group,
+        (
+          COALESCE((
+            SELECT SUM(bi.approved_budget)
+            FROM budget_items bi
+            LEFT JOIN budget_proposals bp
+              ON bp.proposal_id = bi.budget_proposal_id
+            WHERE bi.fiscal_year = r.fiscal_year
+              AND (bi.budget_proposal_id IS NULL OR bp.status = 'Approved')
+              AND bi.fund_cluster_id IS NOT DISTINCT FROM r.fund_cluster_id
+              AND bi.fund_source_id IS NOT DISTINCT FROM r.fund_source_id
+              AND bi.campus_id IS NOT DISTINCT FROM r.campus_id
+              AND bi.responsibility_center_id IS NOT DISTINCT FROM r.responsibility_center_id
+              AND bi.mfo_id IS NOT DISTINCT FROM r.mfo_id
+              AND bi.pap_id IS NOT DISTINCT FROM r.pap_id
+              AND bi.uacs_code_id IS NOT DISTINCT FROM r.uacs_code_id
+              AND bi.allotment_class_id IS NOT DISTINCT FROM r.allotment_class_id
+          ), 0)
+          -
+          COALESCE((
+            SELECT SUM(r2.utilization_amount)
+            FROM rbud_entries r2
+            WHERE r2.fiscal_year = r.fiscal_year
+              AND r2.fund_cluster_id IS NOT DISTINCT FROM r.fund_cluster_id
+              AND r2.fund_source_id IS NOT DISTINCT FROM r.fund_source_id
+              AND r2.campus_id IS NOT DISTINCT FROM r.campus_id
+              AND r2.responsibility_center_id IS NOT DISTINCT FROM r.responsibility_center_id
+              AND r2.mfo_id IS NOT DISTINCT FROM r.mfo_id
+              AND r2.pap_id IS NOT DISTINCT FROM r.pap_id
+              AND r2.uacs_code_id IS NOT DISTINCT FROM r.uacs_code_id
+              AND r2.allotment_class_id IS NOT DISTINCT FROM r.allotment_class_id
+          ), 0)
+        ) AS calculated_running_balance,
         CASE
           WHEN COALESCE(r.disbursement_amount,0) > 0 THEN 'Disbursed'
           WHEN COALESCE(r.utilization_amount,0) > 0 THEN 'Utilized'
@@ -486,8 +604,8 @@ router.get("/", async (req, res) => {
       LEFT JOIN responsibility_centers rc ON rc.id = r.responsibility_center_id
       LEFT JOIN pap ON pap.id = r.pap_id
       LEFT JOIN mfo ON mfo.id = r.mfo_id
-      LEFT JOIN object_expenditures oe ON oe.id = r.object_expenditure_id
       LEFT JOIN uacs_codes uacs ON uacs.id = r.uacs_code_id
+      LEFT JOIN allotment_classes ac ON ac.id = r.allotment_class_id
       LEFT JOIN wfp_sources ws ON ws.id = r.wfp_source_id
       ${where}
       ORDER BY r.entry_date DESC NULLS LAST, r.id DESC
@@ -519,10 +637,10 @@ router.get("/", async (req, res) => {
       status: row.derived_status,
       utilization_amount: num(row.utilization_amount),
       disbursement_amount: num(row.disbursement_amount),
-      unpaid_utilization: num(row.unpaid_utilization),
-      running_balance: num(row.running_balance),
+      unpaid_utilization: num(row.calculated_unpaid_utilization),
+      running_balance: num(row.calculated_running_balance),
       approved_budget: 0,
-      remaining_balance: Math.max(0, num(row.running_balance)),
+      remaining_balance: num(row.calculated_running_balance),
     }));
 
     return res.json({
@@ -677,7 +795,7 @@ router.get("/overview", async (req, res) => {
         ) AS disbursed,
 
         COALESCE(
-          SUM(r.unpaid_utilization),
+          SUM(GREATEST(COALESCE(r.utilization_amount,0) - COALESCE(r.disbursement_amount,0),0)),
           0
         ) AS unpaid
 
@@ -1046,7 +1164,7 @@ router.get("/departments", async (req, res) => {
           COUNT(*) AS records,
           SUM(COALESCE(r.utilization_amount, 0)) AS utilized,
           SUM(COALESCE(r.disbursement_amount, 0)) AS disbursed,
-          SUM(COALESCE(r.unpaid_utilization, 0)) AS unpaid_utilization
+          SUM(GREATEST(COALESCE(r.utilization_amount,0) - COALESCE(r.disbursement_amount,0),0)) AS unpaid_utilization
         FROM rbud_entries r
         LEFT JOIN fund_clusters fc
           ON fc.id = r.fund_cluster_id
@@ -1461,7 +1579,6 @@ router.get(
               COALESCE(
                 pap.code,
                 mfo.code,
-                oe.code,
                 uacs.code,
                 'N/A'
               ) AS code,
@@ -1469,7 +1586,6 @@ router.get(
               COALESCE(
                 pap.name,
                 mfo.name,
-                oe.name,
                 uacs.account_title,
                 bi.notes,
                 'Unclassified'
@@ -1493,10 +1609,6 @@ router.get(
             LEFT JOIN mfo
               ON mfo.id = bi.mfo_id
 
-            LEFT JOIN object_expenditures oe
-              ON oe.id =
-                 bi.object_expenditure_id
-
             LEFT JOIN uacs_codes uacs
               ON uacs.id = bi.uacs_code_id
 
@@ -1519,7 +1631,6 @@ router.get(
               COALESCE(
                 pap.code,
                 mfo.code,
-                oe.code,
                 uacs.code,
                 'N/A'
               ) AS code,
@@ -1545,10 +1656,6 @@ router.get(
 
             LEFT JOIN mfo
               ON mfo.id = r.mfo_id
-
-            LEFT JOIN object_expenditures oe
-              ON oe.id =
-                 r.object_expenditure_id
 
             LEFT JOIN uacs_codes uacs
               ON uacs.id = r.uacs_code_id
@@ -1684,6 +1791,9 @@ router.get(
           LEFT JOIN responsibility_centers rc
             ON rc.id =
                r.responsibility_center_id
+
+          LEFT JOIN campuses c
+            ON c.id = r.campus_id
 
           WHERE r.fiscal_year = $1
 
@@ -1885,8 +1995,6 @@ router.get("/budget-allocation", async (req, res) => {
           OR COALESCE(pap.name, '') ILIKE $${i}
           OR COALESCE(mfo.code, '') ILIKE $${i}
           OR COALESCE(mfo.name, '') ILIKE $${i}
-          OR COALESCE(oe.code, '') ILIKE $${i}
-          OR COALESCE(oe.name, '') ILIKE $${i}
         )
       `;
       params.push(`%${search}%`);
@@ -1927,9 +2035,6 @@ router.get("/budget-allocation", async (req, res) => {
         mfo.code AS mfo_code,
         mfo.name AS mfo_name,
 
-        oe.code AS object_expenditure_code,
-        oe.name AS object_expenditure_name,
-
         (${FUND_GROUP_CASE}) AS fund_group,
 
         COALESCE((
@@ -1943,7 +2048,6 @@ router.get("/budget-allocation", async (req, res) => {
             AND r.mfo_id IS NOT DISTINCT FROM bi.mfo_id
             AND r.pap_id IS NOT DISTINCT FROM bi.pap_id
             AND r.uacs_code_id IS NOT DISTINCT FROM bi.uacs_code_id
-            AND r.object_expenditure_id IS NOT DISTINCT FROM bi.object_expenditure_id
             AND r.allotment_class_id IS NOT DISTINCT FROM bi.allotment_class_id
         ), 0) AS utilized_amount,
 
@@ -1958,12 +2062,11 @@ router.get("/budget-allocation", async (req, res) => {
             AND r.mfo_id IS NOT DISTINCT FROM bi.mfo_id
             AND r.pap_id IS NOT DISTINCT FROM bi.pap_id
             AND r.uacs_code_id IS NOT DISTINCT FROM bi.uacs_code_id
-            AND r.object_expenditure_id IS NOT DISTINCT FROM bi.object_expenditure_id
             AND r.allotment_class_id IS NOT DISTINCT FROM bi.allotment_class_id
         ), 0) AS disbursement_amount,
 
         COALESCE((
-          SELECT SUM(r.unpaid_utilization)
+          SELECT SUM(GREATEST(COALESCE(r.utilization_amount,0) - COALESCE(r.disbursement_amount,0),0))
           FROM rbud_entries r
           WHERE r.fiscal_year = bi.fiscal_year
             AND r.fund_cluster_id IS NOT DISTINCT FROM bi.fund_cluster_id
@@ -1973,7 +2076,6 @@ router.get("/budget-allocation", async (req, res) => {
             AND r.mfo_id IS NOT DISTINCT FROM bi.mfo_id
             AND r.pap_id IS NOT DISTINCT FROM bi.pap_id
             AND r.uacs_code_id IS NOT DISTINCT FROM bi.uacs_code_id
-            AND r.object_expenditure_id IS NOT DISTINCT FROM bi.object_expenditure_id
             AND r.allotment_class_id IS NOT DISTINCT FROM bi.allotment_class_id
         ), 0) AS unpaid_utilization
 
@@ -1996,9 +2098,6 @@ router.get("/budget-allocation", async (req, res) => {
 
       LEFT JOIN mfo
         ON mfo.id = bi.mfo_id
-
-      LEFT JOIN object_expenditures oe
-        ON oe.id = bi.object_expenditure_id
 
       ${where}
 
@@ -2119,7 +2218,7 @@ router.get("/utilization", async (req, res) => {
         COUNT(*) AS records,
         COALESCE(SUM(r.utilization_amount), 0) AS utilized,
         COALESCE(SUM(r.disbursement_amount), 0) AS disbursed,
-        COALESCE(SUM(r.unpaid_utilization), 0) AS unpaid,
+        COALESCE(SUM(GREATEST(COALESCE(r.utilization_amount,0) - COALESCE(r.disbursement_amount,0),0)), 0) AS unpaid,
         COALESCE(SUM(r.ps_utilization), 0) AS ps_utilized,
         COALESCE(SUM(r.mooe_utilization), 0) AS mooe_utilized,
         COALESCE(SUM(r.co_utilization), 0) AS co_utilized
@@ -2395,7 +2494,7 @@ router.get("/financial-reports", async (req, res) => {
         COUNT(*) AS records,
         COALESCE(SUM(r.utilization_amount), 0) AS obligations,
         COALESCE(SUM(r.disbursement_amount), 0) AS disbursements,
-        COALESCE(SUM(r.unpaid_utilization), 0) AS unpaid
+        COALESCE(SUM(GREATEST(COALESCE(r.utilization_amount,0) - COALESCE(r.disbursement_amount,0),0)), 0) AS unpaid
       FROM rbud_entries r
       LEFT JOIN fund_clusters fc ON fc.id = r.fund_cluster_id
       LEFT JOIN fund_sources fs ON fs.id = r.fund_source_id
@@ -2534,11 +2633,33 @@ router.get("/:id", async (req, res) => {
         mfo.code AS mfo_code,
         mfo.name AS mfo_name,
 
-        oe.code AS object_expenditure_code,
-        oe.name AS object_expenditure_name,
-
         uacs.code AS uacs_code,
-        uacs.account_title
+        uacs.old_code AS uacs_old_code,
+        uacs.account_title AS uacs_account_title,
+        uacs.account_title,
+
+        ac.code AS allotment_class_code,
+        ac.name AS allotment_class_name,
+
+        old_uacs.code AS old_uacs_code,
+        old_uacs.account_title AS old_uacs_account_title,
+
+        ws.code AS wfp_source_master_code,
+        ws.name AS wfp_source_name,
+
+        (${FUND_GROUP_CASE}) AS fund_group,
+
+        CASE
+          WHEN COALESCE(r.disbursement_amount, 0) > 0 THEN 'Disbursed'
+          WHEN COALESCE(r.utilization_amount, 0) > 0 THEN 'Utilized'
+          ELSE COALESCE(NULLIF(TRIM(r.status), ''), 'Approved')
+        END AS derived_status,
+
+        COALESCE(
+          NULLIF(TRIM(rc.name), ''),
+          NULLIF(TRIM(c.name), ''),
+          ''
+        ) AS department_name
 
       FROM rbud_entries r
 
@@ -2561,12 +2682,14 @@ router.get("/:id", async (req, res) => {
       LEFT JOIN mfo
         ON mfo.id = r.mfo_id
 
-      LEFT JOIN object_expenditures oe
-        ON oe.id =
-           r.object_expenditure_id
-
       LEFT JOIN uacs_codes uacs
         ON uacs.id = r.uacs_code_id
+
+      LEFT JOIN allotment_classes ac
+        ON ac.id = r.allotment_class_id
+
+      LEFT JOIN uacs_codes old_uacs
+        ON old_uacs.id = r.old_uacs_code_id
 
       LEFT JOIN wfp_sources ws
         ON ws.id = r.wfp_source_id
@@ -2585,7 +2708,61 @@ router.get("/:id", async (req, res) => {
       });
     }
 
-    res.json(result.rows[0]);
+    const row = result.rows[0];
+
+    res.json({
+      ...row,
+
+      // Keep the same derived values used by the RBUD transaction list.
+      status: row.derived_status || row.status || "Approved",
+      fund_group: row.fund_group || "Other Funds",
+      department:
+        row.department_name ||
+        row.responsibility_center_name ||
+        row.campus_name ||
+        "—",
+
+      // Normalize numeric values so the View modal never receives
+      // PostgreSQL numeric strings/nulls unexpectedly.
+      utilization_amount: num(row.utilization_amount),
+      ps_utilization: num(row.ps_utilization),
+      mooe_utilization: num(row.mooe_utilization),
+      co_utilization: num(row.co_utilization),
+      disbursement_amount: num(row.disbursement_amount),
+      unpaid_utilization: num(row.unpaid_utilization),
+      running_balance: num(row.running_balance),
+
+      fiscal_year:
+        row.fiscal_year ||
+        (row.entry_date ? new Date(row.entry_date).getFullYear() : null),
+
+      month:
+        row.month ||
+        (row.entry_date ? new Date(row.entry_date).getMonth() + 1 : null),
+
+      quarter:
+        row.quarter ||
+        (row.entry_date
+          ? Math.ceil((new Date(row.entry_date).getMonth() + 1) / 3)
+          : null),
+
+      old_uacs_code:
+        row.old_uacs_code ||
+        row.old_uacs_account_title ||
+        row.uacs_old_code ||
+        row.old_uacs_code_id ||
+        null,
+
+      account_title:
+        row.account_title ||
+        row.uacs_account_title ||
+        null,
+
+      wfp_source_code:
+        row.wfp_source_code ||
+        row.wfp_source_master_code ||
+        null,
+    });
   } catch (error) {
     console.error(
       "RBUD get record error:",
@@ -2610,6 +2787,7 @@ const RBUD_FIELDS = [
   "fund_cluster_id",
   "fund_source_id",
   "campus_id",
+  "fund_code",
   "burs_serial_no",
   "serial_no_transferred",
   "payee",
@@ -2625,7 +2803,6 @@ const RBUD_FIELDS = [
   "series",
   "series2",
   "quarter",
-  "object_expenditure_id",
   "mfo_id",
   "old_uacs_code_id",
   "account_title",
@@ -2635,13 +2812,10 @@ const RBUD_FIELDS = [
   "co_utilization",
   "wfp_source_id",
   "wfp_source_code",
-  "dv_payroll_no",
   "disbursement_amount",
   "running_balance",
   "remarks",
   "unpaid_utilization",
-  "po_no",
-  "po_status",
 ];
 
 const ID_FIELDS = [
@@ -2652,7 +2826,6 @@ const ID_FIELDS = [
   "pap_id",
   "uacs_code_id",
   "allotment_class_id",
-  "object_expenditure_id",
   "mfo_id",
   "old_uacs_code_id",
   "wfp_source_id",
@@ -2669,6 +2842,320 @@ const NUMERIC_FIELDS = [
   "running_balance",
   "unpaid_utilization",
 ];
+
+/*
+|-------------------------------------------------------------------------- 
+| RBUD ROLE-BASED FIELD PERMISSIONS
+|-------------------------------------------------------------------------- 
+| The role must come from the authenticated request (req.user / req.auth).
+| The client is never trusted to choose its own role.
+|-------------------------------------------------------------------------- 
+*/
+
+const RBUD_SYSTEM_FIELDS = new Set([
+  "registry_no",
+  "burs_serial_no",
+  "running_balance",
+  "month",
+  "series",
+  "series2",
+  "quarter",
+  "uacs_funding_source_code",
+  "wfp_source_code",
+  "old_uacs_code_id",
+  "account_title",
+  "unpaid_utilization",
+]);
+
+// Object of Expenditure is intentionally not part of the RBUD transaction workflow.
+// The legacy DB column remains for compatibility with existing analytics/data.
+const RBUD_BUDGET_EDIT_FIELDS = new Set([
+  "entry_date",
+  "fiscal_year",
+  "fund_cluster_id",
+  "fund_source_id",
+  "campus_id",
+  "fund_code",
+  "serial_no_transferred",
+  "payee",
+  "particulars",
+  "responsibility_center_id",
+  "pap_id",
+  "uacs_code_id",
+  "ref_no",
+  "allotment_class_id",
+  "mfo_id",
+  "utilization_amount",
+  "ps_utilization",
+  "mooe_utilization",
+  "co_utilization",
+  "wfp_source_id",
+  "remarks",
+]);
+
+
+
+
+/*
+|--------------------------------------------------------------------------
+| RBUD AUDIT TRAIL
+|--------------------------------------------------------------------------
+*/
+
+function normalizeRbudRoleValue(value) {
+  const raw = String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[._-]+/g, " ")
+    .replace(/\s+/g, " ");
+
+  if (["administration", "administrator", "admin", "system administrator"].includes(raw)) {
+    return "Administration";
+  }
+  if (["budget", "budget officer"].includes(raw)) {
+    return "Budget";
+  }
+  if (["accountant", "accounting"].includes(raw)) {
+    return "Accountant";
+  }
+  if (["procurement", "procurement officer"].includes(raw)) {
+    return "Procurement";
+  }
+
+  return "";
+}
+
+function getRbudAuthUser(req) {
+  const user = req.user || req.auth || req.session?.user || {};
+  return user?.user || user;
+}
+
+function auditActor(req) {
+  const user = getRbudAuthUser(req);
+  const id = user.id ?? user.user_id ?? user.userId ?? null;
+  const email = user.email ?? user.user_email ?? null;
+  const name =
+    user.name ??
+    user.full_name ??
+    (
+      [user.first_name, user.last_name]
+        .filter(Boolean)
+        .join(" ") ||
+      user.username ||
+      email ||
+      "Unknown User"
+    );
+
+  return {
+    id: id === null || id === undefined ? null : String(id),
+    name: String(name || "Unknown User"),
+    email: email ? String(email) : null,
+    role: normalizeRbudRoleValue(user.role),
+  };
+}
+
+async function writeRbudAudit(client, {
+  req,
+  entryId,
+  action,
+  registryNo = null,
+  changedFields = [],
+  oldValues = null,
+  newValues = null,
+}) {
+  const actor = auditActor(req);
+
+  await client.query(
+    `
+      INSERT INTO rbud_audit_trail (
+        rbud_entry_id,
+        registry_no,
+        action,
+        performed_by_id,
+        performed_by_name,
+        performed_by_email,
+        performed_by_role,
+        changed_fields,
+        old_values,
+        new_values
+      )
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9::jsonb,$10::jsonb)
+    `,
+    [
+      entryId ?? null,
+      registryNo ?? null,
+      action,
+      actor.id,
+      actor.name,
+      actor.email,
+      actor.role,
+      JSON.stringify(changedFields || []),
+      JSON.stringify(oldValues ?? null),
+      JSON.stringify(newValues ?? null),
+    ]
+  );
+}
+
+function auditChangedFields(oldRow, newRow) {
+  return RBUD_FIELDS.filter((field) =>
+    String(oldRow?.[field] ?? "") !== String(newRow?.[field] ?? "")
+  );
+}
+
+function rbudRole(req) {
+  const user = getRbudAuthUser(req);
+  return normalizeRbudRoleValue(user?.role);
+}
+
+function rbudEditableFields(role) {
+  if (role === "Administration") {
+    return new Set(
+      RBUD_FIELDS.filter((field) => !RBUD_SYSTEM_FIELDS.has(field))
+    );
+  }
+
+  if (role === "Budget") return RBUD_BUDGET_EDIT_FIELDS;
+
+  return new Set();
+}
+
+function requireRbudCreateRole(req, res) {
+  const role = rbudRole(req);
+
+  if (!["Administration", "Budget"].includes(role)) {
+    res.status(403).json({
+      error: "Your role is not allowed to create RBUD transactions.",
+    });
+    return null;
+  }
+
+  return role;
+}
+
+function requireRbudEditRole(req, res) {
+  const role = rbudRole(req);
+
+  if (!["Administration", "Budget"].includes(role)) {
+    res.status(403).json({
+      error: "Your role is not allowed to edit RBUD transactions.",
+    });
+    return null;
+  }
+
+  return role;
+}
+
+function requireRbudDeleteRole(req, res) {
+  const role = rbudRole(req);
+
+  if (role !== "Administration") {
+    res.status(403).json({
+      error: "Only Administration can delete RBUD transactions.",
+    });
+    return null;
+  }
+
+  return role;
+}
+
+async function recalculateRbudFinancialFields(client, entryId) {
+  const currentResult = await client.query(
+    `SELECT * FROM rbud_entries WHERE id = $1`,
+    [entryId]
+  );
+
+  if (!currentResult.rows.length) {
+    throw new Error("RBUD record not found while calculating financial fields.");
+  }
+
+  const row = currentResult.rows[0];
+
+  // Approved Budget comes from approved budget_items, not from a value typed
+  // into the RBUD transaction form. Match the same budget dimensions used by
+  // the RBUD Budget & Allocation view, excluding the retired Object of
+  // Expenditure dimension.
+  const budgetResult = await client.query(
+    `
+      SELECT COALESCE(SUM(bi.approved_budget), 0) AS approved_budget
+      FROM budget_items bi
+      LEFT JOIN budget_proposals bp
+        ON bp.proposal_id = bi.budget_proposal_id
+      WHERE bi.fiscal_year = $1
+        AND (
+          bi.budget_proposal_id IS NULL
+          OR bp.status = 'Approved'
+        )
+        AND bi.fund_cluster_id IS NOT DISTINCT FROM $2
+        AND bi.fund_source_id IS NOT DISTINCT FROM $3
+        AND bi.campus_id IS NOT DISTINCT FROM $4
+        AND bi.responsibility_center_id IS NOT DISTINCT FROM $5
+        AND bi.mfo_id IS NOT DISTINCT FROM $6
+        AND bi.pap_id IS NOT DISTINCT FROM $7
+        AND bi.uacs_code_id IS NOT DISTINCT FROM $8
+        AND bi.allotment_class_id IS NOT DISTINCT FROM $9
+    `,
+    [
+      row.fiscal_year,
+      row.fund_cluster_id,
+      row.fund_source_id,
+      row.campus_id,
+      row.responsibility_center_id,
+      row.mfo_id,
+      row.pap_id,
+      row.uacs_code_id,
+      row.allotment_class_id,
+    ]
+  );
+
+  const utilizationResult = await client.query(
+    `
+      SELECT COALESCE(SUM(r.utilization_amount), 0) AS utilized_amount
+      FROM rbud_entries r
+      WHERE r.fiscal_year = $1
+        AND r.fund_cluster_id IS NOT DISTINCT FROM $2
+        AND r.fund_source_id IS NOT DISTINCT FROM $3
+        AND r.campus_id IS NOT DISTINCT FROM $4
+        AND r.responsibility_center_id IS NOT DISTINCT FROM $5
+        AND r.mfo_id IS NOT DISTINCT FROM $6
+        AND r.pap_id IS NOT DISTINCT FROM $7
+        AND r.uacs_code_id IS NOT DISTINCT FROM $8
+        AND r.allotment_class_id IS NOT DISTINCT FROM $9
+    `,
+    [
+      row.fiscal_year,
+      row.fund_cluster_id,
+      row.fund_source_id,
+      row.campus_id,
+      row.responsibility_center_id,
+      row.mfo_id,
+      row.pap_id,
+      row.uacs_code_id,
+      row.allotment_class_id,
+    ]
+  );
+
+  const approvedBudget = num(budgetResult.rows[0]?.approved_budget);
+  const cumulativeUtilization = num(utilizationResult.rows[0]?.utilized_amount);
+  const unpaidUtilization = Math.max(
+    0,
+    num(row.utilization_amount) - num(row.disbursement_amount)
+  );
+  const runningBalance = approvedBudget - cumulativeUtilization;
+
+  const updatedResult = await client.query(
+    `
+      UPDATE rbud_entries
+      SET
+        running_balance = $1,
+        unpaid_utilization = $2
+      WHERE id = $3
+      RETURNING *
+    `,
+    [runningBalance, unpaidUtilization, entryId]
+  );
+
+  return updatedResult.rows[0];
+}
 
 async function resolveWfpSourceId(body) {
   if (body.wfp_source_id) return body.wfp_source_id;
@@ -2687,6 +3174,35 @@ async function resolveWfpSourceId(body) {
   );
 
   return result.rows[0]?.id ?? null;
+}
+
+async function validateFundClusterCode(fundClusterId, fundCode) {
+  const clusterId = Number(fundClusterId);
+  const code = String(fundCode ?? "").trim();
+
+  if (!Number.isInteger(clusterId) || clusterId <= 0 || !code) {
+    return { valid: false, reason: "Fund Cluster and Fund Code are required." };
+  }
+
+  // Validate the dependent relationship against the new Fund Codes master data.
+  // If the migration is not installed yet, do not break legacy RBUD records.
+  const tableCheck = await pool.query(`SELECT to_regclass('public.fund_codes') AS table_name`);
+  if (!tableCheck.rows[0]?.table_name) {
+    return { valid: true, skipped: true };
+  }
+
+  const result = await pool.query(`
+    SELECT fcd.id
+    FROM fund_codes fcd
+    WHERE fcd.fund_cluster_id = $1
+      AND LOWER(TRIM(fcd.code)) = LOWER(TRIM($2))
+      AND fcd.is_active = TRUE
+    LIMIT 1
+  `, [clusterId, code]);
+
+  return result.rowCount > 0
+    ? { valid: true }
+    : { valid: false, reason: "The selected Fund Code does not belong to the selected Fund Cluster." };
 }
 
 function fieldValue(field, body) {
@@ -2736,7 +3252,12 @@ function fieldValue(field, body) {
   }
 
   return body[field] ?? null;
-}router.post("/", async (req, res) => {
+}
+
+router.post("/", async (req, res) => {
+  const role = requireRbudCreateRole(req, res);
+  if (!role) return;
+
   const client = await pool.connect();
 
   try {
@@ -2746,16 +3267,40 @@ function fieldValue(field, body) {
       });
     }
 
-    if (!req.body.registry_no || !String(req.body.registry_no).trim()) {
-      return res.status(400).json({
-        error: "Registry No. is required. Please enter it manually.",
-      });
-    }
-
     await client.query("BEGIN");
 
-    // Registry No. is supplied manually by the user.
-    const body = { ...req.body };
+    const editable = rbudEditableFields(role);
+    const body = {};
+
+    // Only fields assigned to the creator's role are accepted.
+    for (const field of editable) {
+      if (Object.prototype.hasOwnProperty.call(req.body, field)) {
+        body[field] = req.body[field];
+      }
+    }
+
+    const fundValidation = await validateFundClusterCode(
+      body.fund_cluster_id,
+      body.fund_code
+    );
+
+    if (!fundValidation.valid) {
+      await client.query("ROLLBACK");
+      return res.status(400).json({ error: fundValidation.reason });
+    }
+
+    // Generated identifiers are server-owned and client-supplied values are ignored.
+    body.registry_no = await generateRegistryNo(client, body.fiscal_year || year(body.entry_date));
+    body.burs_serial_no = await generateBursSerialNo(client, body.entry_date, body.fiscal_year);
+
+    // These are derived from Entry Date on the server so the transaction
+    // cannot store a mismatched month/quarter supplied by the browser.
+    const entryDate = new Date(`${body.entry_date}T00:00:00`);
+    if (!Number.isNaN(entryDate.getTime())) {
+      body.month = entryDate.getMonth() + 1;
+      body.quarter = Math.ceil(body.month / 3);
+    }
+
     body._resolved_wfp_source_id = await resolveWfpSourceId(body);
 
     if (body.wfp_source && !body._resolved_wfp_source_id) {
@@ -2765,24 +3310,51 @@ function fieldValue(field, body) {
     }
 
     const values = RBUD_FIELDS.map((field) => fieldValue(field, body));
+    const actor = auditActor(req);
+    const actorValues = [actor.name, actor.role];
     const placeholders = RBUD_FIELDS.map((_, i) => `$${i + 1}`);
+    const createdByNameParam = RBUD_FIELDS.length + 1;
+    const createdByRoleParam = RBUD_FIELDS.length + 2;
 
     const result = await client.query(
       `
         INSERT INTO rbud_entries (
-          ${RBUD_FIELDS.join(",")}
+          ${RBUD_FIELDS.join(",")},
+          created_by_name,
+          created_by_role
         )
         VALUES (
-          ${placeholders.join(",")}
+          ${placeholders.join(",")},
+          $${createdByNameParam},
+          $${createdByRoleParam}
         )
         RETURNING *
       `,
-      values
+      [...values, ...actorValues]
     );
+
+    const createdRow = await recalculateRbudFinancialFields(
+      client,
+      result.rows[0].id
+    );
+
+    await writeRbudAudit(client, {
+      req,
+      entryId: createdRow.id,
+      registryNo: createdRow.registry_no,
+      action: "CREATE",
+      changedFields: RBUD_FIELDS.filter((field) =>
+        createdRow[field] !== null &&
+        createdRow[field] !== undefined &&
+        String(createdRow[field]) !== ""
+      ),
+      oldValues: null,
+      newValues: createdRow,
+    });
 
     await client.query("COMMIT");
 
-    res.status(201).json(result.rows[0]);
+    res.status(201).json(createdRow);
   } catch (error) {
     try {
       await client.query("ROLLBACK");
@@ -2806,6 +3378,7 @@ function fieldValue(field, body) {
   }
 });
 
+
 /*
 |--------------------------------------------------------------------------
 | UPDATE RBUD RECORD
@@ -2813,8 +3386,57 @@ function fieldValue(field, body) {
 */
 
 router.put("/:id", async (req, res) => {
+  const role = requireRbudEditRole(req, res);
+  if (!role) return;
+
   try {
-    const body = { ...req.body };
+    const existingResult = await pool.query(
+      `SELECT * FROM rbud_entries WHERE id = $1`,
+      [req.params.id]
+    );
+
+    if (!existingResult.rows.length) {
+      return res.status(404).json({
+        error: "RBUD record not found.",
+      });
+    }
+
+    const existing = existingResult.rows[0];
+    const editable = rbudEditableFields(role);
+
+    /*
+     * Merge only fields assigned to the current role.
+     * This prevents non-Budget roles from overwriting Budget-owned
+     * values even if the client submits the complete form payload.
+     */
+    const body = { ...existing };
+
+    for (const field of editable) {
+      if (Object.prototype.hasOwnProperty.call(req.body, field)) {
+        body[field] = req.body[field];
+      }
+    }
+
+    const fundValidation = await validateFundClusterCode(
+      body.fund_cluster_id,
+      body.fund_code
+    );
+
+    if (!fundValidation.valid) {
+      return res.status(400).json({ error: fundValidation.reason });
+    }
+
+    // Generated/system-derived values remain immutable or recalculated by the server.
+    body.registry_no = existing.registry_no;
+    body.burs_serial_no = existing.burs_serial_no;
+
+    // Keep derived date parts synchronized when Entry Date is edited.
+    const entryDate = new Date(`${body.entry_date}T00:00:00`);
+    if (!Number.isNaN(entryDate.getTime())) {
+      body.month = entryDate.getMonth() + 1;
+      body.quarter = Math.ceil(body.month / 3);
+    }
+
     body._resolved_wfp_source_id = await resolveWfpSourceId(body);
 
     if (body.wfp_source && !body._resolved_wfp_source_id) {
@@ -2823,60 +3445,73 @@ router.put("/:id", async (req, res) => {
       });
     }
 
-    const values =
-      RBUD_FIELDS.map(
-        (field) =>
-          fieldValue(
-            field,
-            body
-          )
-      );
+    const values = RBUD_FIELDS.map((field) => fieldValue(field, body));
+    const actor = auditActor(req);
 
-    const sets =
-      RBUD_FIELDS.map(
-        (field, i) =>
-          `${field} = $${i + 1}`
-      );
+    const sets = RBUD_FIELDS.map(
+      (field, i) => `${field} = $${i + 1}`
+    );
 
-    const result =
-      await pool.query(
-        `
+    const updatedByNameParam = RBUD_FIELDS.length + 1;
+    const updatedByRoleParam = RBUD_FIELDS.length + 2;
+    const idParam = RBUD_FIELDS.length + 3;
+
+    const result = await pool.query(
+      `
         UPDATE rbud_entries
-
         SET
           ${sets.join(",")},
+          updated_by_name = $${updatedByNameParam},
+          updated_by_role = $${updatedByRoleParam},
+          updated_at = CURRENT_TIMESTAMP
 
-          updated_at =
-            CURRENT_TIMESTAMP
-
-        WHERE id =
-              $${RBUD_FIELDS.length + 1}
+        WHERE id = $${idParam}
 
         RETURNING *
-        `,
-        [
-          ...values,
-          req.params.id,
-        ]
-      );
+      `,
+      [
+        ...values,
+        actor.name,
+        actor.role,
+        req.params.id,
+      ]
+    );
 
-    if (
-      result.rows.length === 0
-    ) {
+    if (result.rows.length === 0) {
       return res.status(404).json({
-        error:
-          "RBUD record not found.",
+        error: "RBUD record not found.",
       });
     }
 
-    res.json(
-      result.rows[0]
+    const updatedRow = await recalculateRbudFinancialFields(
+      pool,
+      result.rows[0].id
     );
+    const changedFields = auditChangedFields(existing, updatedRow);
+
+    if (changedFields.length > 0) {
+      const oldValues = {};
+      const newValues = {};
+
+      for (const field of changedFields) {
+        oldValues[field] = existing[field];
+        newValues[field] = updatedRow[field];
+      }
+
+      await writeRbudAudit(pool, {
+        req,
+        entryId: updatedRow.id,
+        registryNo: updatedRow.registry_no,
+        action: "UPDATE",
+        changedFields,
+        oldValues,
+        newValues,
+      });
+    }
+
+    res.json(updatedRow);
   } catch (error) {
-    console.error(
-      "RBUD update error:",
-      error
-    );
+    console.error("RBUD role-based update error:", error);
 
     res.status(500).json({
       error: error.message,
@@ -2893,6 +3528,9 @@ router.put("/:id", async (req, res) => {
 router.delete(
   "/:id",
   async (req, res) => {
+    const role = requireRbudDeleteRole(req, res);
+    if (!role) return;
+
     try {
       const result =
         await pool.query(
@@ -2901,7 +3539,7 @@ router.delete(
 
           WHERE id = $1
 
-          RETURNING id
+          RETURNING *
           `,
           [req.params.id]
         );
@@ -2914,6 +3552,18 @@ router.delete(
             "RBUD record not found.",
         });
       }
+
+      const deletedRow = result.rows[0];
+
+      await writeRbudAudit(pool, {
+        req,
+        entryId: deletedRow.id,
+        registryNo: deletedRow.registry_no,
+        action: "DELETE",
+        changedFields: RBUD_FIELDS,
+        oldValues: deletedRow,
+        newValues: null,
+      });
 
       res.json({
         message:
@@ -3054,7 +3704,6 @@ router.get(
             COALESCE(
               pap.code,
               mfo.code,
-              oe.code,
               uacs.code,
               'N/A'
             ) AS code,
@@ -3062,7 +3711,6 @@ router.get(
             COALESCE(
               pap.name,
               mfo.name,
-              oe.name,
               uacs.account_title,
               bi.notes,
               'Unclassified'
@@ -3082,10 +3730,6 @@ router.get(
 
           LEFT JOIN mfo
             ON mfo.id = bi.mfo_id
-
-          LEFT JOIN object_expenditures oe
-            ON oe.id =
-               bi.object_expenditure_id
 
           LEFT JOIN uacs_codes uacs
             ON uacs.id =
@@ -3240,26 +3884,33 @@ router.get(
             (${FUND_GROUP_CASE})
               AS fund_group,
 
-            fc.code
-              AS fund_code,
-
-            fc.name
-              AS fund,
-
+            fc.code AS fund_cluster_code,
+            fc.name AS fund_cluster_name,
+            r.fund_code,
+            c.name AS campus_name,
+            r.registry_no,
+            r.burs_serial_no,
+            r.serial_no_transferred,
             r.payee,
             r.particulars,
-
-            rc.name
-              AS responsibility_center,
-
+            rc.name AS responsibility_center,
+            r.ref_no,
+            r.uacs_funding_source_code,
+            r.fiscal_year,
+            r.month,
+            r.series,
+            r.series2,
+            r.quarter,
             r.utilization_amount,
-
-            r.disbursement_amount,
+            r.ps_utilization,
+            r.mooe_utilization,
+            r.co_utilization,
+            r.wfp_source_code,
+                r.disbursement_amount,
             r.running_balance,
+            r.remarks,
             r.unpaid_utilization,
-            r.po_no,
-            r.po_status,
-
+                            
             (${STATUS_CASE})
               AS status
 
@@ -3275,7 +3926,10 @@ router.get(
 
           LEFT JOIN responsibility_centers rc
             ON rc.id =
-               r.responsibility_center_id
+               r.responsibility_center_id 
+
+          LEFT JOIN campuses c
+            ON c.id = r.campus_id
 
           WHERE r.fiscal_year = $1
 

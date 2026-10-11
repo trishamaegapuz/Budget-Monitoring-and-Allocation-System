@@ -3,10 +3,51 @@ import { X, LogOut, ChevronDown, Database } from 'lucide-react';
 import Sidebar from './Sidebar';
 import Header from './Header';
 import Footer from './Footer';
-import { navItems } from '../../constants/navigation';
+import { getNavItemsForRole } from '../../constants/navigation';
 
-export default function Layout({ children, user, onLogout, activePath = '/', onNavigate }) {
+export default function Layout({ children, user, onLogout, activePath, onNavigate }) {
   const [collapsed, setCollapsed] = useState(false);
+
+  // Keep the header synchronized with the actual page URL.
+  // Some Dashboard links navigate without passing activePath to Layout.
+  const resolvedActivePath =
+    activePath && activePath !== '/'
+      ? activePath
+      : (window.location.pathname || '/');
+
+  // The sidebar uses the navigation item's canonical path for highlighting.
+  // Dashboard cards may navigate to /rbud or /raod, while the sidebar items
+  // are defined as /rbud/overview and /raod/overview. Map those aliases here
+  // without changing the actual browser URL or application route.
+  const sidebarActivePath = (() => {
+    const path = resolvedActivePath || '/';
+
+    if (
+      path === '/rbud' ||
+      path === '/rbud-registry' ||
+      path.startsWith('/rbud/')
+    ) {
+      return path === '/rbud' || path === '/rbud-registry'
+        ? '/rbud/overview'
+        : path;
+    }
+
+    if (
+      path === '/raod' ||
+      path === '/raod-registry' ||
+      path.startsWith('/raod/')
+    ) {
+      return path === '/raod' || path === '/raod-registry'
+        ? '/raod/overview'
+        : path;
+    }
+
+    if (path === '/igp' || path === '/igp-registry') {
+      return '/igp/overview';
+    }
+
+    return path;
+  })();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [openMobileGroups, setOpenMobileGroups] = useState({
     Registries: true,
@@ -19,35 +60,51 @@ export default function Layout({ children, user, onLogout, activePath = '/', onN
     'RAOD Registry-4. Transactions': false,
   });
 
-  // Restore the standalone Master Data item in the mobile menu too.
-  // This mirrors the desktop Sidebar without changing the existing navigation structure.
+    /*
+  |--------------------------------------------------------------------------
+  | MOBILE NAVIGATION
+  |--------------------------------------------------------------------------
+  | Show only the modules allowed for the logged-in user's role.
+  |
+  | Master Data is available to the Administration role.
+  |--------------------------------------------------------------------------
+  */
+
   const mobileNavItems = (() => {
-    const items = Array.isArray(navItems) ? [...navItems] : [];
+    const role = user?.role;
 
-    const alreadyExists = items.some(
-      (item) => item?.path === '/master-data'
-    );
+    // Get only navigation items allowed for this role
+    const items = [...getNavItemsForRole(role)];
 
-    if (alreadyExists) return items;
+    // Master Data is available to Administration
+    if (role === 'Administration') {
+      const alreadyExists = items.some(
+        (item) => item?.path === '/master-data'
+      );
 
-    const masterDataItem = {
-      label: 'Master Data',
-      path: '/master-data',
-      icon: Database,
-    };
+      if (!alreadyExists) {
+        const masterDataItem = {
+          label: 'Master Data',
+          path: '/master-data',
+          icon: Database,
+          allowedRoles: ['Administration'],
+        };
 
-    const userIndex = items.findIndex(
-      (item) => item?.path === '/user-management'
-    );
+        const userIndex = items.findIndex(
+          (item) => item?.path === '/user-management'
+        );
 
-    if (userIndex >= 0) {
-      items.splice(userIndex, 0, masterDataItem);
-    } else {
-      items.push(masterDataItem);
+        if (userIndex >= 0) {
+          items.splice(userIndex, 0, masterDataItem);
+        } else {
+          items.push(masterDataItem);
+        }
+      }
     }
 
     return items;
   })();
+  
 
   const toggleCollapse = () => setCollapsed(!collapsed);
   const openSidebar = () => setSidebarOpen(true);
@@ -59,7 +116,7 @@ export default function Layout({ children, user, onLogout, activePath = '/', onN
 
   // 🔹 FUNCTION PARA TUKUYIN ANG TITLE AT SUBTITLE DEPENDE SA ACTIVE PATH
   const getPageHeader = (path) => {
-    if (path === '/budget-proposals') {
+    if (path === '/budget-proposals' || path.startsWith('/budget-proposals/')) {
   return {
     title: 'Budget Proposal',
     subtitle: 'Preparation, Review, and Approval of Budget Proposals.',
@@ -71,13 +128,33 @@ export default function Layout({ children, user, onLogout, activePath = '/', onN
         subtitle: 'Manage and monitor all fund sources of the university.',
       };
     }
-    if (path === '/rbud-registry' || path.startsWith('/rbud/')) {
+    if (
+      path === '/igp-registry' ||
+      path === '/igp' ||
+      path === '/igp/overview' ||
+      path.startsWith('/igp/')
+    ) {
+      return {
+        title: 'IGP Registry',
+        subtitle: 'Income Generating Program / Project — Fund 161.',
+      };
+    }
+
+    if (
+      path === '/rbud' ||
+      path === '/rbud-registry' ||
+      path.startsWith('/rbud/')
+    ) {
       return {
         title: 'RBUD Registry',
         subtitle: 'Manage budget utilization, disbursement, fund registries, and generate financial reports.',
       };
     }
-    if (path === '/raod-registry' || path.startsWith('/raod/')) {
+    if (
+      path === '/raod' ||
+      path === '/raod-registry' ||
+      path.startsWith('/raod/')
+    ) {
       return {
         title: 'RAOD Registry',
         subtitle: 'Manage allotments, obligations, disbursements, fund registries, and financial accountability reports.',
@@ -133,12 +210,12 @@ export default function Layout({ children, user, onLogout, activePath = '/', onN
     };
   };
 
-  const { title, subtitle } = getPageHeader(activePath);
+  const { title, subtitle } = getPageHeader(resolvedActivePath);
 
   const isAnySubActive = (subItems) => {
     if (!subItems || !Array.isArray(subItems)) return false;
     return subItems.some((item) => {
-      if (item?.path) return item.path === activePath;
+      if (item?.path) return item.path === sidebarActivePath;
       if (item?.sub && Array.isArray(item.sub)) return isAnySubActive(item.sub);
       if (item?.subGroups && Array.isArray(item.subGroups)) {
         return item.subGroups.some((g) => isAnySubActive(g.sub));
@@ -183,7 +260,7 @@ export default function Layout({ children, user, onLogout, activePath = '/', onN
                     <div key={sgIdx}>
                       <div
                         className={`flex items-center justify-between px-3 py-1.5 text-xs font-semibold rounded cursor-pointer ${
-                          hasActiveSubGroup || activePath === subGroup?.path
+                          hasActiveSubGroup || sidebarActivePath === subGroup?.path
                             ? 'bg-blue-600/20 text-white'
                             : 'text-blue-100 hover:text-white hover:bg-white/5'
                         }`}
@@ -234,7 +311,7 @@ export default function Layout({ children, user, onLogout, activePath = '/', onN
           <div key={idx} className="mb-1">
             <div
               className={`flex items-center justify-between px-3 py-2 text-[11px] font-semibold rounded-md transition cursor-pointer ${
-                hasActiveSub || activePath === item?.path
+                hasActiveSub || sidebarActivePath === item?.path
                   ? 'bg-blue-600/20 text-white'
                   : 'text-blue-200/70 hover:text-white hover:bg-white/5'
               }`}
@@ -252,7 +329,7 @@ export default function Layout({ children, user, onLogout, activePath = '/', onN
                   <div
                     key={sIdx}
                     className={`px-3 py-1.5 text-xs rounded cursor-pointer transition ${
-                      activePath === subItem?.path
+                      sidebarActivePath === subItem?.path
                         ? 'bg-blue-600/30 text-white font-medium'
                         : 'text-blue-200/80 hover:text-white hover:bg-white/5'
                     }`}
@@ -276,7 +353,7 @@ export default function Layout({ children, user, onLogout, activePath = '/', onN
         <div
           key={idx}
           className={`flex items-center px-3 py-2 text-[11px] font-semibold rounded-md transition cursor-pointer ${
-            activePath === item?.path
+            sidebarActivePath === item?.path
               ? 'bg-blue-600/30 text-white'
               : 'text-blue-200/70 hover:text-white hover:bg-white/5'
           }`}
@@ -302,12 +379,13 @@ export default function Layout({ children, user, onLogout, activePath = '/', onN
 
   return (
     <div className="flex h-screen bg-gray-50 overflow-hidden">
+      {/* Sidebar highlighting uses canonical navigation paths. */}
       <Sidebar
         collapsed={collapsed}
         onToggleCollapse={toggleCollapse}
         user={user}
         onLogout={onLogout}
-        activePath={activePath}
+        activePath={sidebarActivePath}
         onNavigate={onNavigate}
       />
 

@@ -15,6 +15,7 @@ const pool = require('../db');
 // fund_clusters
 // fund_sources
 // responsibility_centers
+// department_master
 // object_expenditures
 // allotment_classes
 // mfo
@@ -25,9 +26,8 @@ const pool = require('../db');
 // users
 //
 // NOTE:
-// There is NO "fund_groups" table in the current database.
-// For compatibility with the frontend's "Fund Groups" tab,
-// fund_groups is mapped to fund_clusters.
+// Fund Clusters are stored in fund_clusters. The old duplicate Fund Groups
+// and Funds UI sections are now represented by one Fund Clusters tab.
 //
 // ============================================================
 
@@ -144,77 +144,33 @@ router.get(
   async (req, res) => {
     try {
       const result = await Promise.all([
-        pool.query(
-          `SELECT COUNT(*)::int AS count
-           FROM fund_clusters`
-        ),
-
-        pool.query(
-          `SELECT COUNT(*)::int AS count
-           FROM fund_clusters`
-        ),
-
-        pool.query(
-          `SELECT COUNT(*)::int AS count
-           FROM responsibility_centers`
-        ),
-
-        pool.query(
-          `SELECT COUNT(*)::int AS count
-           FROM object_expenditures`
-        ),
-
-        pool.query(
-          `SELECT COUNT(*)::int AS count
-           FROM fund_sources`
-        ),
-
-        pool.query(
-          `SELECT COUNT(*)::int AS count
-           FROM allotment_classes`
-        ),
-
-        pool.query(
-          `SELECT COUNT(*)::int AS count
-           FROM users`
-        ),
+        pool.query(`SELECT COUNT(*)::int AS count FROM fund_clusters`),
+        pool.query(`SELECT COUNT(*)::int AS count FROM department_master`),
+        pool.query(`SELECT COUNT(*)::int AS count FROM responsibility_centers`),
+        pool.query(`SELECT COUNT(*)::int AS count FROM object_expenditures`),
+        pool.query(`SELECT COUNT(*)::int AS count FROM fund_sources`),
+        pool.query(`SELECT COUNT(*)::int AS count FROM allotment_classes`),
+        pool.query(`SELECT COUNT(*)::int AS count FROM mfo`),
+        pool.query(`SELECT COUNT(*)::int AS count FROM uacs_codes`),
+        pool.query(`SELECT COUNT(*)::int AS count FROM campuses`),
+        pool.query(`SELECT COUNT(*)::int AS count FROM pap`),
+        pool.query(`SELECT COUNT(*)::int AS count FROM wfp_sources`),
+        pool.query(`SELECT COUNT(*)::int AS count FROM users`),
       ]);
 
       return res.json({
-        fundGroups:
-          Number(
-            result[0].rows[0]?.count
-          ) || 0,
-
-        funds:
-          Number(
-            result[1].rows[0]?.count
-          ) || 0,
-
-        centers:
-          Number(
-            result[2].rows[0]?.count
-          ) || 0,
-
-        objects:
-          Number(
-            result[3].rows[0]?.count
-          ) || 0,
-
-        sources:
-          Number(
-            result[4].rows[0]?.count
-          ) || 0,
-
-        allotments:
-          Number(
-            result[5].rows[0]?.count
-          ) || 0,
-
-        users:
-          Number(
-            result[6].rows[0]?.count
-          ) || 0,
+        fundClusters: Number(result[0].rows[0]?.count) || 0,
+        departments: Number(result[1].rows[0]?.count) || 0,
+        centers: Number(result[2].rows[0]?.count) || 0,
+        objects: Number(result[3].rows[0]?.count) || 0,
+        sources: Number(result[4].rows[0]?.count) || 0,
+        allotments: Number(result[5].rows[0]?.count) || 0,
+        mfo: Number(result[6].rows[0]?.count) || 0,
+        uacs: Number(result[7].rows[0]?.count) || 0,
+        campuses: Number(result[8].rows[0]?.count) || 0,
+        pap: Number(result[9].rows[0]?.count) || 0,
+        wfp: Number(result[10].rows[0]?.count) || 0,
+        users: Number(result[11].rows[0]?.count) || 0,
       });
     } catch (error) {
       return sendDatabaseError(
@@ -1208,6 +1164,344 @@ router.delete(
         res,
         error,
         'Failed to delete Fund.'
+      );
+    }
+  }
+);
+
+
+// ============================================================
+// DEPARTMENTS
+// ============================================================
+//
+// Departments are now a separate Master Data reference.
+// responsibility_centers remains a separate internal reference because
+// budget/RBUD/RAOD records still use responsibility_center_id.
+// ============================================================
+
+router.get(
+  '/departments',
+  async (req, res) => {
+    try {
+      const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
+      const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 10, 1), 100);
+      const offset = (page - 1) * limit;
+      const search = String(req.query.search || '').trim();
+      const campusId = parseId(req.query.campus_id);
+
+      const where = [];
+      const params = [];
+
+      if (search) {
+        params.push(`%${search}%`);
+        where.push(`(
+          dm.code ILIKE $${params.length}
+          OR dm.name ILIKE $${params.length}
+          OR COALESCE(dm.description, '') ILIKE $${params.length}
+          OR c.code ILIKE $${params.length}
+          OR c.name ILIKE $${params.length}
+        )`);
+      }
+
+      if (campusId) {
+        params.push(campusId);
+        where.push(`dm.campus_id = $${params.length}`);
+      }
+
+      const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+
+      const countResult = await pool.query(
+        `SELECT COUNT(*)::int AS total
+           FROM department_master dm
+           INNER JOIN campuses c ON c.id = dm.campus_id
+          ${whereSql}`,
+        params
+      );
+
+      const totalItems = Number(countResult.rows[0]?.total) || 0;
+
+      const dataParams = [...params, limit, offset];
+      const result = await pool.query(
+        `SELECT
+           dm.id,
+           dm.code,
+           dm.name,
+           dm.description,
+           dm.campus_id,
+           c.code AS campus_code,
+           c.name AS campus_name,
+           dm.is_active,
+           dm.created_at,
+           dm.updated_at
+         FROM department_master dm
+         INNER JOIN campuses c ON c.id = dm.campus_id
+         ${whereSql}
+         ORDER BY c.name ASC, dm.name ASC, dm.id ASC
+         LIMIT $${dataParams.length - 1}
+         OFFSET $${dataParams.length}`,
+        dataParams
+      );
+
+      return res.json({
+        items: result.rows.map((row) => ({
+          id: row.id,
+          code: row.code,
+          name: row.name,
+          description: row.description || '',
+          campus_id: row.campus_id,
+          campus_code: row.campus_code,
+          campus_name: row.campus_name,
+          status: row.is_active ? 'Active' : 'Inactive',
+          is_active: row.is_active,
+          created_at: row.created_at,
+          updated_at: row.updated_at,
+        })),
+        currentPage: page,
+        totalItems,
+        totalPages: Math.max(Math.ceil(totalItems / limit), 1),
+        pageSize: limit,
+      });
+    } catch (error) {
+      return sendDatabaseError(
+        res,
+        error,
+        'Failed to load Departments.'
+      );
+    }
+  }
+);
+
+router.post(
+  '/departments',
+  async (req, res) => {
+    try {
+      const {
+        code,
+        name,
+        description,
+        campus_id,
+        status,
+      } = req.body;
+
+      const cleanCode = String(code || '').trim();
+      const cleanName = String(name || '').trim();
+      const campusId = parseId(campus_id);
+
+      if (!cleanCode || !cleanName || !campusId) {
+        return res.status(400).json({
+          error: 'Code, Name, and Campus are required.',
+        });
+      }
+
+      const campus = await pool.query(
+        `SELECT id, code, name
+           FROM campuses
+          WHERE id = $1
+            AND is_active = TRUE
+          LIMIT 1`,
+        [campusId]
+      );
+
+      if (campus.rowCount === 0) {
+        return res.status(400).json({
+          error: 'Selected Campus does not exist or is inactive.',
+        });
+      }
+
+      const duplicate = await pool.query(
+        `SELECT id
+           FROM department_master
+          WHERE campus_id = $1
+            AND LOWER(code) = LOWER($2)
+          LIMIT 1`,
+        [campusId, cleanCode]
+      );
+
+      if (duplicate.rowCount > 0) {
+        return res.status(409).json({
+          error: 'A Department with this code already exists in the selected Campus.',
+        });
+      }
+
+      const result = await pool.query(
+        `INSERT INTO department_master
+          (campus_id, code, name, description, is_active)
+         VALUES ($1, $2, $3, $4, $5)
+         RETURNING *`,
+        [
+          campusId,
+          cleanCode,
+          cleanName,
+          String(description || '').trim() || null,
+          normalizeStatus(status) === 'Active',
+        ]
+      );
+
+      return res.status(201).json({
+        message: 'Department created successfully.',
+        item: {
+          ...result.rows[0],
+          campus_code: campus.rows[0].code,
+          campus_name: campus.rows[0].name,
+          status: result.rows[0].is_active ? 'Active' : 'Inactive',
+        },
+      });
+    } catch (error) {
+      return sendDatabaseError(
+        res,
+        error,
+        'Failed to create Department.'
+      );
+    }
+  }
+);
+
+router.put(
+  '/departments/:id',
+  async (req, res) => {
+    try {
+      const id = parseId(req.params.id);
+
+      if (!id) {
+        return res.status(400).json({
+          error: 'Invalid Department ID.',
+        });
+      }
+
+      const {
+        code,
+        name,
+        description,
+        campus_id,
+        status,
+      } = req.body;
+
+      const cleanCode = String(code || '').trim();
+      const cleanName = String(name || '').trim();
+      const campusId = parseId(campus_id);
+
+      if (!cleanCode || !cleanName || !campusId) {
+        return res.status(400).json({
+          error: 'Code, Name, and Campus are required.',
+        });
+      }
+
+      const campus = await pool.query(
+        `SELECT id, code, name
+           FROM campuses
+          WHERE id = $1
+            AND is_active = TRUE
+          LIMIT 1`,
+        [campusId]
+      );
+
+      if (campus.rowCount === 0) {
+        return res.status(400).json({
+          error: 'Selected Campus does not exist or is inactive.',
+        });
+      }
+
+      const duplicate = await pool.query(
+        `SELECT id
+           FROM department_master
+          WHERE campus_id = $1
+            AND LOWER(code) = LOWER($2)
+            AND id <> $3
+          LIMIT 1`,
+        [campusId, cleanCode, id]
+      );
+
+      if (duplicate.rowCount > 0) {
+        return res.status(409).json({
+          error: 'Another Department already uses this code in the selected Campus.',
+        });
+      }
+
+      const result = await pool.query(
+        `UPDATE department_master
+            SET campus_id = $1,
+                code = $2,
+                name = $3,
+                description = $4,
+                is_active = $5,
+                updated_at = NOW()
+          WHERE id = $6
+          RETURNING *`,
+        [
+          campusId,
+          cleanCode,
+          cleanName,
+          String(description || '').trim() || null,
+          normalizeStatus(status) === 'Active',
+          id,
+        ]
+      );
+
+      if (result.rowCount === 0) {
+        return res.status(404).json({
+          error: 'Department not found.',
+        });
+      }
+
+      return res.json({
+        message: 'Department updated successfully.',
+        item: {
+          ...result.rows[0],
+          campus_code: campus.rows[0].code,
+          campus_name: campus.rows[0].name,
+          status: result.rows[0].is_active ? 'Active' : 'Inactive',
+        },
+      });
+    } catch (error) {
+      return sendDatabaseError(
+        res,
+        error,
+        'Failed to update Department.'
+      );
+    }
+  }
+);
+
+router.delete(
+  '/departments/:id',
+  async (req, res) => {
+    try {
+      const id = parseId(req.params.id);
+
+      if (!id) {
+        return res.status(400).json({
+          error: 'Invalid Department ID.',
+        });
+      }
+
+      const result = await pool.query(
+        `DELETE FROM department_master
+         WHERE id = $1
+         RETURNING id, code, name`,
+        [id]
+      );
+
+      if (result.rowCount === 0) {
+        return res.status(404).json({
+          error: 'Department not found.',
+        });
+      }
+
+      return res.json({
+        message: 'Department deleted successfully.',
+        item: result.rows[0],
+      });
+    } catch (error) {
+      if (error.code === '23503') {
+        return res.status(409).json({
+          error: 'This Department cannot be deleted because it is already being used by another record.',
+        });
+      }
+
+      return sendDatabaseError(
+        res,
+        error,
+        'Failed to delete Department.'
       );
     }
   }
@@ -2814,9 +3108,9 @@ router.get(
 // OTHERS CRUD
 // MFO / UACS / CAMPUSES / PAP / WFP SOURCES
 // ============================================================
-// These reference tables are managed from the Master Data > Others
-// selector. Users are intentionally excluded; user management remains
-// in the dedicated User Management module.
+// These reference tables are managed from dedicated Master Data tabs.
+// Users are intentionally excluded; user management remains in the
+// dedicated User Management module.
 // ============================================================
 
 const EDITABLE_OTHER_TYPES = {
@@ -3287,9 +3581,8 @@ router.get(
         'Master Data API is running.',
       endpoints: [
         '/stats',
-        '/fund-groups',
         '/funds',
-        '/centers',
+        '/departments',
         '/objects',
         '/sources',
         '/allotments',

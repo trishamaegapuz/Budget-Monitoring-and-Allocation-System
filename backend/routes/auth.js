@@ -39,18 +39,43 @@ function normalizeEmail(value) {
   return normalize(value).toLowerCase();
 }
 
+// ============================================================
+// CANONICAL SYSTEM ROLES
+// ============================================================
+// Final BMAS role labels:
+// Administration, Budget, Accountant, Procurement.
+// Legacy labels are temporarily mapped for existing accounts.
+// ============================================================
+
+const ROLE_ALIASES = {
+  'administrator': 'Administration',
+  'administration': 'Administration',
+  'budget officer': 'Budget',
+  'budget staff': 'Budget',
+  'budget': 'Budget',
+  'accounting': 'Accountant',
+  'accountant': 'Accountant',
+  'procurement officer': 'Procurement',
+  'procurement': 'Procurement',
+};
+
+function canonicalRole(value) {
+  const normalized = normalize(value).toLowerCase();
+  return ROLE_ALIASES[normalized] || normalize(value);
+}
+
 
 // ============================================================
 // PUBLIC REGISTRATION ROLES
 // ============================================================
 // Public registration is limited to these three roles.
-// Administrator accounts are not created through this page.
+// Administration accounts are not created through this page.
 // ============================================================
 
 const PUBLIC_REGISTRATION_ROLES = {
-  'budget officer': 'Budget Officer',
+  'budget': 'Budget',
   'accountant': 'Accountant',
-  'staff': 'Staff',
+  'procurement': 'Procurement',
 };
 
 
@@ -159,6 +184,9 @@ router.post('/login', async (req, res) => {
     const user =
       result.rows[0];
 
+    // Normalize legacy role labels to the current four-role model.
+    user.role = canonicalRole(user.role);
+
 
     const status =
       String(user.status || '')
@@ -175,7 +203,7 @@ router.post('/login', async (req, res) => {
       return res.status(403).json({
 
         message:
-          'Your account is still pending approval. Please wait for the Administrator to approve your registration.',
+          'Your account is still pending approval. Please wait for the Administration to approve your registration.',
 
         code:
           'ACCOUNT_PENDING',
@@ -194,7 +222,7 @@ router.post('/login', async (req, res) => {
       return res.status(403).json({
 
         message:
-          'Your registration has been rejected. Please contact the Administrator.',
+          'Your registration has been rejected. Please contact the Administration.',
 
         code:
           'ACCOUNT_REJECTED',
@@ -213,7 +241,7 @@ router.post('/login', async (req, res) => {
       return res.status(403).json({
 
         message:
-          'Your account has been deactivated. Please contact the Administrator.',
+          'Your account has been deactivated. Please contact the Administration.',
 
         code:
           'ACCOUNT_SUSPENDED',
@@ -232,7 +260,7 @@ router.post('/login', async (req, res) => {
       return res.status(403).json({
 
         message:
-          'Your account is not approved for login. Please contact the Administrator.',
+          'Your account is not approved for login. Please contact the Administration.',
 
         code:
           'ACCOUNT_NOT_APPROVED',
@@ -251,7 +279,7 @@ router.post('/login', async (req, res) => {
       return res.status(403).json({
 
         message:
-          'Your account is inactive. Please contact the Administrator.',
+          'Your account is inactive. Please contact the Administration.',
 
         code:
           'ACCOUNT_INACTIVE',
@@ -427,7 +455,7 @@ router.post('/register', async (req, res) => {
   let role =
     normalize(
       req.body.role
-    ) || 'Staff';
+    ) || 'Budget';
 
   const department =
     normalize(
@@ -533,8 +561,8 @@ router.post('/register', async (req, res) => {
   // ----------------------------------------------------------
   // PUBLIC REGISTRATION ROLE VALIDATION
   // ----------------------------------------------------------
-  // Only Budget Officer, Accountant, and Staff can register
-  // through the public registration page.
+  // Only Budget, Accountant, and Procurement can register through the public registration page.
+  // Administration accounts are not created through public registration.
 
   const requestedRole =
     normalize(role).toLowerCase();
@@ -547,7 +575,7 @@ router.post('/register', async (req, res) => {
     return res.status(400).json({
 
       message:
-        'Invalid role requested. You may register only as Budget Officer, Accountant, or Staff.',
+        'Invalid role requested. You may register only as Budget, Accountant, or Procurement.',
 
       code:
         'INVALID_REGISTRATION_ROLE',
@@ -754,7 +782,7 @@ router.post('/register', async (req, res) => {
 
     // ========================================================
     // EMAIL #2
-    // ADMINISTRATOR ONLY
+    // ADMINISTRATION ONLY
     // NEW USER REGISTRATION
     // ========================================================
 
@@ -763,7 +791,7 @@ router.post('/register', async (req, res) => {
 
 
     console.log(
-      'Administrator registration recipients:',
+      'Administration registration recipients:',
       administratorEmails
     );
 
@@ -831,7 +859,7 @@ router.post('/register', async (req, res) => {
       await createNotification({
 
         recipientRole:
-          'Administrator',
+          'Administration',
 
         title:
           'New User Registration',
@@ -864,7 +892,7 @@ router.post('/register', async (req, res) => {
     return res.status(201).json({
 
       message:
-        'Registration successful. Your account is pending Administrator approval.',
+        'Registration successful. Your account is pending Administration approval.',
 
       user:
         newUser,
@@ -994,6 +1022,9 @@ router.get('/me', async (req, res) => {
 
     const user =
       result.rows[0];
+
+    // Normalize legacy role labels for existing sessions/accounts.
+    user.role = canonicalRole(user.role);
 
 
     if (

@@ -1,6 +1,6 @@
 import React from 'react';
 import { LogOut, ChevronLeft, ChevronRight, Database } from 'lucide-react';
-import { navItems } from '../../constants/navigation';
+import { navItems, getNavItemsForRole } from '../../constants/navigation';
 
 export default function Sidebar({
   collapsed,
@@ -26,33 +26,50 @@ export default function Sidebar({
   // Keep the existing navigation and restore the standalone Master Data module.
   // If navigation.js already contains Master Data, we do not add a duplicate.
   const sidebarItems = (() => {
-    const items = Array.isArray(navItems) ? [...navItems] : [];
+  const role = user?.role;
 
+  // Get only the navigation items allowed for the logged-in role
+  const items = Array.isArray(role)
+    ? [...getNavItemsForRole(role)]
+    : [...getNavItemsForRole(role)];
+
+  /*
+  |--------------------------------------------------------------------------
+  | Master Data
+  |--------------------------------------------------------------------------
+  | Administration only.
+  | This is still added here because the existing system keeps Master Data
+  | as a separate module.
+  |--------------------------------------------------------------------------
+  */
+
+  if (role === 'Administration') {
     const alreadyExists = items.some(
       (item) => item?.path === '/master-data'
     );
 
-    if (alreadyExists) return items;
+    if (!alreadyExists) {
+      const masterDataItem = {
+        label: 'Master Data',
+        path: '/master-data',
+        icon: Database,
+        allowedRoles: ['Administration'],
+      };
 
-    const masterDataItem = {
-      label: 'Master Data',
-      path: '/master-data',
-      icon: Database,
-    };
+      const userIndex = items.findIndex(
+        (item) => item?.path === '/user-management'
+      );
 
-    // Put Master Data before User Management when possible.
-    const userIndex = items.findIndex(
-      (item) => item?.path === '/user-management'
-    );
-
-    if (userIndex >= 0) {
-      items.splice(userIndex, 0, masterDataItem);
-    } else {
-      items.push(masterDataItem);
+      if (userIndex >= 0) {
+        items.splice(userIndex, 0, masterDataItem);
+      } else {
+        items.push(masterDataItem);
+      }
     }
+  }
 
-    return items;
-  })();
+  return items;
+})();
 
   const isItemActive = (item) => {
     if (!item?.path) return false;

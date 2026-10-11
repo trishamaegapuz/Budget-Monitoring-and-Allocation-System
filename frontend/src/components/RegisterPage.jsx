@@ -9,7 +9,7 @@ export default function RegisterPage({ onSwitchToLogin }) {
     username: '',
     email: '',
     password: '',
-    role: 'Staff',
+    role: 'Budget',
   });
   const [errors, setErrors] = useState({});
   const [message, setMessage] = useState('');
@@ -127,7 +127,7 @@ export default function RegisterPage({ onSwitchToLogin }) {
         <div className="w-full max-w-md bg-white p-8 lg:p-10 rounded-3xl shadow-xl border border-gray-100">
           <div className="text-center mb-6">
             <h2 className="text-2xl font-bold text-gray-800">Create an Account</h2>
-            <p className="text-xs text-gray-500 mt-1">Budget Office Staff Registration</p>
+            <p className="text-xs text-gray-500 mt-1">BMAS User Registration</p>
           </div>
 
           {message && (
@@ -229,9 +229,9 @@ export default function RegisterPage({ onSwitchToLogin }) {
                 value={formData.role}
                 onChange={(e) => setFormData({ ...formData, role: e.target.value })}
               >
-                <option value="Budget Officer">Budget Officer</option>
+                <option value="Budget">Budget</option>
                 <option value="Accountant">Accountant</option>
-                <option value="Staff">Staff</option>
+                <option value="Procurement">Procurement</option>
               </select>
             </div>
 

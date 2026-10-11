@@ -65,6 +65,25 @@ export default function BudgetProposals({
 }) {
 
   // ==========================================================
+  // ROLE-BASED ACCESS
+  // ==========================================================
+
+  const currentRole = user?.role || '';
+  const isAdministration = currentRole === 'Administration';
+  const isBudget = currentRole === 'Budget';
+  const isAccountant = currentRole === 'Accountant';
+  const isProcurement = currentRole === 'Procurement';
+
+  // Budget Proposal ownership: Administration has full oversight;
+  // Budget owns proposal creation, editing, submission, and workflow review.
+  // Accountant has relevant read-only access; Procurement has no access.
+  const canViewProposal = isAdministration || isBudget || isAccountant;
+  const canCreateProposal = isAdministration || isBudget;
+  const canEditProposal = isAdministration || isBudget;
+  const canSubmitProposal = isAdministration || isBudget;
+  const canReviewProposal = isAdministration || isBudget;
+
+  // ==========================================================
   // STATE
   // ==========================================================
 
@@ -126,13 +145,13 @@ export default function BudgetProposals({
   // Existing RBUD/RAOD Master Data used by the Budget Proposal form.
   const [fundClusters, setFundClusters] = useState([]);
   const [fundSources, setFundSources] = useState([]);
+  const [fundCodes, setFundCodes] = useState([]);
   const [campuses, setCampuses] = useState([]);
   const [responsibilityCenters, setResponsibilityCenters] = useState([]);
   const [papOptions, setPapOptions] = useState([]);
   const [uacsOptions, setUacsOptions] = useState([]);
   const [wfpOptions, setWfpOptions] = useState([]);
   const [mfoOptions, setMfoOptions] = useState([]);
-  const [objectExpenditureOptions, setObjectExpenditureOptions] = useState([]);
   const [allotmentClasses, setAllotmentClasses] = useState([]);
   const [loadingReferenceData, setLoadingReferenceData] = useState(true);
   const [proposalForm, setProposalForm] = useState({
@@ -145,7 +164,6 @@ export default function BudgetProposals({
     proposingOffice: '',
     pap: '',
     mfo: '',
-    objectExpenditure: '',
     uacsCode: '',
     classification: '',
     psAmount: '',
@@ -199,6 +217,30 @@ export default function BudgetProposals({
             : []
       );
 
+      const loadedFundCodes =
+        Array.isArray(refs.fundCodes)
+          ? refs.fundCodes
+          : Array.isArray(refs.fund_codes)
+            ? refs.fund_codes
+            : [];
+
+      // Normalize the parent-cluster key so the dropdown keeps working even
+      // when the API returns the equivalent key using a slightly different
+      // name. The actual master-data relationship is still Fund Cluster ->
+      // Fund Code; no database values are changed here.
+      setFundCodes(
+        loadedFundCodes.map(item => ({
+          ...item,
+          fund_cluster_id:
+            item.fund_cluster_id ??
+            item.fundClusterId ??
+            item.cluster_id ??
+            item.fund_cluster?.id ??
+            item.fundCluster?.id ??
+            null
+        }))
+      );
+
       setCampuses(
         Array.isArray(refs.campuses) ? refs.campuses : []
       );
@@ -213,13 +255,6 @@ export default function BudgetProposals({
 
       setPapOptions(Array.isArray(refs.pap) ? refs.pap : Array.isArray(refs.paps) ? refs.paps : []);
       setMfoOptions(Array.isArray(refs.mfo) ? refs.mfo : Array.isArray(refs.mfoList) ? refs.mfoList : []);
-      setObjectExpenditureOptions(
-        Array.isArray(refs.objectExpenditures)
-          ? refs.objectExpenditures
-          : Array.isArray(refs.object_expenditures)
-            ? refs.object_expenditures
-            : []
-      );
       setUacsOptions(Array.isArray(refs.uacsCodes) ? refs.uacsCodes : Array.isArray(refs.uacs_codes) ? refs.uacs_codes : []);
       setWfpOptions(Array.isArray(refs.wfpSources) ? refs.wfpSources : Array.isArray(refs.wfp_sources) ? refs.wfp_sources : []);
       setAllotmentClasses(Array.isArray(refs.allotmentClasses) ? refs.allotmentClasses : Array.isArray(refs.allotment_classes) ? refs.allotment_classes : []);
@@ -318,7 +353,11 @@ export default function BudgetProposals({
 
   const saveProposal = async (submit = false) => {
     try {
+      // Clear previous validation/success messages before every new save attempt.
+      // This prevents an old success banner from appearing together with a
+      // validation error when the user starts a new proposal.
       setProposalError('');
+      setFormSaved(false);
 
       const psAmount = Number(proposalForm.psAmount || 0);
       const mooeAmount = Number(proposalForm.mooeAmount || 0);
@@ -338,19 +377,22 @@ export default function BudgetProposals({
         throw new Error('Particulars / Description is required.');
       }
 
+      const selectedClusterHasFundCodes = fundCodes.some(
+        item => String(item.fund_cluster_id) === String(proposalForm.fundCluster)
+      );
+
       if (
         !proposalForm.fundCluster ||
-        !proposalForm.fundCode ||
+        (selectedClusterHasFundCodes && !proposalForm.fundCode) ||
         !proposalForm.campus ||
         !proposalForm.responsibilityCenter ||
         !proposalForm.wfpDescription ||
         !proposalForm.mfo ||
         !proposalForm.uacsCode ||
-        !proposalForm.objectExpenditure ||
         !proposalForm.classification
       ) {
         throw new Error(
-          'Please complete Fund Cluster, Fund Code, Campus, Responsibility Center, WFP Description, P/A/P, MFO, UACS Code, Object of Expenditure, and Allotment Class.'
+          'Please complete Fund Cluster, Fund Code, Campus, Responsibility Center, WFP Description, P/A/P, MFO, UACS Code, and Allotment Class.'
         );
       }
 
@@ -365,16 +407,13 @@ export default function BudgetProposals({
       }
 
       const fc = fundClusters.find(x => String(x.id) === String(proposalForm.fundCluster));
-      const fs = fundSources.find(x => String(x.id) === String(proposalForm.fundCode));
+      const fcFundCode = fundCodes.find(x => String(x.id) === String(proposalForm.fundCode));
       const campus = campuses.find(x => String(x.id) === String(proposalForm.campus));
       const rc = responsibilityCenters.find(x => String(x.id) === String(proposalForm.responsibilityCenter));
       const wfp = wfpOptions.find(x => String(x.id) === String(proposalForm.wfpDescription));
       const pap = papOptions.find(x => String(x.id) === String(proposalForm.pap));
       const mfo = mfoOptions.find(x => String(x.id) === String(proposalForm.mfo));
       const uacs = uacsOptions.find(x => String(x.id) === String(proposalForm.uacsCode));
-      const objectExpenditure = objectExpenditureOptions.find(
-        x => String(x.id) === String(proposalForm.objectExpenditure)
-      );
       const allotment = allotmentClasses.find(x => String(x.id) === String(proposalForm.classification));
 
       const payload = {
@@ -393,20 +432,21 @@ export default function BudgetProposals({
         created_by: user?.id || user?.user_id || null,
 
         // Budget/WFP classification
-        fund_source: fs?.code || proposalForm.fundCode || null,
+        // budget_proposals.fund_source_id remains the FK to fund_sources.
+        // The selected Fund Code is stored in the existing fund_source text field.
+        fund_source: fcFundCode?.code || proposalForm.fundCode || null,
         fund_cluster_id: fc?.id || null,
-        fund_source_id: fs?.id || null,
+        fund_source_id: fc?.fund_source_id || null,
         campus_id: campus?.id || null,
         responsibility_center_id: rc?.id || null,
         wfp_source_id: wfp?.id || null,
         pap_id: pap?.id || null,
         mfo_id: mfo?.id || null,
         uacs_code_id: uacs?.id || null,
-        object_expenditure_id: objectExpenditure?.id || null,
         allotment_class_id: allotment?.id || null,
 
         fund_cluster: fc?.code || null,
-        fund_code: fs?.code || proposalForm.fundCode || null,
+        fund_code: fcFundCode?.code || proposalForm.fundCode || null,
         campus: campus?.code || campus?.name || null,
         responsibility_center: rc?.code || rc?.name || null,
         wfp_description: wfp?.name || proposalForm.wfpDescription || null,
@@ -414,7 +454,6 @@ export default function BudgetProposals({
         pap: pap?.name || null,
         mfo: mfo?.name || null,
         uacs_code: uacs?.code || null,
-        object_expenditure: objectExpenditure?.name || null,
         budget_classification: allotment?.code || null,
 
         amount,
@@ -475,8 +514,7 @@ export default function BudgetProposals({
         proposingOffice: '',
         pap: '',
         mfo: '',
-        objectExpenditure: '',
-        uacsCode: '',
+            uacsCode: '',
         classification: '',
         psAmount: '',
         mooeAmount: '',
@@ -509,11 +547,9 @@ export default function BudgetProposals({
 
     setProposalForm({
       fundCluster: proposal.fund_cluster_id ? String(proposal.fund_cluster_id) : '',
-      fundCode: proposal.fund_source_id
-        ? String(proposal.fund_source_id)
-        : proposal.fundCode
-          ? String(fundSources.find(x => x.code === proposal.fundCode)?.id || '')
-          : '',
+      fundCode: proposal.fundCode
+        ? String(fundCodes.find(x => String(x.fund_cluster_id) === String(proposal.fund_cluster_id) && String(x.code).toLowerCase() === String(proposal.fundCode).toLowerCase())?.id || '')
+        : '',
       campus: proposal.campus_id ? String(proposal.campus_id) : '',
       responsibilityCenter: proposal.responsibility_center_id ? String(proposal.responsibility_center_id) : '',
       wfpDescription: proposal.wfp_source_id ? String(proposal.wfp_source_id) : '',
@@ -521,7 +557,6 @@ export default function BudgetProposals({
       proposingOffice: proposal.department || proposal.department_unit || '',
       pap: proposal.pap_id ? String(proposal.pap_id) : '',
       mfo: proposal.mfo_id ? String(proposal.mfo_id) : '',
-      objectExpenditure: proposal.object_expenditure_id ? String(proposal.object_expenditure_id) : '',
       uacsCode: proposal.uacs_code_id ? String(proposal.uacs_code_id) : '',
       classification: proposal.allotment_class_id ? String(proposal.allotment_class_id) : '',
       psAmount: proposal.proposed_ps != null
@@ -613,6 +648,16 @@ export default function BudgetProposals({
   // ==========================================================
 
   const handleSectionClick = (section) => {
+
+    // A new proposal starts with a clean message state.
+    // Do not carry the previous proposal's success/error banner into the new form.
+    if (section === 'create') {
+      setFormSaved(false);
+      setProposalError('');
+      setWorkflowAction(null);
+      setEditingProposalId(null);
+      setSelectedSupportingFile(null);
+    }
 
     setSelectedSection(section);
 
@@ -956,6 +1001,40 @@ export default function BudgetProposals({
   ];
 
 
+  // Compact proposal-status chart data.
+  // Uses the same live proposal counts; this only changes presentation.
+  const statusTotal = proposalStatuses.reduce(
+    (total, item) => total + Number(item.count || 0),
+    0
+  );
+
+  const statusColors = {
+    Draft: '#f59e0b',
+    Submitted: '#3b82f6',
+    'Under Review': '#3b82f6',
+    'For Revision': '#f97316',
+    Endorsed: '#8b5cf6',
+    Approved: '#10b981',
+    Rejected: '#ef4444'
+  };
+
+  const statusGradient = (() => {
+    if (statusTotal <= 0) return '#eef2f7';
+
+    let current = 0;
+
+    return `conic-gradient(${proposalStatuses
+      .filter(item => Number(item.count || 0) > 0)
+      .map(item => {
+        const start = (current / statusTotal) * 100;
+        current += Number(item.count || 0);
+        const end = (current / statusTotal) * 100;
+        return `${statusColors[item.label]} ${start}% ${end}%`;
+      })
+      .join(', ')})`;
+  })();
+
+
   // ==========================================================
   // STATUS CLASS
   // ==========================================================
@@ -1074,14 +1153,14 @@ export default function BudgetProposals({
     .bp-screen-heading h2 {
       margin: 0;
       color: #10255c;
-      font-size: 16px;
+      font-size: 18px;
       font-weight: 850;
     }
 
     .bp-screen-heading p {
       margin: 4px 0 0;
       color: #64748b;
-      font-size: 10px;
+      font-size: 12px;
       line-height: 1.5;
     }
 
@@ -1108,15 +1187,15 @@ export default function BudgetProposals({
     .bp-panel-title {
       margin: 0;
       color: #10255c;
-      font-size: 11px;
+      font-size: 13px;
       font-weight: 850;
       text-transform: uppercase;
     }
 
     .bp-panel-subtitle {
       margin: 3px 0 0;
-      color: #94a3b8;
-      font-size: 8.5px;
+      color: #64748b;
+      font-size: 10px;
     }
 
 
@@ -1634,39 +1713,116 @@ export default function BudgetProposals({
        STATUS
     ======================================================== */
 
-    .bp-status-list {
+    /* ========================================================
+       COMPACT PROPOSAL STATUS CHART
+       Replaces the old long horizontal bars with a compact
+       donut + readable status list.
+    ======================================================== */
+
+    .bp-proposal-status-visual {
+      display: grid;
+      grid-template-columns: 148px minmax(0, 1fr);
+      align-items: center;
+      gap: 18px;
+      min-height: 190px;
+      padding: 10px 4px 8px;
+    }
+
+    .bp-proposal-status-donut {
+      width: 136px;
+      height: 136px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      position: relative;
+      flex: 0 0 136px;
+      box-shadow: inset 0 0 0 1px rgba(15, 23, 42, .04);
+    }
+
+    .bp-proposal-status-donut::before {
+      content: '';
+      position: absolute;
+      inset: 16px;
+      border-radius: 50%;
+      background: #ffffff;
+    }
+
+    .bp-proposal-status-donut-hole {
+      position: relative;
+      z-index: 1;
+      width: 72px;
+      height: 72px;
+      border-radius: 50%;
       display: flex;
       flex-direction: column;
-      gap: 8px;
-    }
-
-    .bp-status-row {
-      display: grid;
-      grid-template-columns:
-        95px
-        minmax(0, 1fr)
-        35px;
       align-items: center;
-      gap: 8px;
+      justify-content: center;
+      background: #ffffff;
     }
 
-    .bp-status-name {
-      color: #475569;
-      font-size: 9px;
+    .bp-proposal-status-donut-hole strong {
+      color: #10255c;
+      font-size: 25px;
+      line-height: 1;
+      font-weight: 850;
+    }
+
+    .bp-proposal-status-donut-hole span {
+      margin-top: 5px;
+      color: #64748b;
+      font-size: 10px;
       font-weight: 700;
     }
 
-    .bp-status-bar {
-      height: 8px;
-      background: #f1f5f9;
-      border-radius: 20px;
-      overflow: hidden;
+    .bp-proposal-status-list {
+      min-width: 0;
+      display: grid;
+      gap: 7px;
     }
 
-    .bp-status-fill {
-      height: 100%;
-      border-radius: 20px;
+    .bp-proposal-status-item {
+      min-height: 25px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 4px 7px;
+      border-radius: 6px;
+      background: #f8fafc;
+      border: 1px solid #edf2f7;
     }
+
+    .bp-proposal-status-label {
+      min-width: 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #334155;
+      font-size: 10.5px;
+      font-weight: 700;
+    }
+
+    .bp-proposal-status-label > span:last-child {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .bp-proposal-status-dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      flex: 0 0 9px;
+    }
+
+    .bp-proposal-status-item > strong {
+      color: #10255c;
+      font-size: 11px;
+      font-weight: 850;
+      min-width: 18px;
+      text-align: right;
+    }
+
 
     .bp-status-pending {
       background: #f59e0b;
@@ -1728,40 +1884,50 @@ export default function BudgetProposals({
       color: #ffffff;
     }
 
+    /* Compact fund-group visualization:
+       keeps the reference section short so the whole dashboard row
+       does not create a large empty area. */
     .bp-fund-list {
-      display: flex;
-      flex-direction: column;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 7px;
     }
 
     .bp-fund-row {
       display: grid;
-      grid-template-columns:
-        minmax(90px, 1fr)
-        auto;
+      grid-template-columns: minmax(0, 1fr) auto;
       align-items: center;
-      gap: 10px;
-      padding: 8px;
+      gap: 4px 8px;
+      min-width: 0;
+      padding: 7px 8px;
       border: 1px solid #edf2f7;
-      border-radius: 5px;
+      border-radius: 6px;
       background: #fafcff;
     }
 
     .bp-fund-name {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
       color: #334155;
-      font-size: 9px;
-      font-weight: 700;
+      font-size: 9.5px;
+      line-height: 1.2;
+      font-weight: 750;
     }
 
     .bp-fund-value {
       color: #10255c;
-      font-size: 9px;
-      font-weight: 800;
+      font-size: 9.5px;
+      line-height: 1.2;
+      font-weight: 850;
       text-align: right;
+      white-space: nowrap;
     }
 
     .bp-fund-mini-bar {
       grid-column: 1 / -1;
+      width: 100%;
       height: 5px;
       background: #eaf0f7;
       border-radius: 10px;
@@ -1772,6 +1938,13 @@ export default function BudgetProposals({
       height: 100%;
       background: #2563eb;
       border-radius: 10px;
+      min-width: 2px;
+    }
+
+    @media (max-width: 900px) {
+      .bp-fund-list {
+        grid-template-columns: 1fr;
+      }
     }
 
 
@@ -3529,14 +3702,14 @@ export default function BudgetProposals({
     .bp-module-copy h3 {
       margin: 1px 0 4px;
       color: #10255c;
-      font-size: 10px;
+      font-size: 12px;
       font-weight: 850;
     }
 
     .bp-module-copy p {
       margin: 0;
       color: #64748b;
-      font-size: 8px;
+      font-size: 10px;
       line-height: 1.4;
     }
 
@@ -3548,7 +3721,7 @@ export default function BudgetProposals({
       align-items: center;
       justify-content: center;
       gap: 5px;
-      font-size: 8px;
+      font-size: 10px;
       font-weight: 800;
     }
 
@@ -3605,7 +3778,7 @@ export default function BudgetProposals({
       border: 0;
       outline: 0;
       color: #334155;
-      font-size: 8px;
+      font-size: 10px;
       background: transparent;
     }
 
@@ -3620,7 +3793,7 @@ export default function BudgetProposals({
       background: #ffffff;
       color: #334155;
       padding: 0 8px;
-      font-size: 8px;
+      font-size: 10px;
       font-weight: 700;
       outline: 0;
     }
@@ -3633,7 +3806,7 @@ export default function BudgetProposals({
       display: inline-flex;
       align-items: center;
       gap: 3px;
-      font-size: 8px;
+      font-size: 10px;
       font-weight: 800;
       cursor: pointer;
       white-space: nowrap;
@@ -3662,7 +3835,7 @@ export default function BudgetProposals({
       background: #f8fafc;
       color: #52627a;
       border-bottom: 1px solid #e7edf5;
-      font-size: 7px;
+      font-size: 10px;
       font-weight: 850;
       text-align: left;
       white-space: nowrap;
@@ -3672,13 +3845,32 @@ export default function BudgetProposals({
       padding: 8px 9px;
       color: #52627a;
       border-bottom: 1px solid #edf1f6;
-      font-size: 7.8px;
+      font-size: 10px;
       vertical-align: middle;
       white-space: nowrap;
     }
 
     .bp-dashboard-table tbody tr:hover {
       background: #fbfdff;
+    }
+
+    /* Readability improvements for the dashboard only */
+    .bp-dashboard-section-heading h2 {
+      font-size: 14px;
+      font-weight: 850;
+      color: #10255c;
+      margin: 0;
+    }
+
+    .bp-dashboard-section-heading p {
+      font-size: 10px;
+      color: #64748b;
+      margin: 3px 0 0;
+    }
+
+    .bp-dashboard-status-pill {
+      font-size: 9px !important;
+      padding: 4px 7px !important;
     }
 
     .bp-table-reference {
@@ -3834,6 +4026,16 @@ export default function BudgetProposals({
     }
 
     @media (max-width: 760px) {
+      .bp-proposal-status-visual {
+        grid-template-columns: 1fr;
+        justify-items: center;
+        gap: 12px;
+      }
+
+      .bp-proposal-status-list {
+        width: 100%;
+      }
+
       .bp-dashboard-summary-grid,
       .bp-dashboard-module-grid {
         grid-template-columns: 1fr;
@@ -3899,14 +4101,6 @@ export default function BudgetProposals({
       Math.max(
         ...overviewData.map(
           item => item.budget
-        ),
-        1
-      );
-
-    const maximumStatus =
-      Math.max(
-        ...proposalStatuses.map(
-          item => item.count
         ),
         1
       );
@@ -4105,43 +4299,54 @@ export default function BudgetProposals({
 
             </div>
 
-            <div className="bp-status-list">
+            <div className="bp-proposal-status-visual">
 
-              {proposalStatuses.map(item => (
+              <div
+                className="bp-proposal-status-donut"
+                style={{
+                  background: statusGradient
+                }}
+              >
+                <div className="bp-proposal-status-donut-hole">
+                  <strong>{statusTotal}</strong>
+                  <span>Total</span>
+                </div>
+              </div>
 
-                <div
-                  className="bp-status-row"
-                  key={item.label}
-                >
+              <div className="bp-proposal-status-list">
 
-                  <span className="bp-status-name">
-                    {item.label}
-                  </span>
+                {proposalStatuses.map(item => (
 
-                  <div className="bp-status-bar">
+                  <div
+                    className="bp-proposal-status-item"
+                    key={item.label}
+                  >
 
-                    <div
-                      className={
-                        `bp-status-fill ${item.className}`
-                      }
-                      style={{
-                        width:
-                          `${(
-                            item.count /
-                            maximumStatus
-                          ) * 100}%`
-                      }}
-                    />
+                    <div className="bp-proposal-status-label">
+
+                      <span
+                        className="bp-proposal-status-dot"
+                        style={{
+                          background:
+                            statusColors[item.label]
+                        }}
+                      />
+
+                      <span>
+                        {item.label}
+                      </span>
+
+                    </div>
+
+                    <strong>
+                      {item.count}
+                    </strong>
 
                   </div>
 
-                  <span className="bp-status-count">
-                    {item.count}
-                  </span>
+                ))}
 
-                </div>
-
-              ))}
+              </div>
 
             </div>
 
@@ -4710,13 +4915,11 @@ export default function BudgetProposals({
               onChange={event => {
                 const value = event.target.value;
                 updateProposalForm('fundCluster', value);
-                const selected = fundClusters.find(item => String(item.id) === String(value));
-                if (selected?.fund_source_id) {
-                  updateProposalForm('fundCode', String(selected.fund_source_id));
-                } else if (selected?.fund_source_code) {
-                  const source = fundSources.find(item => String(item.code) === String(selected.fund_source_code));
-                  if (source) updateProposalForm('fundCode', String(source.id));
-                }
+                // Fund Code is a separate master-data level and is dependent
+                // on the selected Fund Cluster. Never use fund_sources as the
+                // Fund Code dropdown.
+                updateProposalForm('fundCode', '');
+                updateProposalForm('sourceCode', '');
               }}
             >
               <option value="">
@@ -4735,17 +4938,29 @@ export default function BudgetProposals({
             <select
               className="bp-form-select"
               value={proposalForm.fundCode}
-              disabled={loadingReferenceData}
+              disabled={
+                loadingReferenceData ||
+                !proposalForm.fundCluster ||
+                !fundCodes.some(item => String(item.fund_cluster_id) === String(proposalForm.fundCluster))
+              }
               onChange={event => updateProposalForm('fundCode', event.target.value)}
             >
               <option value="">
-                {loadingReferenceData ? 'Loading Master Data...' : 'Select Fund Code'}
+                {loadingReferenceData
+                  ? 'Loading Master Data...'
+                  : !proposalForm.fundCluster
+                    ? 'Select Fund Cluster first'
+                    : fundCodes.some(item => String(item.fund_cluster_id) === String(proposalForm.fundCluster))
+                      ? 'Select Fund Code'
+                      : 'No Fund Code configured for this Fund Cluster'}
               </option>
-              {fundSources.map(item => (
-                <option key={item.id} value={String(item.id)}>
-                  {item.code} - {item.name}
-                </option>
-              ))}
+              {fundCodes
+                .filter(item => String(item.fund_cluster_id) === String(proposalForm.fundCluster))
+                .map(item => (
+                  <option key={item.id} value={String(item.id)}>
+                    {item.code} - {item.name}
+                  </option>
+                ))}
             </select>
           </div>
 
@@ -4881,25 +5096,6 @@ export default function BudgetProposals({
                 <option key={item.id} value={String(item.id)}>
                   {item.code}
                   {item.account_title ? ` - ${item.account_title}` : item.name ? ` - ${item.name}` : ''}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="bp-form-group">
-            <label className="bp-form-label">Object of Expenditure <span>*</span></label>
-            <select
-              className="bp-form-select"
-              value={proposalForm.objectExpenditure}
-              disabled={loadingReferenceData}
-              onChange={event => updateProposalForm('objectExpenditure', event.target.value)}
-            >
-              <option value="">
-                {loadingReferenceData ? 'Loading Master Data...' : 'Select Object of Expenditure'}
-              </option>
-              {objectExpenditureOptions.map(item => (
-                <option key={item.id} value={String(item.id)}>
-                  {item.code ? `${item.code} - ${item.name}` : item.name}
                 </option>
               ))}
             </select>
@@ -5256,8 +5452,16 @@ export default function BudgetProposals({
 
                       <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
                         <button className="bp-small-button" onClick={() => openProposal(proposal)}><Eye /> View</button>
-                        {['Draft','For Revision'].includes(proposal.status) && <button className="bp-small-button" onClick={() => editProposal(proposal)}><Pencil /> Edit</button>}
-                        {proposal.status === 'Draft' && <button className="bp-small-button" onClick={() => deleteProposal(proposal)}><XCircle /> Delete</button>}
+                        {canEditProposal && ['Draft', 'For Revision'].includes(proposal.status) && (
+                          <button className="bp-small-button" onClick={() => editProposal(proposal)}>
+                            <Pencil /> Edit
+                          </button>
+                        )}
+                        {(isAdministration || isBudget) && proposal.status === 'Draft' && (
+                          <button className="bp-small-button" onClick={() => deleteProposal(proposal)}>
+                            <XCircle /> Delete
+                          </button>
+                        )}
                       </div>
 
                     </td>
@@ -5523,7 +5727,36 @@ export default function BudgetProposals({
           @media print{
             body{padding:18mm}
           }
-        </style>
+        
+
+    /* READABILITY PASS — slightly larger typography at 100% zoom */
+    .bp-panel-title { font-size: 15px !important; }
+    .bp-panel-subtitle { font-size: 11.5px !important; }
+
+    .bp-proposal-status-label { font-size: 12px !important; }
+    .bp-proposal-status-item > strong { font-size: 12px !important; }
+    .bp-proposal-status-donut-hole strong { font-size: 27px !important; }
+    .bp-proposal-status-donut-hole span { font-size: 11.5px !important; }
+
+    .bp-fund-pill { font-size: 10px !important; padding: 7px 10px !important; }
+    .bp-fund-name { font-size: 11px !important; }
+    .bp-fund-value { font-size: 11px !important; }
+    .bp-fund-mini-bar { height: 6px !important; }
+
+    .bp-dashboard-status-header h2,
+    .bp-dashboard-recent-header h2,
+    .bp-dashboard-section-heading h2 { font-size: 14px !important; }
+
+    .bp-dashboard-status-header p,
+    .bp-dashboard-recent-header p,
+    .bp-dashboard-section-heading p { font-size: 10.5px !important; }
+
+    .bp-mini-year select { font-size: 10.5px !important; }
+    .bp-mini-year svg { width: 14px; height: 14px; }
+
+    .bp-status-legend-row { font-size: 11.5px !important; }
+    .bp-status-legend-row strong { font-size: 11.5px !important; }
+</style>
       </head>
       <body>
         <div class="report-header">
@@ -5838,8 +6071,7 @@ export default function BudgetProposals({
               />
 
               <strong>
-                ABRA STATE INSTITUTE OF SCIENCES
-                AND TECHNOLOGY
+                UNIVERSITY OF ABRA
               </strong>
 
               <span>
@@ -6433,12 +6665,31 @@ export default function BudgetProposals({
 
 
               <div className="bp-review-actions">
-                {['Draft','For Revision'].includes(selectedProposal.status) && <button className="bp-review-action neutral" onClick={() => editProposal(selectedProposal)}><Pencil /> Edit / Update</button>}
-                {selectedProposal.status === 'Draft' && <button className="bp-review-action neutral" onClick={() => changeProposalStatus('Submitted')}><Send /> Submit</button>}
-                {selectedProposal.status === 'Submitted' && <button className="bp-review-action neutral" onClick={() => changeProposalStatus('Under Review')}><Clock3 /> Start Review</button>}
-                {selectedProposal.status === 'Under Review' && <><button className="bp-review-action endorse" onClick={() => changeProposalStatus('Endorsed')}><CheckCircle2 /> Endorse</button><button className="bp-review-action return" onClick={() => changeProposalStatus('For Revision')}><RotateCcw /> For Revision</button><button className="bp-review-action return" onClick={() => changeProposalStatus('Rejected')}><XCircle /> Reject</button></>}
-                {selectedProposal.status === 'For Revision' && <button className="bp-review-action neutral" onClick={() => changeProposalStatus('Submitted')}><Send /> Resubmit</button>}
-                {selectedProposal.status === 'Endorsed' && <><button className="bp-review-action endorse" onClick={() => changeProposalStatus('Approved')}><CheckCircle2 /> Approve</button><button className="bp-review-action return" onClick={() => changeProposalStatus('Rejected')}><XCircle /> Reject</button></>}
+                {canEditProposal && ['Draft', 'For Revision'].includes(selectedProposal.status) && (
+                  <button className="bp-review-action neutral" onClick={() => editProposal(selectedProposal)}><Pencil /> Edit / Update</button>
+                )}
+                {canSubmitProposal && selectedProposal.status === 'Draft' && (
+                  <button className="bp-review-action neutral" onClick={() => changeProposalStatus('Submitted')}><Send /> Submit</button>
+                )}
+                {canReviewProposal && selectedProposal.status === 'Submitted' && (
+                  <button className="bp-review-action neutral" onClick={() => changeProposalStatus('Under Review')}><Clock3 /> Start Review</button>
+                )}
+                {canReviewProposal && selectedProposal.status === 'Under Review' && (
+                  <>
+                    <button className="bp-review-action endorse" onClick={() => changeProposalStatus('Endorsed')}><CheckCircle2 /> Endorse</button>
+                    <button className="bp-review-action return" onClick={() => changeProposalStatus('For Revision')}><RotateCcw /> For Revision</button>
+                    <button className="bp-review-action return" onClick={() => changeProposalStatus('Rejected')}><XCircle /> Reject</button>
+                  </>
+                )}
+                {canSubmitProposal && selectedProposal.status === 'For Revision' && (
+                  <button className="bp-review-action neutral" onClick={() => changeProposalStatus('Submitted')}><Send /> Resubmit</button>
+                )}
+                {canReviewProposal && selectedProposal.status === 'Endorsed' && (
+                  <>
+                    <button className="bp-review-action endorse" onClick={() => changeProposalStatus('Approved')}><CheckCircle2 /> Approve</button>
+                    <button className="bp-review-action return" onClick={() => changeProposalStatus('Rejected')}><XCircle /> Reject</button>
+                  </>
+                )}
                 <button className="bp-review-action neutral" onClick={() => handleSectionClick('history')}><History /> View History</button>
               </div>
 
@@ -6620,13 +6871,15 @@ export default function BudgetProposals({
                 track approval status, and generate summaries for better
                 financial planning and decision-making.
               </p>
-              <button
-                type="button"
-                className="bp-dashboard-primary-button"
-                onClick={() => handleSectionClick('create')}
-              >
-                Create New Proposal <ArrowRight />
-              </button>
+              {canCreateProposal && (
+                <button
+                  type="button"
+                  className="bp-dashboard-primary-button"
+                  onClick={() => handleSectionClick('create')}
+                >
+                  Create New Proposal <ArrowRight />
+                </button>
+              )}
             </div>
 
             <div className="bp-dashboard-hero-art" aria-hidden="true">
@@ -6910,4 +7163,3 @@ export default function BudgetProposals({
   );
 
 }
-

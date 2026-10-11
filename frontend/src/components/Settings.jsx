@@ -636,11 +636,13 @@ export default function Settings({
   // ADMIN CHECK
   // ============================================================
 
+  const normalizedRole = String(
+    user?.role || ''
+  ).trim().toLowerCase();
+
   const isAdministrator =
-    String(
-      user?.role || ''
-    ).toLowerCase() ===
-    'administrator';
+    normalizedRole === 'administrator' ||
+    normalizedRole === 'administration';
 
   // ============================================================
   // TABS

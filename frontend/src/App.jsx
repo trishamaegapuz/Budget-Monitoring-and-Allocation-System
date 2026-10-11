@@ -14,6 +14,7 @@ import MasterData from './components/MasterData';
 
 import RaodRegistry from './components/RaodRegistry';
 import RbudFundRegistry from './components/RbudFundRegistry';
+import IGPRegistry from './components/IgpRegistry';
 
 import Reports from './components/Reports';
 import Exports from './components/Exports';
@@ -22,6 +23,64 @@ import Settings from './components/Settings';
 
 import TransactionsView from './components/TransactionsView';
 import NoticesView from './components/NoticesView';
+
+
+// ============================================================
+// ROLE-BASED ROUTE ACCESS
+// ============================================================
+
+const ROLE_ACCESS = {
+  '/': ['Administration', 'Budget', 'Procurement', 'Accountant'],
+  '/budget-proposals': ['Administration', 'Budget'],
+  '/rbud': ['Administration', 'Budget'],
+  '/rbud-registry': ['Administration', 'Budget'],
+  '/igp': ['Administration', 'Budget'],
+  '/igp-registry': ['Administration', 'Budget'],
+  '/raod': ['Administration', 'Budget', 'Procurement', 'Accountant'],
+  '/raod-registry': ['Administration', 'Budget', 'Procurement', 'Accountant'],
+  '/user-management': ['Administration'],
+  '/fund-sources': ['Administration'],
+  '/master-data': ['Administration'],
+  '/settings': ['Administration'],
+  '/reports': ['Administration', 'Budget', 'Procurement', 'Accountant'],
+  '/exports': ['Administration', 'Budget', 'Procurement', 'Accountant'],
+  '/reports-exports': ['Administration', 'Budget', 'Procurement', 'Accountant'],
+  '/transactions': ['Administration', 'Budget', 'Procurement', 'Accountant'],
+  '/notices': ['Administration', 'Budget', 'Procurement', 'Accountant'],
+  '/noticeee': ['Administration', 'Budget', 'Procurement', 'Accountant'],
+};
+
+const normalizePath = (path) => {
+  if (!path || path === '/') return '/';
+  const clean = path.split('?')[0].split('#')[0];
+  return clean.endsWith('/') && clean.length > 1
+    ? clean.slice(0, -1)
+    : clean;
+};
+
+const isPathUnder = (path, base) =>
+  path === base || path.startsWith(`${base}/`);
+
+const getAllowedRolesForPath = (path) => {
+  const normalized = normalizePath(path);
+
+  // More specific module prefixes first.
+  const matches = Object.keys(ROLE_ACCESS)
+    .filter((base) => isPathUnder(normalized, base))
+    .sort((a, b) => b.length - a.length);
+
+  return matches.length ? ROLE_ACCESS[matches[0]] : null;
+};
+
+const canRoleAccessPath = (role, path) => {
+  const allowedRoles = getAllowedRolesForPath(path);
+
+  // Unknown routes are not considered role-accessible.
+  // This prevents a role from bypassing RBAC through an unlisted URL.
+  if (!allowedRoles) return false;
+
+  return allowedRoles.includes(role);
+};
 
 
 // ============================================================
@@ -38,11 +97,13 @@ function App() {
 
   const [user, setUser] = useState(null);
 
-  const [activePath, setActivePath] = useState('/');
+  const [activePath, setActivePath] = useState(() =>
+    normalizePath(window.location.pathname)
+  );
 
 
   // ==========================================================
-  // CHECK LOGIN SESSION
+  // CHECK LOGIN SESSION + DIRECT URL
   // ==========================================================
 
   useEffect(() => {
@@ -68,11 +129,25 @@ function App() {
         const parsedUser =
           JSON.parse(userData);
 
+        const browserPath =
+          normalizePath(window.location.pathname);
+
+        const requestedPath =
+          browserPath || '/';
+
+        const allowed =
+          canRoleAccessPath(parsedUser.role, requestedPath);
+
+        const safePath =
+          allowed ? requestedPath : '/';
+
         setUser(parsedUser);
-
         setCurrentPage('dashboard');
+        setActivePath(safePath);
 
-        setActivePath('/');
+        if (safePath !== browserPath) {
+          window.history.replaceState({}, '', safePath);
+        }
 
       } catch (error) {
 
@@ -82,12 +157,61 @@ function App() {
         );
 
         localStorage.removeItem('user');
+        window.history.replaceState({}, '', '/');
+        setActivePath('/');
 
       }
+
+    } else {
+
+      // A protected/unknown URL must not remain in the browser address
+      // bar while the application is showing the login page.
+      if (window.location.pathname !== '/') {
+        window.history.replaceState({}, '', '/');
+      }
+
+      setActivePath('/');
 
     }
 
   }, []);
+
+
+  // ==========================================================
+  // BROWSER BACK / FORWARD
+  // ==========================================================
+
+  useEffect(() => {
+
+    const handlePopState = () => {
+
+      const path =
+        normalizePath(window.location.pathname);
+
+      const role =
+        user?.role;
+
+      if (!role) {
+        window.history.replaceState({}, '', '/');
+        setActivePath('/');
+        return;
+      }
+
+      if (!canRoleAccessPath(role, path)) {
+        window.history.replaceState({}, '', '/');
+        setActivePath('/');
+        return;
+      }
+
+      setActivePath(path);
+    };
+
+    window.addEventListener('popstate', handlePopState);
+
+    return () =>
+      window.removeEventListener('popstate', handlePopState);
+
+  }, [user]);
 
 
   // ==========================================================
@@ -101,6 +225,8 @@ function App() {
     setCurrentPage('dashboard');
 
     setActivePath('/');
+
+    window.history.replaceState({}, '', '/');
 
   };
 
@@ -132,12 +258,33 @@ function App() {
 
   const handleNavigate = (path) => {
 
+    const requestedPath =
+      normalizePath(path);
+
+    const role =
+      user?.role;
+
     console.log(
       'Navigating to:',
-      path
+      requestedPath,
+      'Role:',
+      role
     );
 
-    setActivePath(path);
+    // Frontend route guard: do not render a module the current role
+    // is not allowed to access.
+    if (role && !canRoleAccessPath(role, requestedPath)) {
+      console.warn(
+        `Blocked unauthorized navigation to ${requestedPath} for role ${role}`
+      );
+
+      window.history.replaceState({}, '', '/');
+      setActivePath('/');
+      return;
+    }
+
+    window.history.pushState({}, '', requestedPath);
+    setActivePath(requestedPath);
 
   };
 
@@ -147,6 +294,23 @@ function App() {
   // ==========================================================
 
   const renderContent = () => {
+
+    // Defensive guard: even if activePath is changed from somewhere
+    // other than the sidebar, an unauthorized module cannot render.
+    if (
+      user?.role &&
+      !canRoleAccessPath(user.role, activePath)
+    ) {
+      window.history.replaceState({}, '', '/');
+      return (
+        <Dashboard
+          user={user}
+          onLogout={handleLogout}
+          onNavigate={handleNavigate}
+          activePath='/'
+        />
+      );
+    }
 
     // ========================================================
     // BUDGET PROPOSALS
@@ -184,6 +348,31 @@ function App() {
       return (
 
         <RbudFundRegistry
+          user={user}
+          onLogout={handleLogout}
+          onNavigate={handleNavigate}
+          activePath={activePath}
+        />
+
+      );
+
+    }
+
+
+    // ========================================================
+    // IGP REGISTRY
+    // ========================================================
+
+    if (
+      activePath === '/igp-registry' ||
+      activePath === '/igp' ||
+      activePath === '/igp/overview' ||
+      activePath.startsWith('/igp/')
+    ) {
+
+      return (
+
+        <IGPRegistry
           user={user}
           onLogout={handleLogout}
           onNavigate={handleNavigate}

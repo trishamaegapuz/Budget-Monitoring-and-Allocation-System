@@ -72,33 +72,131 @@ const MODULES = [
     tabs: ["Summary", "PS / MOOE / CO", "Allocation Details"],
   },
   {
-    id: "transactions",
+    id: "fundRegistries",
     number: "3",
+    title: "Fund Registries",
+    description: "View the registered funds and open the detailed fund and project breakdown.",
+    icon: Folder,
+    tone: "purple",
+    tabs: ["Fund Groups", "Registered Funds"],
+  },
+  {
+    id: "transactions",
+    number: "4",
     title: "Transactions",
-    description: "Enter and manage the actual RBUD transactions. Registry No. is entered manually.",
+    description: "Enter and manage the actual RBUD transactions using the RBUD registry fields.",
     icon: ClipboardList,
     tone: "orange",
     tabs: ["Transaction List", "Add Transaction", "Transaction History"],
   },
   {
     id: "monitoring",
-    number: "4",
-    title: "Monitoring",
-    description: "Check what has been utilized, what has been disbursed, and what budget remains.",
+    number: "5",
+    title: "Budget Utilization & Balance",
+    description: "Monitor utilization, disbursement, unpaid utilization, and remaining budget by fund and class.",
     icon: TrendingUp,
     tone: "teal",
-    tabs: ["Overall", "By Fund", "By Department", "By Budget Class"],
+    tabs: ["Summary", "WFP Balance", "Utilization Details"],
+  },
+  {
+    id: "breakdown",
+    number: "6",
+    title: "Fund / Project Breakdown",
+    description: "View the detailed budget, utilization, and disbursement breakdown of each fund or project.",
+    icon: Landmark,
+    tone: "yellow",
+    tabs: ["By Fund / Project", "Budget", "Utilization", "Disbursement"],
   },
   {
     id: "reports",
-    number: "5",
+    number: "7",
     title: "Reports & Export",
-    description: "Generate RBUD and financial reports, print records, and export data for documentation.",
+    description: "Generate FAR reports, RBUD reports, and export or print the selected records.",
     icon: FileText,
-    tone: "purple",
-    tabs: ["Financial Reports", "RBUD Registry", "Print / Export"],
+    tone: "red",
+    tabs: ["Financial Reports", "Export", "Print"],
   },
 ];
+
+
+/*
+ * Resolve an RBUD master-data ID for edit mode.
+ * Some older RBUD rows may have a missing/legacy FK ID while still carrying
+ * the joined code/name returned by GET /rbud/:id.  We use the FK first,
+ * then safely fall back to matching code/name/account title.
+ */
+const normalizeReferenceValue = (value) =>
+  String(value ?? "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .toLowerCase();
+
+const resolveReferenceId = (items = [], rawId, ...candidateValues) => {
+  const idText =
+    rawId !== null && rawId !== undefined && rawId !== ""
+      ? String(rawId)
+      : "";
+
+  if (
+    idText &&
+    items.some((item) => String(item?.id ?? "") === idText)
+  ) {
+    return idText;
+  }
+
+  const candidates = candidateValues
+    .map(normalizeReferenceValue)
+    .filter(Boolean);
+
+  if (!candidates.length) return idText;
+
+  const matched = items.find((item) => {
+    const values = [
+      item?.code,
+      item?.name,
+      item?.account_title,
+      item?.title,
+      item?.description,
+    ]
+      .map(normalizeReferenceValue)
+      .filter(Boolean);
+
+    return values.some((value) => candidates.includes(value));
+  });
+
+  return matched ? String(matched.id) : idText;
+};
+
+const addMissingReferenceOption = (
+  items = [],
+  rawId,
+  code,
+  name,
+  extra = {}
+) => {
+  const idText =
+    rawId !== null && rawId !== undefined && rawId !== ""
+      ? String(rawId)
+      : "";
+
+  if (!idText) return items;
+
+  if (items.some((item) => String(item?.id ?? "") === idText)) {
+    return items;
+  }
+
+  if (!code && !name && !extra.account_title) return items;
+
+  return [
+    ...items,
+    {
+      id: rawId,
+      code: code || "",
+      name: name || extra.account_title || "",
+      ...extra,
+    },
+  ];
+};
 
 const money = (value) =>
   `₱${Number(value || 0).toLocaleString("en-US", {
@@ -146,14 +244,40 @@ const softToneMap = {
   red: "bg-red-50 text-red-700 border-red-100",
 };
 
+const normalizeRbudRole = (value) => {
+  const raw = String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[._-]+/g, " ")
+    .replace(/\s+/g, " ");
+
+  if (["administration", "administrator", "admin", "system administrator"].includes(raw)) {
+    return "Administration";
+  }
+  if (["budget", "budget officer"].includes(raw)) {
+    return "Budget";
+  }
+  return "";
+};
+
+const getStoredRbudRole = () => {
+  try {
+    const stored = localStorage.getItem("user");
+    if (!stored) return "";
+    const parsed = JSON.parse(stored);
+    return parsed?.role || "";
+  } catch {
+    return "";
+  }
+};
+
 const initialForm = (year) => ({
-  registry_no: "",
   entry_date: "",
   fiscal_year: Number(year),
   fund_cluster_id: "",
   fund_source_id: "",
   campus_id: "",
-  burs_serial_no: "",
+  fund_code: "",
   serial_no_transferred: "",
   payee: "",
   particulars: "",
@@ -162,29 +286,85 @@ const initialForm = (year) => ({
   uacs_code_id: "",
   ref_no: "",
   allotment_class_id: "",
-  uacs_funding_source_code: "",
-  month: "",
-  series: "",
-  series2: "",
-  quarter: "",
-  object_expenditure_id: "",
   mfo_id: "",
-  old_uacs_code_id: "",
-  account_title: "",
   utilization_amount: "",
   ps_utilization: "",
   mooe_utilization: "",
   co_utilization: "",
-  wfp_source_id: "",
-  wfp_source_code: "",
-  dv_payroll_no: "",
   disbursement_amount: "",
-  running_balance: "",
-  remarks: "",
+  wfp_source_id: "",
   unpaid_utilization: "",
-  po_no: "",
-  status_of_po: "",
+  remarks: "",
 });
+
+const RBUD_FORM_FIELDS = [
+  "entry_date",
+  "fiscal_year",
+  "fund_cluster_id",
+  "fund_source_id",
+  "campus_id",
+  "fund_code",
+  "serial_no_transferred",
+  "payee",
+  "particulars",
+  "responsibility_center_id",
+  "pap_id",
+  "uacs_code_id",
+  "ref_no",
+  "allotment_class_id",
+  "mfo_id",
+  "utilization_amount",
+  "ps_utilization",
+  "mooe_utilization",
+  "co_utilization",
+  "disbursement_amount",
+  "wfp_source_id",
+  "remarks",
+];
+
+const buildRbudPayload = (source) =>
+  RBUD_FORM_FIELDS.reduce((payload, field) => {
+    payload[field] = source?.[field] ?? "";
+    return payload;
+  }, {});
+
+const RBUD_BUDGET_FIELDS = [
+  "entry_date",
+  "fiscal_year",
+  "fund_cluster_id",
+  "fund_source_id",
+  "campus_id",
+  "fund_code",
+  "serial_no_transferred",
+  "payee",
+  "particulars",
+  "responsibility_center_id",
+  "pap_id",
+  "uacs_code_id",
+  "ref_no",
+  "allotment_class_id",
+  "mfo_id",
+  "utilization_amount",
+  "ps_utilization",
+  "mooe_utilization",
+  "co_utilization",
+  "wfp_source_id",
+  "remarks",
+];
+
+const RBUD_EDITABLE_FIELDS = {
+  Administration: [...RBUD_FORM_FIELDS],
+  Budget: RBUD_BUDGET_FIELDS,
+};
+
+const getRbudEditableFields = (role) =>
+  new Set(RBUD_EDITABLE_FIELDS[role] || []);
+
+const canEditRbudRole = (role) =>
+  ["Administration", "Budget"].includes(role);
+
+const canCreateRbudRole = (role) =>
+  ["Administration", "Budget"].includes(role);
 
 export default function RbudFundRegistry({
   user,
@@ -193,6 +373,13 @@ export default function RbudFundRegistry({
   activePath = "/rbud",
 }) {
   const token = localStorage.getItem("token");
+  const role = normalizeRbudRole(
+    user?.role || getStoredRbudRole()
+  );
+  const canViewRbud = ["Administration", "Budget"].includes(role);
+  const canCreateRbud = canCreateRbudRole(role);
+  const canEditRbud = canEditRbudRole(role);
+  const canDeleteRbud = role === "Administration";
 
   const headers = useMemo(
     () => ({
@@ -214,12 +401,12 @@ export default function RbudFundRegistry({
   const [references, setReferences] = useState({
     fund_clusters: [],
     fund_sources: [],
+    fund_codes: [],
     campuses: [],
     responsibility_centers: [],
     pap: [],
     mfo: [],
     uacs_codes: [],
-    object_expenditures: [],
     allotment_classes: [],
     wfp_sources: [],
   });
@@ -264,7 +451,7 @@ export default function RbudFundRegistry({
   });
   const [utilizationTab, setUtilizationTab] = useState("Summary");
   const [monitoringTab, setMonitoringTab] = useState("Overall");
-  const [reportChoice, setReportChoice] = useState("RBUD Registry");
+  const [reportChoice, setReportChoice] = useState("FAR 2");
   const [fundGroupTab, setFundGroupTab] = useState("All");
   const [referenceTab, setReferenceTab] = useState("Fund Codes");
   const [referenceSearch, setReferenceSearch] = useState("");
@@ -314,14 +501,13 @@ export default function RbudFundRegistry({
       setReferences({
         fund_clusters: data.fund_clusters || data.fundClusters || [],
         fund_sources: data.fund_sources || data.fundSources || [],
+        fund_codes: data.fund_codes || data.fundCodes || [],
         campuses: data.campuses || [],
         responsibility_centers:
           data.responsibility_centers || data.responsibilityCenters || [],
         pap: data.pap || data.paps || [],
         mfo: data.mfo || data.mfoList || [],
         uacs_codes: data.uacs_codes || data.uacsCodes || [],
-        object_expenditures:
-          data.object_expenditures || data.objectExpenditures || [],
         allotment_classes:
           data.allotment_classes || data.allotmentClasses || [],
         wfp_sources: data.wfp_sources || data.wfpSources || [],
@@ -346,7 +532,7 @@ export default function RbudFundRegistry({
       try {
         const params = new URLSearchParams(filterParams());
         params.set("page", String(requestedPage));
-        params.set("limit", "8");
+        params.set("limit", "30");
         if (selectedStatus !== "All Status") params.set("status", selectedStatus);
         if (searchTerm.trim()) params.set("search", searchTerm.trim());
 
@@ -507,15 +693,23 @@ export default function RbudFundRegistry({
       if (initialTab === "Overall") setUtilizationTab("Summary");
       if (initialTab === "By Fund") setUtilizationTab("WFP Balance");
     }
+    if (nextView === "fundRegistries" && initialTab) {
+      setFundGroupTab(initialTab === "Registered Funds" ? selectedGroup : initialTab);
+    }
+    if (nextView === "breakdown" && initialTab) {
+      setBreakdownTab(initialTab);
+    }
     if (nextView === "reports" && initialTab) {
       setReportChoice(
         initialTab === "Financial Reports"
-          ? "Financial Summary"
-          : initialTab === "RBUD Registry"
+          ? "FAR 2"
+          : initialTab === "Export"
             ? "RBUD Registry"
-            : "RBUD Registry"
+            : initialTab === "Print"
+              ? "RBUD Registry"
+              : "FAR 2"
       );
-      if (initialTab === "Print / Export") setReportPreview(true);
+      if (initialTab === "Print") setReportPreview(true);
     }
   };
 
@@ -530,6 +724,13 @@ export default function RbudFundRegistry({
     setSelectedGroup(group);
     setSelectedFund("All Funds");
     setFundGroupTab(group);
+  };
+
+  const openFundBreakdown = (fundId) => {
+    setSelectedBreakdownFund(String(fundId || ""));
+    setBreakdownTab("By Fund / Project");
+    setView("breakdown");
+    setError("");
   };
 
   const refreshAll = async () => {
@@ -548,33 +749,165 @@ export default function RbudFundRegistry({
   };
 
   const openAddRecord = () => {
+    if (!canCreateRbud) return;
     setForm(initialForm(selectedFiscalYear));
     setSelectedRecord(null);
     setRecordModal("add");
   };
 
   const openEditRecord = async (record) => {
+    if (!canEditRbud) return;
     try {
       // Always load the complete database record before editing.
       // The transaction list is a joined/derived row and may not contain every
       // field required by the PUT request.
       const fresh = await query(`/rbud/${record.id}`);
+
+      // Keep the dropdowns populated even for older RBUD rows whose FK is
+      // missing/legacy, but whose joined code/name is still available.
+      const resolvedFundClusterId = resolveReferenceId(
+        references.fund_clusters,
+        fresh.fund_cluster_id,
+        fresh.fund_cluster_code,
+        fresh.fund_cluster_name
+      );
+      const resolvedFundSourceId = resolveReferenceId(
+        references.fund_sources,
+        fresh.fund_source_id,
+        fresh.fund_source_code,
+        fresh.fund_source_name
+      );
+      const resolvedCampusId = resolveReferenceId(
+        references.campuses,
+        fresh.campus_id,
+        fresh.campus_code,
+        fresh.campus_name
+      );
+      const resolvedResponsibilityCenterId = resolveReferenceId(
+        references.responsibility_centers,
+        fresh.responsibility_center_id,
+        fresh.responsibility_center_code,
+        fresh.responsibility_center_name
+      );
+      const resolvedPapId = resolveReferenceId(
+        references.pap,
+        fresh.pap_id,
+        fresh.pap_code,
+        fresh.pap_name
+      );
+      const resolvedUacsId = resolveReferenceId(
+        references.uacs_codes,
+        fresh.uacs_code_id,
+        fresh.uacs_code,
+        fresh.account_title
+      );
+      const resolvedAllotmentClassId = resolveReferenceId(
+        references.allotment_classes,
+        fresh.allotment_class_id,
+        fresh.allotment_class_code,
+        fresh.allotment_class_name
+      );
+      const resolvedMfoId = resolveReferenceId(
+        references.mfo,
+        fresh.mfo_id,
+        fresh.mfo_code,
+        fresh.mfo_name
+      );
+      const resolvedWfpSourceId = resolveReferenceId(
+        references.wfp_sources,
+        fresh.wfp_source_id,
+        fresh.wfp_source_code,
+        fresh.wfp_source_name
+      );
+
+      // If a referenced master row is not currently in the reference payload,
+      // temporarily include the existing joined value so the current value
+      // remains visible/selectable during edit.
+      setReferences((current) => ({
+        ...current,
+        fund_clusters: addMissingReferenceOption(
+          current.fund_clusters,
+          fresh.fund_cluster_id,
+          fresh.fund_cluster_code,
+          fresh.fund_cluster_name
+        ),
+        fund_sources: addMissingReferenceOption(
+          current.fund_sources,
+          fresh.fund_source_id,
+          fresh.fund_source_code,
+          fresh.fund_source_name
+        ),
+        campuses: addMissingReferenceOption(
+          current.campuses,
+          fresh.campus_id,
+          fresh.campus_code,
+          fresh.campus_name
+        ),
+        responsibility_centers: addMissingReferenceOption(
+          current.responsibility_centers,
+          fresh.responsibility_center_id,
+          fresh.responsibility_center_code,
+          fresh.responsibility_center_name
+        ),
+        pap: addMissingReferenceOption(
+          current.pap,
+          fresh.pap_id,
+          fresh.pap_code,
+          fresh.pap_name
+        ),
+        uacs_codes: addMissingReferenceOption(
+          current.uacs_codes,
+          fresh.uacs_code_id,
+          fresh.uacs_code,
+          fresh.account_title,
+          { account_title: fresh.account_title || "" }
+        ),
+        allotment_classes: addMissingReferenceOption(
+          current.allotment_classes,
+          fresh.allotment_class_id,
+          fresh.allotment_class_code,
+          fresh.allotment_class_name
+        ),
+        mfo: addMissingReferenceOption(
+          current.mfo,
+          fresh.mfo_id,
+          fresh.mfo_code,
+          fresh.mfo_name
+        ),
+        wfp_sources: addMissingReferenceOption(
+          current.wfp_sources,
+          fresh.wfp_source_id,
+          fresh.wfp_source_code,
+          fresh.wfp_source_name
+        ),
+      }));
+
       setSelectedRecord(fresh);
       setForm({
         ...initialForm(selectedFiscalYear),
-        ...fresh,
+        entry_date: fresh.entry_date ? String(fresh.entry_date).slice(0, 10) : "",
         fiscal_year: Number(fresh.fiscal_year || selectedFiscalYear),
-        fund_cluster_id: fresh.fund_cluster_id ? String(fresh.fund_cluster_id) : "",
-        fund_source_id: fresh.fund_source_id ? String(fresh.fund_source_id) : "",
-        campus_id: fresh.campus_id ? String(fresh.campus_id) : "",
-        responsibility_center_id: fresh.responsibility_center_id ? String(fresh.responsibility_center_id) : "",
-        pap_id: fresh.pap_id ? String(fresh.pap_id) : "",
-        uacs_code_id: fresh.uacs_code_id ? String(fresh.uacs_code_id) : "",
-        object_expenditure_id: fresh.object_expenditure_id ? String(fresh.object_expenditure_id) : "",
-        mfo_id: fresh.mfo_id ? String(fresh.mfo_id) : "",
-        allotment_class_id: fresh.allotment_class_id ? String(fresh.allotment_class_id) : "",
-        wfp_source_id: fresh.wfp_source_id ? String(fresh.wfp_source_id) : "",
-        old_uacs_code_id: fresh.old_uacs_code_id ? String(fresh.old_uacs_code_id) : "",
+        fund_cluster_id: resolvedFundClusterId,
+        fund_source_id: resolvedFundSourceId,
+        campus_id: resolvedCampusId,
+        fund_code: fresh.fund_code || "",
+        serial_no_transferred: fresh.serial_no_transferred || "",
+        payee: fresh.payee || "",
+        particulars: fresh.particulars || "",
+        responsibility_center_id: resolvedResponsibilityCenterId,
+        pap_id: resolvedPapId,
+        uacs_code_id: resolvedUacsId,
+        ref_no: fresh.ref_no || "",
+        allotment_class_id: resolvedAllotmentClassId,
+        mfo_id: resolvedMfoId,
+        utilization_amount: fresh.utilization_amount ?? "",
+        ps_utilization: fresh.ps_utilization ?? "",
+        mooe_utilization: fresh.mooe_utilization ?? "",
+        co_utilization: fresh.co_utilization ?? "",
+        disbursement_amount: fresh.disbursement_amount ?? "",
+        wfp_source_id: resolvedWfpSourceId,
+        unpaid_utilization: fresh.unpaid_utilization ?? "",
+        remarks: fresh.remarks || "",
       });
       setError("");
       setRecordModal("edit");
@@ -596,12 +929,13 @@ export default function RbudFundRegistry({
   const saveRecord = async (event) => {
     event.preventDefault();
 
-    // Client-side validation for the database CHECK constraints.
-    const monthText = String(form.month ?? "").trim();
-    const quarterText = String(form.quarter ?? "").trim();
+    if (recordModal === "add" && !canCreateRbud) {
+      setError("Your role is not allowed to create RBUD transactions.");
+      return;
+    }
 
-    if (!String(form.registry_no ?? "").trim()) {
-      setError("Registry No. is required. Please enter it manually.");
+    if (recordModal === "edit" && !canEditRbud) {
+      setError("Your role is not allowed to edit RBUD transactions.");
       return;
     }
 
@@ -610,20 +944,26 @@ export default function RbudFundRegistry({
       return;
     }
 
-    if (monthText !== "") {
-      const month = Number(monthText);
-      if (!Number.isInteger(month) || month < 1 || month > 12) {
-        setError("Month must be a whole number from 1 to 12.");
-        return;
-      }
-    }
+    const requiredReferenceFields = [
+      ["Fund Code", form.fund_code],
+      ["Fund 164 Cluster", form.fund_cluster_id],
+      ["Fund Source", form.fund_source_id],
+      ["Campus", form.campus_id],
+      ["Responsibility Center", form.responsibility_center_id],
+      ["PAP / Program", form.pap_id],
+      ["UACS Code", form.uacs_code_id],
+      ["MFO", form.mfo_id],
+      ["Allotment Class", form.allotment_class_id],
+      ["WFP Source", form.wfp_source_id],
+    ];
 
-    if (quarterText !== "") {
-      const quarter = Number(quarterText);
-      if (!Number.isInteger(quarter) || quarter < 1 || quarter > 4) {
-        setError("Quarter must be a whole number from 1 to 4.");
-        return;
-      }
+    const missingReference = requiredReferenceFields.find(
+      ([, value]) => String(value ?? "").trim() === ""
+    );
+
+    if (missingReference) {
+      setError(`${missingReference[0]} is required. Please select a valid master-data option.`);
+      return;
     }
 
     try {
@@ -633,7 +973,7 @@ export default function RbudFundRegistry({
         : "/rbud";
       const data = await query(path, {
         method: isEdit ? "PUT" : "POST",
-        body: JSON.stringify(form),
+        body: JSON.stringify(buildRbudPayload(form)),
       });
       if (!data) return;
       setRecordModal(null);
@@ -646,6 +986,7 @@ export default function RbudFundRegistry({
   };
 
   const requestDeleteRecord = (record) => {
+    if (!canDeleteRbud) return;
     setDeleteTarget(record);
   };
 
@@ -663,53 +1004,85 @@ export default function RbudFundRegistry({
 
   const exportCsv = () => {
     const rows = entries;
-    const headersCsv = [
-      "Registry No.",
-      "Date",
-      "Fund Group",
-      "Fund",
-      "Payee",
-      "Particulars",
-      "Responsibility Center",
-      "Approved Budget",
-      "Utilized",
-      "Disbursed",
-      "Remaining Balance",
-      "Status",
-    ];
+
+    const reportDefinitions = {
+      "FAR 2": {
+        headers: ["Fund / Cluster","Campus","Allotment Class","Utilization","PS","MOOE","CO","Disbursement","Unpaid","Balance"],
+        map: (row) => [
+          row.fund_cluster_code || row.fund_cluster_name,
+          row.campus_name,
+          row.allotment_class_code || row.allotment_class_name,
+          row.utilization_amount,
+          row.ps_utilization,
+          row.mooe_utilization,
+          row.co_utilization,
+          row.disbursement_amount,
+          row.unpaid_utilization,
+          row.running_balance ?? row.available_balance ?? row.remaining_balance,
+        ],
+      },
+      "FAR 2A": {
+        headers: ["PAP / Program","Utilization","PS","MOOE","CO","Disbursement","Unpaid"],
+        map: (row) => [
+          row.pap_name,
+          row.utilization_amount,
+          row.ps_utilization,
+          row.mooe_utilization,
+          row.co_utilization,
+          row.disbursement_amount,
+          row.unpaid_utilization,
+        ],
+      },
+      "FAR 2A 2A": {
+        headers: ["Registry No.","Date","Payee / Name","Particulars / Description","PAP","UACS Code","Ref. No.","Utilization","PS","MOOE","CO","Disbursement","Unpaid","Balance"],
+        map: (row) => [
+          row.registry_no,dateLabel(row.entry_date),row.payee,row.particulars,row.pap_name,row.uacs_code,row.ref_no,
+          row.utilization_amount,row.ps_utilization,row.mooe_utilization,row.co_utilization,row.disbursement_amount,
+          row.unpaid_utilization,row.running_balance ?? row.available_balance ?? row.remaining_balance,
+        ],
+      },
+      "RBUD Registry": {
+        headers: RBUD_FULL_REPORT_HEADERS,
+        map: (row) => fullRbudReportValues(row),
+      },
+      "WFP Monitoring Report": {
+        headers: ["WFP Source","PAP / Program","Fund","Registry No.","Utilization","Disbursement","Balance","Status","Remarks"],
+        map: (row) => [
+          row.wfp_source_name || row.wfp_source_code,row.pap_name,row.fund_code || row.fund_cluster_name,row.registry_no,
+          row.utilization_amount,row.disbursement_amount,row.running_balance ?? row.available_balance ?? row.remaining_balance,row.status,row.remarks
+        ],
+      },
+      "Financial Summary": {
+        headers: ["Registry No.","Status","Utilization","Disbursement","Unpaid Utilization"],
+        map: (row) => [row.registry_no,row.status,row.utilization_amount,row.disbursement_amount,row.unpaid_utilization],
+      },
+      "Fund / Project Breakdown": {
+        headers: ["Fund / Cluster","PAP / Project","Registry No.","Utilization","Disbursement","Unpaid","Balance"],
+        map: (row) => [
+          row.fund_cluster_code || row.fund_cluster_name || row.fund_code,row.pap_name,row.registry_no,
+          row.utilization_amount,row.disbursement_amount,row.unpaid_utilization,row.running_balance ?? row.available_balance ?? row.remaining_balance
+        ],
+      },
+    };
+
+    const definition = reportDefinitions[reportChoice] || reportDefinitions["RBUD Registry"];
     const lines = [
-      headersCsv,
-      ...rows.map((row) => [
-        row.registry_no,
-        dateLabel(row.entry_date),
-        row.fund_group,
-        row.fund_cluster_name,
-        row.payee,
-        row.particulars,
-        row.responsibility_center_name || row.department_name,
-        row.approved_budget,
-        row.utilization_amount || row.total_utilized,
-        row.disbursement_amount || row.disbursed,
-        row.available_balance || row.remaining_balance,
-        row.status,
-      ]),
+      definition.headers,
+      ...rows.map(definition.map),
     ];
+
     const csv = lines
-      .map((row) =>
-        row
-          .map((value) => `"${String(value ?? "").replaceAll('"', '""')}"`)
-          .join(",")
-      )
+      .map((row) => row.map((value) => `"${String(value ?? "").replaceAll('"', '""')}"`).join(","))
       .join("\n");
 
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `RBUD-${selectedGroup}-${selectedFiscalYear}.csv`;
+    link.download = `${reportChoice.replaceAll(" ", "-").replaceAll("/", "-")}-${selectedGroup}-${selectedFiscalYear}.csv`;
     link.click();
     URL.revokeObjectURL(url);
-    showToast("RBUD CSV exported.");
+    showToast(`${reportChoice} CSV exported.`);
   };
 
   const printCurrent = () => window.print();
@@ -772,6 +1145,9 @@ export default function RbudFundRegistry({
             onView={openRecord}
             onEdit={openEditRecord}
             onDelete={requestDeleteRecord}
+            canCreate={canCreateRbud}
+            canEdit={canEditRbud}
+            canDelete={canDeleteRbud}
           />
         ) : (
           <div className="px-6 py-5">
@@ -813,6 +1189,16 @@ export default function RbudFundRegistry({
               />
             )}
 
+            {view === "fundRegistries" && (
+              <FundRegistriesView
+                references={references}
+                selectedGroup={selectedGroup}
+                setSelectedGroup={handleGroupClick}
+                selectedFunds={selectedGroupFunds}
+                onOpenBreakdown={openFundBreakdown}
+              />
+            )}
+
             {view === "transactions" && (
               <TransactionsView
                 entries={entries}
@@ -836,15 +1222,17 @@ export default function RbudFundRegistry({
                 onView={openRecord}
                 onEdit={openEditRecord}
                 onDelete={requestDeleteRecord}
+                canCreate={canCreateRbud}
+                canEdit={canEditRbud}
+                canDelete={canDeleteRbud}
               />
             )}
 
             {view === "monitoring" && (
-              <MonitoringView
+              <UtilizationView
                 data={utilization}
-                departments={departmentMonitoring.departments || []}
-                monitoringTab={monitoringTab}
-                setMonitoringTab={setMonitoringTab}
+                tab={utilizationTab}
+                setTab={setUtilizationTab}
                 group={selectedGroup}
                 setGroup={handleGroupClick}
                 fund={selectedFund}
@@ -852,6 +1240,20 @@ export default function RbudFundRegistry({
                 fundOptions={fundOptions}
                 year={selectedFiscalYear}
                 setYear={setSelectedFiscalYear}
+              />
+            )}
+
+            {view === "breakdown" && (
+              <FundBreakdownView
+                data={breakdown}
+                tab={breakdownTab}
+                setTab={setBreakdownTab}
+                references={references}
+                selectedFund={selectedBreakdownFund}
+                setSelectedFund={setSelectedBreakdownFund}
+                onLoad={() => loadBreakdown(selectedBreakdownFund)}
+                group={selectedGroup}
+                year={selectedFiscalYear}
               />
             )}
 
@@ -891,6 +1293,7 @@ export default function RbudFundRegistry({
             form={form}
             setForm={setForm}
             references={references}
+            role={role}
             onClose={() => {
               setRecordModal(null);
               setSelectedRecord(null);
@@ -925,6 +1328,9 @@ function ModuleHome({
   onView,
   onEdit,
   onDelete,
+  canCreate,
+  canEdit,
+  canDelete,
 }) {
   const allocatedPct = percent(allocated, approved);
   const utilizedPct = percent(utilized, approved);
@@ -1041,14 +1447,22 @@ function ModuleHome({
         <p className="text-[12px] text-slate-500">Quick access to RBUD functions.</p>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3 mb-4">
-        {modules.map((item) => (
-          <ModuleCard
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-12 gap-3 mb-4">
+        {modules.map((item, index) => (
+          <div
             key={item.id}
-            item={item}
-            Icon={item.icon}
-            onClick={() => onOpen(item.id)}
-          />
+            className={
+              index < 4
+                ? "xl:col-span-3"
+                : "xl:col-span-4"
+            }
+          >
+            <ModuleCard
+              item={item}
+              Icon={item.icon}
+              onClick={() => onOpen(item.id)}
+            />
+          </div>
         ))}
       </div>
 
@@ -1130,8 +1544,8 @@ function ModuleHome({
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-center gap-1">
                         <ActionButton title="View" onClick={() => onView(row)} icon={Eye} />
-                        <ActionButton title="Edit" onClick={() => onEdit(row)} icon={Edit2} />
-                        <ActionButton title="Delete" onClick={() => onDelete(row)} icon={Trash2} />
+                        {canEdit && <ActionButton title="Edit" onClick={() => onEdit(row)} icon={Edit2} />}
+                        {canDelete && <ActionButton title="Delete" onClick={() => onDelete(row)} icon={Trash2} />}
                       </div>
                     </td>
                   </tr>
@@ -1210,14 +1624,18 @@ function ModuleCard({ item, Icon, onClick }) {
     ? "Go to Dashboard"
     : item.id === "allocation"
       ? "Open Budget & Allocation"
-      : item.id === "transactions"
-        ? "Open Transactions"
-        : item.id === "monitoring"
-          ? "Open Monitoring"
-          : "Open Reports & Export";
+      : item.id === "fundRegistries"
+        ? "Open Fund Registries"
+        : item.id === "transactions"
+          ? "Open Transactions"
+          : item.id === "monitoring"
+            ? "Open Utilization & Balance"
+            : item.id === "breakdown"
+              ? "Open Fund / Project Breakdown"
+              : "Open Reports & Export";
 
   return (
-    <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm hover:shadow-md transition min-h-[150px] flex flex-col">
+    <section className="h-full rounded-xl border border-slate-200 bg-white p-4 shadow-sm hover:shadow-md transition min-h-[150px] flex flex-col">
       <button type="button" onClick={onClick} className="w-full text-left flex items-start gap-3">
         <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-white ${toneMap[item.tone]}`}>
           <Icon className="h-5 w-5" />
@@ -1233,9 +1651,11 @@ function ModuleCard({ item, Icon, onClick }) {
         className={`mt-auto w-full h-9 rounded-lg border text-[11px] font-bold inline-flex items-center justify-center gap-1.5 ${
           item.tone === "blue" ? "border-blue-600 text-blue-700 hover:bg-blue-600 hover:text-white" :
           item.tone === "green" ? "border-green-600 text-green-700 hover:bg-green-600 hover:text-white" :
+          item.tone === "purple" ? "border-purple-600 text-purple-700 hover:bg-purple-600 hover:text-white" :
           item.tone === "orange" ? "border-orange-500 text-orange-600 hover:bg-orange-500 hover:text-white" :
           item.tone === "teal" ? "border-teal-500 text-teal-600 hover:bg-teal-500 hover:text-white" :
-          "border-purple-600 text-purple-700 hover:bg-purple-600 hover:text-white"
+          item.tone === "yellow" ? "border-yellow-500 text-yellow-700 hover:bg-yellow-500 hover:text-white" :
+          "border-red-600 text-red-700 hover:bg-red-600 hover:text-white"
         }`}
       >
         {openLabel}<ChevronRight className="h-4 w-4" />
@@ -1567,10 +1987,7 @@ function BudgetAllocationView({
                       {row.responsibility_center_name || "—"}
                     </td>
                     <td className="p-3">
-                      {row.pap_name ||
-                        row.mfo_name ||
-                        row.object_expenditure_name ||
-                        "—"}
+                      {row.pap_name || row.mfo_name || "—"}
                     </td>
                     <td className="p-3 text-right font-semibold">
                       {money(row.approved_budget)}
@@ -1881,15 +2298,18 @@ function TransactionsView({
   onView,
   onEdit,
   onDelete,
+  canCreate,
+  canEdit,
+  canDelete,
 }) {
   return (
     <div>
       <TabBar
-        tabs={["Transaction List", "Add Transaction", "Transaction History"]}
-        value={tab}
+        tabs={canCreate ? ["Transaction List", "Add Transaction", "Transaction History"] : ["Transaction List", "Transaction History"]}
+        value={tab === "Add Transaction" && !canCreate ? "Transaction List" : tab}
         onChange={(nextTab) => {
           setTab(nextTab);
-          if (nextTab === "Add Transaction") onAdd();
+          if (nextTab === "Add Transaction" && canCreate) onAdd();
         }}
       />
       <FilterBar
@@ -1910,14 +2330,16 @@ function TransactionsView({
         title="Transaction Registry"
         subtitle={`${pagination.totalItems} record(s) found`}
         action={
-          <button
-            type="button"
-            onClick={onAdd}
-            className="h-8 px-3 rounded-lg bg-[#211b79] text-white text-[10px] font-semibold flex items-center gap-1.5"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            Add Transaction
-          </button>
+          canCreate ? (
+            <button
+              type="button"
+              onClick={onAdd}
+              className="h-8 px-3 rounded-lg bg-[#211b79] text-white text-[10px] font-semibold flex items-center gap-1.5"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              Add Transaction
+            </button>
+          ) : null
         }
       >
         <TransactionTable
@@ -1926,6 +2348,8 @@ function TransactionsView({
           onView={onView}
           onEdit={onEdit}
           onDelete={onDelete}
+          canEdit={canEdit}
+          canDelete={canDelete}
         />
 
         <div className="mt-4 pt-3 border-t border-gray-100 flex items-center justify-between">
@@ -1962,79 +2386,48 @@ function TransactionsView({
   );
 }
 
-function TransactionTable({
-  entries = [],
-  loading,
-  compact = false,
-  onView,
-  onEdit,
-  onDelete,
-}) {
+function TransactionTable({ entries = [], loading, compact = false, onView, onEdit, onDelete, canEdit = false, canDelete = false }) {
+  const columns = compact
+    ? [["Registry No.","registry_no"],["Date","entry_date"],["Fund Code","fund_code"],["Payee / Name","payee"],["Particulars / Description","particulars"],["Utilization","utilization_amount"],["Disbursement","disbursement_amount"],["Running Balance","running_balance"]]
+    : [["Registry No.","registry_no"],["Date","entry_date"],["Fund Cluster","fund_cluster_name"],["Fund Code","fund_code"],["Campus","campus_name"],["BURS Serial No.","burs_serial_no"],["Transferred From/To","serial_no_transferred"],["Payee / Name","payee"],["Particulars / Description","particulars"],["Responsibility Center","responsibility_center_name"],["PAP","pap_name"],["UACS Code","uacs_code"],["Ref. No.","ref_no"],["Allotment Class","allotment_class_name"],["Utilization","utilization_amount"],["PS","ps_utilization"],["MOOE","mooe_utilization"],["CO","co_utilization"],["WFP Source","wfp_source_name"],["Disbursement","disbursement_amount"],["Unpaid Utilization","unpaid_utilization"],["Running Balance","running_balance"],["Status","status"],["Entered By","created_by_name"],["Updated By","updated_by_name"]];
+  const moneyKeys = new Set(["utilization_amount","ps_utilization","mooe_utilization","co_utilization","disbursement_amount","unpaid_utilization","running_balance"]);
+  const cellValue = (row,key) => {
+    if (key === "entry_date") return dateLabel(row.entry_date);
+    if (moneyKeys.has(key)) return money(row[key]);
+    if (key === "created_by_name") {
+      return row.created_by_name
+        ? `${row.created_by_name}${row.created_by_role ? ` (${row.created_by_role})` : ""}`
+        : "—";
+    }
+    if (key === "updated_by_name") {
+      return row.updated_by_name
+        ? `${row.updated_by_name}${row.updated_by_role ? ` (${row.updated_by_role})` : ""}`
+        : "—";
+    }
+    return row[key] || "—";
+  };
   return (
     <div className="overflow-x-auto">
-      <table className={`w-full ${compact ? "min-w-[1050px]" : "min-w-[1250px]"} text-[10px]`}>
-        <thead className="bg-gray-50 text-gray-500">
-          <tr>
-            <th className="p-3 text-left">Registry No.</th>
-            <th className="p-3 text-left">Date</th>
-            <th className="p-3 text-left">Fund</th>
-            <th className="p-3 text-left">Department / Responsibility Center</th>
-            <th className="p-3 text-left">BURS / Ref. No.</th>
-            <th className="p-3 text-left">Payee</th>
-            <th className="p-3 text-left">Particulars</th>
-            <th className="p-3 text-right">Utilized</th>
-            <th className="p-3 text-right">Disbursed</th>
-            {!compact && <th className="p-3 text-center">Status</th>}
-            {!compact && <th className="p-3 text-center">Actions</th>}
-          </tr>
-        </thead>
+      <table className={`w-full ${compact ? "min-w-[1050px]" : "min-w-[2900px]"} text-[10px]`}>
+        <thead className="bg-gray-50 text-gray-500"><tr>
+          {columns.map(([label]) => <th key={label} className="p-3 text-left whitespace-nowrap">{label}</th>)}
+          {!compact && <th className="p-3 text-center sticky right-0 bg-gray-50">Actions</th>}
+        </tr></thead>
         <tbody>
-          {loading && (
-            <tr>
-              <td colSpan={compact ? 8 : 10} className="p-8 text-center text-gray-400">
-                <Loader2 className="w-5 h-5 animate-spin mx-auto mb-2" />
-                Loading transactions...
-              </td>
-            </tr>
-          )}
-
-          {!loading &&
-            entries.map((row) => (
-              <tr key={row.id} className="border-b border-gray-50 hover:bg-gray-50/70">
-                <td className="p-3 font-semibold text-[#17135f]">{row.registry_no || "—"}</td>
-                <td className="p-3">{dateLabel(row.entry_date)}</td>
-                <td className="p-3">
-                  <b>{row.fund_cluster_code || "—"}</b>
-                  <div className="text-gray-400">{row.fund_cluster_name || "—"}</div>
-                  <div className="text-[9px] text-gray-400">{row.fund_source_name || row.fund_source_code || ""}</div>
-                </td>
-                <td className="p-3 min-w-[210px]">
-                  <b>{row.responsibility_center_code || "—"}</b>
-                  <div className="text-gray-400">{row.responsibility_center_name || row.department_name || "—"}</div>
-                </td>
-                <td className="p-3">{row.burs_serial_no || row.ref_no || "—"}</td>
-                <td className="p-3">{row.payee || "—"}</td>
-                <td className="p-3 max-w-[230px] truncate">{row.particulars || "—"}</td>
-                <td className="p-3 text-right">{money(row.utilization_amount || row.total_utilized)}</td>
-                <td className="p-3 text-right">{money(row.disbursement_amount || row.disbursed)}</td>
-                {!compact && (
-                  <td className="p-3 text-center">
-                    <StatusBadge status={row.status} />
-                  </td>
-                )}
-                {!compact && (
-                  <td className="p-3">
-                    <div className="flex items-center justify-center gap-1">
-                      <ActionButton title="View" onClick={() => onView(row)} icon={Eye} />
-                      <ActionButton title="Edit" onClick={() => onEdit(row)} icon={Edit2} />
-                      <ActionButton title="Delete" onClick={() => onDelete(row)} icon={Trash2} />
-                    </div>
-                  </td>
-                )}
-              </tr>
-            ))}
-
-          {!loading && !entries.length && <EmptyRow colSpan={compact ? 8 : 10} />}
+          {loading && <tr><td colSpan={columns.length+(compact?0:1)} className="p-8 text-center text-gray-400"><Loader2 className="w-5 h-5 animate-spin mx-auto mb-2"/>Loading transactions...</td></tr>}
+          {!loading && entries.map(row => <tr key={row.id} className="border-b border-gray-50 hover:bg-gray-50/70 align-top">
+            {columns.map(([label,key]) => <td key={label} className="p-3">
+              {key === "registry_no" ? <span className="font-semibold text-[#17135f] whitespace-nowrap">{cellValue(row,key)}</span>
+              : key === "particulars" ? <div className="whitespace-pre-line max-w-[280px]">{cellValue(row,key)}</div>
+              : <span className="whitespace-nowrap">{cellValue(row,key)}</span>}
+            </td>)}
+            {!compact && <td className="p-3 sticky right-0 bg-white"><div className="flex items-center justify-center gap-1">
+              <ActionButton title="View" onClick={()=>onView(row)} icon={Eye}/>
+              {canEdit && <ActionButton title="Edit" onClick={()=>onEdit(row)} icon={Edit2}/>}
+              {canDelete && <ActionButton title="Delete" onClick={()=>onDelete(row)} icon={Trash2}/>}
+            </div></td>}
+          </tr>)}
+          {!loading && !entries.length && <EmptyRow colSpan={columns.length+(compact?0:1)}/>}
         </tbody>
       </table>
     </div>
@@ -2531,7 +2924,6 @@ function MasterDataView({ references, tab, setTab, search, setSearch }) {
     "Other Approved Codes": [
       ...references.pap,
       ...references.mfo,
-      ...references.object_expenditures,
     ],
   };
 
@@ -2610,6 +3002,529 @@ function MasterDataView({ references, tab, setTab, search, setSearch }) {
    REPORTS & EXPORT
 ============================================================ */
 
+/*
+  Each report has its own layout and data presentation.
+  These are BMAS/RBUD report templates based on the fields available
+  in the current RBUD registry. They are intentionally not treated as
+  official external-government form replicas unless an approved template
+  is provided.
+*/
+
+const reportNumber = (value) => {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : 0;
+};
+
+const reportRows = (entries = []) => entries.filter(Boolean);
+
+const sumReport = (rows, field) =>
+  rows.reduce((total, row) => total + reportNumber(row?.[field]), 0);
+
+const reportLabel = (row, fields = []) => {
+  for (const field of fields) {
+    const value = row?.[field];
+    if (value !== undefined && value !== null && String(value).trim() !== "") {
+      return String(value);
+    }
+  }
+  return "—";
+};
+
+const reportUser = (row, type = "created") => {
+  const isUpdated = type === "updated";
+  const name = isUpdated ? row?.updated_by_name : row?.created_by_name;
+  const role = isUpdated ? row?.updated_by_role : row?.created_by_role;
+  return name ? `${name}${role ? ` (${role})` : ""}` : "—";
+};
+
+const RBUD_FULL_REPORT_COLUMNS = [
+  ["Registry No.", row => row.registry_no],
+  ["Date", row => dateLabel(row.entry_date)],
+  ["Fund Cluster", row => reportLabel(row, ["fund_cluster_code", "fund_cluster_name"])],
+  ["Fund Code", row => row.fund_code],
+  ["Campus", row => row.campus_name],
+  ["BURS Serial No.", row => row.burs_serial_no],
+  ["Serial No. Transferred From/To", row => row.serial_no_transferred || row.serial_no_transferred_from_to],
+  ["Payee / Name", row => row.payee],
+  ["Particulars / Description", row => row.particulars],
+  ["Responsibility Center", row => reportLabel(row, ["responsibility_center_code", "responsibility_center_name", "department_name"])],
+  ["PAP", row => reportLabel(row, ["pap_code", "pap_name"])],
+  ["UACS Code", row => row.uacs_code],
+  ["Ref. No.", row => row.ref_no],
+  ["Allotment Class", row => reportLabel(row, ["allotment_class_code", "allotment_class_name"])],
+  ["UACS Funding Source Code", row => row.uacs_funding_source_code],
+  ["Year", row => row.fiscal_year || (row.entry_date ? new Date(row.entry_date).getFullYear() : null)],
+  ["Month", row => row.month || (row.entry_date ? new Date(row.entry_date).toLocaleString("en-US", { month: "long" }) : null)],
+  ["Series", row => row.series],
+  ["Series2", row => row.series2],
+  ["Quarter", row => row.quarter || (row.entry_date ? `Q${Math.ceil((new Date(row.entry_date).getMonth() + 1) / 3)}` : null)],
+  ["MFO", row => row.mfo_name || row.mfo_code],
+  ["Old UACS Code", row => row.old_uacs_code || row.uacs_old_code || row.old_uacs_code_id],
+  ["Accounts Title", row => row.account_title || row.uacs_account_title],
+  ["Utilization", row => money(row.utilization_amount)],
+  ["PS", row => money(row.ps_utilization)],
+  ["MOOE", row => money(row.mooe_utilization)],
+  ["CO", row => money(row.co_utilization)],
+  ["WFP Source", row => row.wfp_source_name || row.wfp_source || row.wfp_source_code],
+  ["WFP Source Code", row => row.wfp_source_code || row.wfp_source_master_code],
+  ["Disbursement Amount", row => money(row.disbursement_amount)],
+  ["Running Balance", row => money(row.running_balance ?? row.available_balance ?? row.remaining_balance)],
+  ["Remarks", row => row.remarks],
+  ["Unpaid Utilization", row => money(row.unpaid_utilization)],
+  ["Status", row => row.status || row.derived_status],
+  ["Entered By", row => reportUser(row, "created")],
+  ["Updated By", row => reportUser(row, "updated")],
+];
+
+const RBUD_FULL_REPORT_HEADERS = RBUD_FULL_REPORT_COLUMNS.map(([label]) => label);
+
+const fullRbudReportValues = (row) =>
+  RBUD_FULL_REPORT_COLUMNS.map(([, getter]) => {
+    const value = getter(row || {});
+    return value === null || value === undefined || String(value).trim() === "" ? "—" : value;
+  });
+
+
+function ReportDocumentHeader({ title, year, group, fund }) {
+  return (
+    <div className="text-center border-b border-gray-200 pb-4 mb-4">
+      <p className="text-[9px] text-gray-400 font-semibold">UNIVERSITY OF ABRA</p>
+      <p className="text-[9px] text-gray-500">BUDGET MONITORING AND ALLOCATION SYSTEM</p>
+      <h3 className="text-base font-bold text-[#17135f] mt-1">{title}</h3>
+      <p className="text-[10px] text-gray-500 mt-1">
+        Fiscal Year {year} • Fund Group: {group} • Fund: {fund || "All Funds"}
+      </p>
+    </div>
+  );
+}
+
+function ReportTable({ headers, rows, renderRow, empty = "No records found.", tableClassName = "" }) {
+  return (
+    <div className="overflow-x-auto">
+      <table className={`w-full border border-gray-400 border-collapse text-[9px] ${tableClassName}`}>
+        <thead>
+          <tr>
+            {headers.map((header) => {
+              const headerLabel = typeof header === "string" ? header : header?.label;
+              const internalAudit = /^(Entered By|Updated By)$/i.test(String(headerLabel || ""));
+              return (
+                <th
+                  key={String(headerLabel)}
+                  className={`border border-gray-400 bg-gray-50 px-2 py-1.5 text-center font-bold whitespace-nowrap align-middle ${internalAudit ? "rbud-internal-audit-column" : ""}`}
+                >
+                  {headerLabel}
+                </th>
+              );
+            })}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.length ? (
+            rows.map((row, index) => renderRow(row, index))
+          ) : (
+            <tr>
+              <td colSpan={headers.length} className="border border-gray-300 px-2 py-5 text-center text-gray-500">
+                {empty}
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function Far2Report({ entries }) {
+  const rows = reportRows(entries);
+  const grouped = Object.values(
+    rows.reduce((acc, row) => {
+      const key = [
+        row.fund_cluster_code || row.fund_cluster_name || "—",
+        row.campus_name || "—",
+        row.allotment_class_code || row.allotment_class_name || "—",
+      ].join("||");
+
+      if (!acc[key]) {
+        acc[key] = {
+          fund: row.fund_cluster_code || row.fund_cluster_name || "—",
+          campus: row.campus_name || "—",
+          allotment: row.allotment_class_code || row.allotment_class_name || "—",
+          utilization: 0,
+          ps: 0,
+          mooe: 0,
+          co: 0,
+          disbursement: 0,
+          unpaid: 0,
+          balance: 0,
+        };
+      }
+
+      acc[key].utilization += reportNumber(row.utilization_amount);
+      acc[key].ps += reportNumber(row.ps_utilization);
+      acc[key].mooe += reportNumber(row.mooe_utilization);
+      acc[key].co += reportNumber(row.co_utilization);
+      acc[key].disbursement += reportNumber(row.disbursement_amount);
+      acc[key].unpaid += reportNumber(row.unpaid_utilization);
+      acc[key].balance += reportNumber(
+        row.running_balance ?? row.available_balance ?? row.remaining_balance
+      );
+      return acc;
+    }, {})
+  );
+
+  return (
+    <div>
+      <div className="text-[9px] font-semibold text-gray-600 mb-2">
+        Utilization and Disbursement Summary
+      </div>
+      <ReportTable
+        headers={[
+          "Fund / Cluster",
+          "Campus",
+          "Allotment Class",
+          "Utilization",
+          "PS",
+          "MOOE",
+          "CO",
+          "Disbursement",
+          "Unpaid",
+          "Balance",
+        ]}
+        rows={grouped}
+        renderRow={(row, index) => (
+          <tr key={`far2-${index}`}>
+            <td className="border border-gray-300 px-2 py-1">{row.fund}</td>
+            <td className="border border-gray-300 px-2 py-1">{row.campus}</td>
+            <td className="border border-gray-300 px-2 py-1">{row.allotment}</td>
+            <td className="border border-gray-300 px-2 py-1 text-right">{money(row.utilization)}</td>
+            <td className="border border-gray-300 px-2 py-1 text-right">{money(row.ps)}</td>
+            <td className="border border-gray-300 px-2 py-1 text-right">{money(row.mooe)}</td>
+            <td className="border border-gray-300 px-2 py-1 text-right">{money(row.co)}</td>
+            <td className="border border-gray-300 px-2 py-1 text-right">{money(row.disbursement)}</td>
+            <td className="border border-gray-300 px-2 py-1 text-right">{money(row.unpaid)}</td>
+            <td className="border border-gray-300 px-2 py-1 text-right">{money(row.balance)}</td>
+          </tr>
+        )}
+      />
+    </div>
+  );
+}
+
+function Far2AReport({ entries }) {
+  const rows = reportRows(entries);
+  const grouped = Object.values(
+    rows.reduce((acc, row) => {
+      const key = row.pap_name || row.pap_code || "Unclassified";
+      if (!acc[key]) {
+        acc[key] = {
+          pap: key,
+          utilization: 0,
+          ps: 0,
+          mooe: 0,
+          co: 0,
+          disbursement: 0,
+          unpaid: 0,
+        };
+      }
+      acc[key].utilization += reportNumber(row.utilization_amount);
+      acc[key].ps += reportNumber(row.ps_utilization);
+      acc[key].mooe += reportNumber(row.mooe_utilization);
+      acc[key].co += reportNumber(row.co_utilization);
+      acc[key].disbursement += reportNumber(row.disbursement_amount);
+      acc[key].unpaid += reportNumber(row.unpaid_utilization);
+      return acc;
+    }, {})
+  );
+
+  return (
+    <div>
+      <div className="text-[9px] font-semibold text-gray-600 mb-2">
+        Utilization by PAP / Program
+      </div>
+      <ReportTable
+        headers={[
+          "PAP / Program",
+          "Utilization",
+          "PS",
+          "MOOE",
+          "CO",
+          "Disbursement",
+          "Unpaid",
+        ]}
+        rows={grouped}
+        renderRow={(row, index) => (
+          <tr key={`far2a-${index}`}>
+            <td className="border border-gray-300 px-2 py-1">{row.pap}</td>
+            <td className="border border-gray-300 px-2 py-1 text-right">{money(row.utilization)}</td>
+            <td className="border border-gray-300 px-2 py-1 text-right">{money(row.ps)}</td>
+            <td className="border border-gray-300 px-2 py-1 text-right">{money(row.mooe)}</td>
+            <td className="border border-gray-300 px-2 py-1 text-right">{money(row.co)}</td>
+            <td className="border border-gray-300 px-2 py-1 text-right">{money(row.disbursement)}</td>
+            <td className="border border-gray-300 px-2 py-1 text-right">{money(row.unpaid)}</td>
+          </tr>
+        )}
+      />
+    </div>
+  );
+}
+
+function Far2A2AReport({ entries }) {
+  const rows = reportRows(entries);
+  return (
+    <div>
+      <div className="text-[9px] font-semibold text-gray-600 mb-2">
+        Detailed Utilization and Disbursement Schedule
+      </div>
+      <ReportTable
+        headers={[
+          "Registry No.",
+          "Date",
+          "Payee / Name",
+          "Particulars / Description",
+          "PAP",
+          "UACS Code",
+          "Ref. No.",
+          "Utilization",
+          "PS",
+          "MOOE",
+          "CO",
+          "Disbursement",
+          "Unpaid",
+          "Balance",
+          "Remarks",
+          "Entered By",
+          "Updated By",
+        ]}
+        rows={rows}
+        tableClassName="min-w-[1900px]"
+        renderRow={(row) => (
+          <tr key={`far2a2a-${row.id}`}>
+            <td className="border border-gray-300 px-2 py-1">{row.registry_no || "—"}</td>
+            <td className="border border-gray-300 px-2 py-1">{dateLabel(row.entry_date)}</td>
+            <td className="border border-gray-300 px-2 py-1">{row.payee || "—"}</td>
+            <td className="border border-gray-300 px-2 py-1">{row.particulars || "—"}</td>
+            <td className="border border-gray-300 px-2 py-1">{row.pap_name || "—"}</td>
+            <td className="border border-gray-300 px-2 py-1">{row.uacs_code || "—"}</td>
+            <td className="border border-gray-300 px-2 py-1">{row.ref_no || "—"}</td>
+            <td className="border border-gray-300 px-2 py-1 text-right">{money(row.utilization_amount)}</td>
+            <td className="border border-gray-300 px-2 py-1 text-right">{money(row.ps_utilization)}</td>
+            <td className="border border-gray-300 px-2 py-1 text-right">{money(row.mooe_utilization)}</td>
+            <td className="border border-gray-300 px-2 py-1 text-right">{money(row.co_utilization)}</td>
+            <td className="border border-gray-300 px-2 py-1 text-right">{money(row.disbursement_amount)}</td>
+            <td className="border border-gray-300 px-2 py-1 text-right">{money(row.unpaid_utilization)}</td>
+            <td className="border border-gray-300 px-2 py-1 text-right">{money(row.running_balance ?? row.available_balance ?? row.remaining_balance)}</td>
+            <td className="border border-gray-300 px-2 py-1 whitespace-nowrap">{row.remarks || "—"}</td>
+            <td className="border border-gray-300 px-2 py-1 whitespace-nowrap rbud-internal-audit-column">{reportUser(row, "created")}</td>
+            <td className="border border-gray-300 px-2 py-1 whitespace-nowrap rbud-internal-audit-column">{reportUser(row, "updated")}</td>
+          </tr>
+        )}
+      />
+    </div>
+  );
+}
+
+function RbudRegistryReport({ entries }) {
+  const rows = reportRows(entries);
+
+  return (
+    <div>
+      <div className="mb-2 text-[9px] text-gray-500">
+        Complete RBUD transaction registry — includes budget, utilization, disbursement, monitoring, and record-tracking fields.
+      </div>
+
+      <ReportTable
+        headers={RBUD_FULL_REPORT_HEADERS}
+        rows={rows}
+        tableClassName="min-w-[3000px]"
+        renderRow={(row) => (
+          <tr key={`rbud-${row.id}`} className="align-middle">
+            {RBUD_FULL_REPORT_COLUMNS.map(([label, getter]) => {
+              const value = getter(row || {});
+              const display = value === null || value === undefined || String(value).trim() === "" ? "—" : value;
+              const auditColumn = label === "Entered By" || label === "Updated By";
+              const moneyColumn = ["Utilization", "PS", "MOOE", "CO", "Disbursement Amount", "Running Balance", "Unpaid Utilization"].includes(label);
+
+              return (
+                <td
+                  key={`${row.id}-${label}`}
+                  className={`border border-gray-300 px-2 py-1 whitespace-nowrap align-middle ${
+                    auditColumn ? "rbud-internal-audit-column" : ""
+                  } ${moneyColumn ? "text-right" : "text-left"}`}
+                >
+                  {display}
+                </td>
+              );
+            })}
+          </tr>
+        )}
+      />
+    </div>
+  );
+}
+
+function WfpMonitoringReport({ entries }) {
+  const rows = reportRows(entries);
+  return (
+    <div>
+      <ReportTable
+        headers={[
+          "WFP Source",
+          "PAP / Program",
+          "Fund",
+          "Registry No.",
+          "Utilization",
+          "Disbursement",
+          "Balance",
+          "Status",
+          "Remarks",
+          "Entered By",
+          "Updated By",
+        ]}
+        rows={rows}
+        renderRow={(row) => (
+          <tr key={`wfp-${row.id}`}>
+            <td className="border border-gray-300 px-2 py-1">{reportLabel(row, ["wfp_source_name", "wfp_source_code"])}</td>
+            <td className="border border-gray-300 px-2 py-1">{row.pap_name || "—"}</td>
+            <td className="border border-gray-300 px-2 py-1">{row.fund_code || row.fund_cluster_name || "—"}</td>
+            <td className="border border-gray-300 px-2 py-1">{row.registry_no || "—"}</td>
+            <td className="border border-gray-300 px-2 py-1 text-right">{money(row.utilization_amount)}</td>
+            <td className="border border-gray-300 px-2 py-1 text-right">{money(row.disbursement_amount)}</td>
+            <td className="border border-gray-300 px-2 py-1 text-right">{money(row.running_balance ?? row.available_balance ?? row.remaining_balance)}</td>
+            <td className="border border-gray-300 px-2 py-1">{row.status || "—"}</td>
+            <td className="border border-gray-300 px-2 py-1">{row.remarks || "—"}</td>
+            <td className="border border-gray-300 px-2 py-1 rbud-internal-audit-column">{reportUser(row, "created")}</td>
+            <td className="border border-gray-300 px-2 py-1 rbud-internal-audit-column">{reportUser(row, "updated")}</td>
+          </tr>
+        )}
+      />
+    </div>
+  );
+}
+
+function FinancialSummaryReport({ entries }) {
+  const rows = reportRows(entries);
+  const campuses = new Set(rows.map((row) => row.campus_name).filter(Boolean)).size;
+  const payees = new Set(rows.map((row) => row.payee).filter(Boolean)).size;
+  const utilization = sumReport(rows, "utilization_amount");
+  const disbursement = sumReport(rows, "disbursement_amount");
+  const unpaid = sumReport(rows, "unpaid_utilization");
+
+  const statusMap = rows.reduce((acc, row) => {
+    const key = row.status || "No Status";
+    acc[key] = (acc[key] || 0) + 1;
+    return acc;
+  }, {});
+
+  return (
+    <div>
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-2 mb-4">
+        {[
+          ["Transactions", rows.length],
+          ["Campuses", campuses],
+          ["Payees", payees],
+          ["Utilization", money(utilization)],
+          ["Disbursement", money(disbursement)],
+        ].map(([label, value]) => (
+          <div key={label} className="border border-gray-200 rounded-lg p-2">
+            <div className="text-[9px] text-gray-500">{label}</div>
+            <div className="text-xs font-bold">{value}</div>
+          </div>
+        ))}
+      </div>
+      <ReportTable
+        headers={["Status", "Transactions", "Utilization", "Disbursement", "Unpaid Utilization"]}
+        rows={Object.entries(statusMap)}
+        renderRow={([status, count], index) => {
+          const statusRows = rows.filter((row) => (row.status || "No Status") === status);
+          return (
+            <tr key={`summary-${index}`}>
+              <td className="border border-gray-300 px-2 py-1">{status}</td>
+              <td className="border border-gray-300 px-2 py-1 text-center">{count}</td>
+              <td className="border border-gray-300 px-2 py-1 text-right">{money(sumReport(statusRows, "utilization_amount"))}</td>
+              <td className="border border-gray-300 px-2 py-1 text-right">{money(sumReport(statusRows, "disbursement_amount"))}</td>
+              <td className="border border-gray-300 px-2 py-1 text-right">{money(sumReport(statusRows, "unpaid_utilization"))}</td>
+            </tr>
+          );
+        }}
+      />
+      <div className="mt-3 text-[9px] text-gray-600">
+        Total unpaid utilization: <span className="font-bold">{money(unpaid)}</span>
+      </div>
+    </div>
+  );
+}
+
+function FundProjectBreakdownReport({ entries }) {
+  const rows = Object.values(
+    reportRows(entries).reduce((acc, row) => {
+      const fund = row.fund_cluster_code || row.fund_cluster_name || row.fund_code || "Unclassified Fund";
+      const pap = row.pap_name || "Unclassified PAP";
+      const key = `${fund}||${pap}`;
+
+      if (!acc[key]) {
+        acc[key] = {
+          fund,
+          pap,
+          transactions: 0,
+          utilization: 0,
+          disbursement: 0,
+          unpaid: 0,
+          balance: 0,
+        };
+      }
+
+      acc[key].transactions += 1;
+      acc[key].utilization += reportNumber(row.utilization_amount);
+      acc[key].disbursement += reportNumber(row.disbursement_amount);
+      acc[key].unpaid += reportNumber(row.unpaid_utilization);
+      acc[key].balance += reportNumber(row.running_balance ?? row.available_balance ?? row.remaining_balance);
+      return acc;
+    }, {})
+  );
+
+  return (
+    <div>
+      <ReportTable
+        headers={["Fund / Cluster", "PAP / Project", "Transactions", "Utilization", "Disbursement", "Unpaid", "Balance"]}
+        rows={rows}
+        renderRow={(row, index) => (
+          <tr key={`breakdown-${index}`}>
+            <td className="border border-gray-300 px-2 py-1">{row.fund}</td>
+            <td className="border border-gray-300 px-2 py-1">{row.pap}</td>
+            <td className="border border-gray-300 px-2 py-1 text-center">{row.transactions}</td>
+            <td className="border border-gray-300 px-2 py-1 text-right">{money(row.utilization)}</td>
+            <td className="border border-gray-300 px-2 py-1 text-right">{money(row.disbursement)}</td>
+            <td className="border border-gray-300 px-2 py-1 text-right">{money(row.unpaid)}</td>
+            <td className="border border-gray-300 px-2 py-1 text-right">{money(row.balance)}</td>
+          </tr>
+        )}
+      />
+    </div>
+  );
+}
+
+
+function SelectedRbudReport({ reportChoice, entries, year, group, fund }) {
+  const reportMap = {
+    "FAR 2": Far2Report,
+    "FAR 2A": Far2AReport,
+    "FAR 2A 2A": Far2A2AReport,
+    "RBUD Registry": RbudRegistryReport,
+    "WFP Monitoring Report": WfpMonitoringReport,
+    "Financial Summary": FinancialSummaryReport,
+    "Fund / Project Breakdown": FundProjectBreakdownReport,
+  };
+
+  const Report = reportMap[reportChoice] || RbudRegistryReport;
+
+  return (
+    <div>
+      <ReportDocumentHeader title={reportChoice} year={year} group={group} fund={fund} />
+      <Report entries={entries} />
+    </div>
+  );
+}
+
 function ReportsExportView({
   entries,
   group,
@@ -2625,6 +3540,11 @@ function ReportsExportView({
   preview,
   closePreview,
 }) {
+  const openReportPreview = (choice) => {
+    setReportChoice(choice);
+    onPreview();
+  };
+
   return (
     <div>
       <div className="bg-white border border-gray-100 rounded-xl shadow-sm p-4 mb-4">
@@ -2634,6 +3554,9 @@ function ReportsExportView({
             value={reportChoice}
             onChange={setReportChoice}
             options={[
+              "FAR 2",
+              "FAR 2A",
+              "FAR 2A 2A",
               "RBUD Registry",
               "WFP Monitoring Report",
               "Financial Summary",
@@ -2652,17 +3575,19 @@ function ReportsExportView({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-3">
-        <ReportAction icon={List} title="Generate Registry" description="Generate fund and transaction registries" onClick={onPreview} />
-        <ReportAction icon={ClipboardList} title="Generate WFP Report" description="Generate WFP monitoring reports" onClick={onPreview} />
-        <ReportAction icon={FileText} title="Generate Financial Report" description="Generate financial accountability reports" onClick={onPreview} />
-        <ReportAction icon={Printer} title="Print Preview" description="Preview report before printing" onClick={onPreview} />
-        <ReportAction icon={Download} title="Export" description="Export reports to CSV / Excel-ready data" onClick={onExport} />
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+        <ReportAction icon={FileText} title="FAR 2" description="Utilization and disbursement summary" onClick={() => openReportPreview("FAR 2")} />
+        <ReportAction icon={FileText} title="FAR 2A" description="Utilization by object of expenditure" onClick={() => openReportPreview("FAR 2A")} />
+        <ReportAction icon={FileText} title="FAR 2A 2A" description="Detailed utilization schedule" onClick={() => openReportPreview("FAR 2A 2A")} />
+        <ReportAction icon={FileSpreadsheet} title="Export to Excel" description="Export the selected report dataset" onClick={onExport} />
+        <ReportAction icon={FileText} title="Export to PDF" description="Print the selected report and save as PDF" onClick={onPrint} />
+        <ReportAction icon={Printer} title="Print" description="Print the selected RBUD report" onClick={onPrint} />
+        <ReportAction icon={List} title="All Reports" description="Preview the selected report" onClick={onPreview} />
       </div>
 
       <Panel
-        title="Report Preview"
-        subtitle={`${entries.length} current registry record(s)`}
+        title={reportChoice}
+        subtitle={`${entries.length} current RBUD registry record(s) • FY ${year}`}
         className="mt-4"
         action={
           <div className="flex items-center gap-2">
@@ -2678,44 +3603,90 @@ function ReportsExportView({
         }
       >
         <div className="bg-gray-50 border border-gray-100 rounded-xl p-4">
-          <div className="bg-white border border-gray-200 rounded-lg p-5 max-w-4xl mx-auto">
-            <div className="text-center border-b border-gray-200 pb-4">
-              <p className="text-[10px] text-gray-400">BUDGET MONITORING AND ALLOCATION SYSTEM</p>
-              <h3 className="text-base font-bold text-[#17135f] mt-1">{reportChoice}</h3>
-              <p className="text-[10px] text-gray-500 mt-1">
-                Fiscal Year {year} • Fund Group: {group}
-              </p>
-            </div>
-
-            <div className="grid grid-cols-4 gap-2 my-4">
-              <MiniMetric label="Records" value={String(entries.length)} />
-              <MiniMetric label="Fund" value={fund || "All Funds"} />
-              <MiniMetric label="Period" value={`FY ${year}`} />
-              <MiniMetric label="Status" value="Generated Preview" />
-            </div>
-
-            <TransactionTable entries={entries.slice(0, 10)} compact />
+          <div className="bg-white border border-gray-200 rounded-lg p-5 max-w-5xl mx-auto">
+            <SelectedRbudReport
+              reportChoice={reportChoice}
+              entries={entries}
+              year={year}
+              group={group}
+              fund={fund}
+            />
           </div>
         </div>
       </Panel>
 
+      <style>{`
+        @media print {
+          @page { size: landscape; margin: 8mm; }
+          body * { visibility: hidden !important; }
+          .rbud-print-report,
+          .rbud-print-report * { visibility: visible !important; }
+          .rbud-print-report {
+            display: block !important;
+            position: absolute !important;
+            left: 0 !important;
+            top: 0 !important;
+            width: 100% !important;
+            background: #fff !important;
+            color: #000 !important;
+            font-family: Arial, sans-serif !important;
+          }
+          .rbud-print-report table {
+            width: 100% !important;
+            border-collapse: collapse !important;
+            table-layout: fixed !important;
+          }
+          .rbud-print-report th,
+          .rbud-print-report td {
+            border: 1px solid #555 !important;
+            padding: 4px 5px !important;
+            font-size: 7px !important;
+            line-height: 1.15 !important;
+            vertical-align: top !important;
+            word-break: break-word !important;
+          }
+          .rbud-print-report th {
+            background: #e9e9e9 !important;
+            font-weight: 700 !important;
+            text-align: center !important;
+          }
+          .rbud-print-report .num { text-align: right !important; }
+          .rbud-print-report .center { text-align: center !important; }
+          .rbud-internal-audit-column { min-width: 88px; }\n          .rbud-print-report .rbud-internal-audit-column { display: none !important; }
+        }
+        @media screen {
+          .rbud-print-report { display: none; }
+        }
+      `}</style>
+
+      <div className="rbud-print-report">
+        <SelectedRbudReport
+          reportChoice={reportChoice}
+          entries={entries}
+          year={year}
+          group={group}
+          fund={fund}
+        />
+      </div>
+
       {preview && (
         <div className="fixed inset-0 z-[100] bg-black/40 flex items-center justify-center p-5">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-6xl w-full max-h-[90vh] overflow-y-auto">
             <div className="sticky top-0 bg-white border-b border-gray-100 px-5 py-4 flex items-center justify-between">
-              <h2 className="text-sm font-bold text-[#17135f]">RBUD Report Preview</h2>
+              <h2 className="text-sm font-bold text-[#17135f]">{reportChoice} Preview</h2>
               <button type="button" onClick={closePreview} className="w-8 h-8 rounded-lg hover:bg-gray-100 flex items-center justify-center">
                 <X className="w-4 h-4" />
               </button>
             </div>
             <div className="p-5">
               <div className="border border-gray-200 rounded-xl p-5">
-                <p className="text-[10px] text-gray-400">FY {year} • {group}</p>
-                <h3 className="text-lg font-bold text-[#17135f] mt-1">RBUD Registry Report</h3>
-                <p className="text-xs text-gray-500 mt-1">Fund: {fund || "All Funds"}</p>
-                <div className="mt-5">
-                  <TransactionTable entries={entries} compact />
-                </div>
+                <SelectedRbudReport
+                  reportChoice={reportChoice}
+                  entries={entries}
+                  year={year}
+                  group={group}
+                  fund={fund}
+                />
               </div>
             </div>
           </div>
@@ -2729,132 +3700,370 @@ function ReportsExportView({
    MODALS
 ============================================================ */
 
-function RecordModal({
-  mode,
-  record,
-  form,
-  setForm,
-  references,
-  onClose,
-  onSubmit,
-}) {
-  const readOnly = mode === "view";
 
-  const update = (field, value) =>
-    setForm((current) => ({
-      ...current,
-      [field]: value,
-    }));
+function RecordModal({ mode, record, form, setForm, references, role, onClose, onSubmit }) {
+  const readOnly = mode === "view";
+  const editableFields = getRbudEditableFields(role);
+  const isEditable = (field) => mode !== "view" && editableFields.has(field);
+
+  const update = (field, value) => {
+    if (!isEditable(field)) return;
+    setForm(current => ({ ...current, [field]: value }));
+  };
 
   const selectOptions = (items, label = "name") =>
-    (items || []).map((item) => ({
+    (items || []).map(item => ({
       value: String(item.id),
-      label: `${item.code ? `${item.code} — ` : ""}${item[label] || item.name || ""}`,
+      label: `${item.code ? `${item.code} — ` : ""}${item[label] || item.name || item.account_title || item.title || ""}`,
     }));
 
+  // Fund Code is now a separate master-data level under Fund Cluster.
+  // The dropdown only shows codes belonging to the selected cluster.
+  const fundCodeOptions = (references.fund_codes || [])
+    .filter((item) =>
+      String(item?.fund_cluster_id ?? "") === String(form.fund_cluster_id ?? "")
+    )
+    .map((item) => ({
+      value: String(item.code || ""),
+      label: `${item.code ? `${item.code} — ` : ""}${item.name || item.code || ""}`,
+    }))
+    .filter((item) => item.value);
+
+  // Keep an existing legacy transaction selectable during edit even if its
+  // Fund Code is not yet present in the new master-data mapping.
+  if (form.fund_code && !fundCodeOptions.some((item) => item.value === String(form.fund_code))) {
+    fundCodeOptions.unshift({
+      value: String(form.fund_code),
+      label: `${form.fund_code} — Existing Transaction`,
+    });
+  }
+
+  const updateFundCode = (fundCode) => {
+    if (!isEditable("fund_code")) return;
+
+    setForm((current) => ({
+      ...current,
+      fund_code: String(fundCode || ""),
+    }));
+  };
+
+  const updateFundCluster = (fundClusterId) => {
+    if (!isEditable("fund_cluster_id")) return;
+
+    const selectedCluster = (references.fund_clusters || []).find(
+      (item) => String(item.id) === String(fundClusterId)
+    );
+
+    const linkedFundSource = selectedCluster?.fund_source_id
+      ? (references.fund_sources || []).find(
+          (item) => String(item.id) === String(selectedCluster.fund_source_id)
+        )
+      : null;
+
+    setForm((current) => ({
+      ...current,
+      fund_cluster_id: fundClusterId,
+      // Changing the cluster invalidates the previous dependent Fund Code.
+      fund_code: "",
+      ...(linkedFundSource
+        ? { fund_source_id: String(linkedFundSource.id) }
+        : { fund_source_id: "" }),
+    }));
+  };
+
+  /*
+   * View-mode display helper.
+   * The RBUD detail API normally returns joined names/codes. For older
+   * records, however, a JOIN value can be empty while the underlying FK
+   * still exists. These helpers fall back to the loaded Master Data so
+   * the View modal does not unnecessarily show blank fields.
+   */
+  const firstValue = (...values) => {
+    for (const value of values) {
+      if (value !== null && value !== undefined && String(value).trim() !== "") {
+        return value;
+      }
+    }
+    return "—";
+  };
+
+  const referenceLabel = (items, id, ...fallbackValues) => {
+    const idText = id !== null && id !== undefined && id !== "" ? String(id) : "";
+    const found = (items || []).find(item => String(item?.id ?? "") === idText);
+
+    if (found) {
+      return firstValue(
+        found.code && found.name ? `${found.code} — ${found.name}` : "",
+        found.name,
+        found.account_title,
+        found.title,
+        found.description,
+        found.code
+      );
+    }
+
+    return firstValue(...fallbackValues);
+  };
+
+  const Detail = ({ label, value }) => (
+    <DetailField label={label} value={firstValue(value)} />
+  );
+
   if (readOnly) {
+    const fundCluster = firstValue(
+      record?.fund_cluster_code && record?.fund_cluster_name
+        ? `${record.fund_cluster_code} — ${record.fund_cluster_name}`
+        : "",
+      record?.fund_cluster_code,
+      record?.fund_cluster_name,
+      referenceLabel(
+        references?.fund_clusters,
+        record?.fund_cluster_id,
+        record?.fund_cluster
+      )
+    );
+
+    const fundSource = firstValue(
+      record?.fund_source_code && record?.fund_source_name
+        ? `${record.fund_source_code} — ${record.fund_source_name}`
+        : "",
+      record?.fund_source_code,
+      record?.fund_source_name,
+      referenceLabel(
+        references?.fund_sources,
+        record?.fund_source_id,
+        record?.fund_source
+      )
+    );
+
+    const campus = firstValue(
+      record?.campus_code && record?.campus_name
+        ? `${record.campus_code} — ${record.campus_name}`
+        : "",
+      record?.campus_code,
+      record?.campus_name,
+      referenceLabel(references?.campuses, record?.campus_id)
+    );
+
+    const responsibilityCenter = firstValue(
+      record?.responsibility_center_code && record?.responsibility_center_name
+        ? `${record.responsibility_center_code} — ${record.responsibility_center_name}`
+        : "",
+      record?.responsibility_center_code,
+      record?.responsibility_center_name,
+      record?.department_name,
+      referenceLabel(
+        references?.responsibility_centers,
+        record?.responsibility_center_id
+      )
+    );
+
+    const pap = firstValue(
+      record?.pap_code && record?.pap_name
+        ? `${record.pap_code} — ${record.pap_name}`
+        : "",
+      record?.pap_code,
+      record?.pap_name,
+      referenceLabel(references?.pap, record?.pap_id)
+    );
+
+    const uacs = firstValue(
+      record?.uacs_code,
+      referenceLabel(references?.uacs_codes, record?.uacs_code_id)
+    );
+
+    const allotmentClass = firstValue(
+      record?.allotment_class_code && record?.allotment_class_name
+        ? `${record.allotment_class_code} — ${record.allotment_class_name}`
+        : "",
+      record?.allotment_class_code,
+      record?.allotment_class_name,
+      referenceLabel(
+        references?.allotment_classes,
+        record?.allotment_class_id
+      )
+    );
+
+    const mfo = firstValue(
+      record?.mfo_code && record?.mfo_name
+        ? `${record.mfo_code} — ${record.mfo_name}`
+        : "",
+      record?.mfo_code,
+      record?.mfo_name,
+      referenceLabel(references?.mfo, record?.mfo_id)
+    );
+
+    const wfpSource = firstValue(
+      record?.wfp_source_code && record?.wfp_source_name
+        ? `${record.wfp_source_code} — ${record.wfp_source_name}`
+        : "",
+      record?.wfp_source_code,
+      record?.wfp_source_name,
+      referenceLabel(references?.wfp_sources, record?.wfp_source_id)
+    );
+
+    const oldUacsCode = firstValue(
+      record?.old_uacs_code,
+      record?.old_uacs_code_code,
+      record?.uacs_old_code,
+      referenceLabel(references?.uacs_codes, record?.old_uacs_code_id)
+    );
+
     return (
       <Modal title="RBUD Transaction Details" onClose={onClose}>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <DetailField label="Registry No." value={record?.registry_no} />
-          <DetailField label="Entry Date" value={dateLabel(record?.entry_date)} />
-          <DetailField label="Fiscal Year" value={record?.fiscal_year} />
-          <DetailField label="Fund" value={`${record?.fund_cluster_code || "—"} — ${record?.fund_cluster_name || "—"}`} />
-          <DetailField label="Fund Group" value={record?.fund_group} />
-          <DetailField label="Campus" value={record?.campus_name} />
-          <DetailField label="BURS Serial No." value={record?.burs_serial_no} />
-          <DetailField label="Reference No." value={record?.ref_no} />
-          <DetailField label="Payee" value={record?.payee} />
-          <DetailField label="Particulars" value={record?.particulars} />
-          <DetailField label="Responsibility Center" value={record?.department_name || record?.responsibility_center_name} />
-          <DetailField label="PAP" value={record?.pap_name} />
-          <DetailField label="UACS" value={`${record?.uacs_code || "—"} ${record?.account_title || ""}`} />
-          <DetailField label="Object of Expenditure" value={record?.object_expenditure_name} />
-          <DetailField label="Utilization / Obligation" value={money(record?.utilization_amount)} />
-          <DetailField label="Disbursement" value={money(record?.disbursement_amount)} />
-          <DetailField label="Running Balance" value={money(record?.running_balance)} />
-          <DetailField label="Unpaid Utilization" value={money(record?.unpaid_utilization)} />
-          <DetailField label="PO No." value={record?.po_no} />
-          <DetailField label="Status of PO" value={record?.status_of_po} />
-          <DetailField label="Status" value={record?.status} />
-          <DetailField label="Remarks" value={record?.remarks} />
+        <div className="space-y-5">
+          <div>
+            <h3 className="text-xs font-bold text-[#17135f] mb-3">Registry Information</h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <Detail label="Registry No." value={record?.registry_no} />
+              <Detail label="Date" value={dateLabel(record?.entry_date)} />
+              <Detail label="Fiscal Year" value={record?.fiscal_year} />
+              <Detail label="Fund Cluster" value={fundCluster} />
+              <Detail label="Fund Code" value={record?.fund_code} />
+              <Detail label="Fund Source" value={fundSource} />
+              <Detail label="Fund Group" value={record?.fund_group} />
+              <Detail label="Department" value={record?.department || record?.department_name} />
+              <Detail label="Campus" value={campus} />
+              <Detail label="BURS Serial No." value={record?.burs_serial_no} />
+              <Detail label="Serial No. Transferred From/To" value={record?.serial_no_transferred} />
+              <Detail label="Payee / Name" value={record?.payee} />
+              <Detail label="Particulars / Description" value={record?.particulars} />
+            </div>
+          </div>
+
+          <div>
+            <h3 className="text-xs font-bold text-[#17135f] mb-3">Classification / Reference</h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <Detail label="Responsibility Center" value={responsibilityCenter} />
+              <Detail label="PAP" value={pap} />
+              <Detail label="UACS Code" value={uacs} />
+              <Detail label="Ref. No." value={record?.ref_no} />
+              <Detail label="Allotment Class" value={allotmentClass} />
+              <Detail label="UACS Funding Source Code" value={record?.uacs_funding_source_code} />
+              <Detail label="Year" value={record?.fiscal_year || (record?.entry_date ? new Date(record.entry_date).getFullYear() : "—")} />
+              <Detail label="Month" value={record?.month || (record?.entry_date ? new Date(record.entry_date).toLocaleString("en-US", { month: "long" }) : "—")} />
+              <Detail label="Series" value={record?.series} />
+              <Detail label="Series2" value={record?.series2} />
+              <Detail label="Quarter" value={record?.quarter || (record?.entry_date ? `Q${Math.ceil((new Date(record.entry_date).getMonth() + 1) / 3)}` : "—")} />
+              <Detail label="MFO" value={mfo} />
+              <Detail label="Old UACS Code" value={oldUacsCode || record?.old_uacs_code_id} />
+              <Detail label="Accounts Title" value={record?.account_title || record?.uacs_account_title || referenceLabel(references?.uacs_codes, record?.uacs_code_id)} />
+            </div>
+          </div>
+
+          <div>
+            <h3 className="text-xs font-bold text-[#17135f] mb-3">Utilization / Disbursement</h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <Detail label="Utilization" value={money(record?.utilization_amount)} />
+              <Detail label="PS" value={money(record?.ps_utilization)} />
+              <Detail label="MOOE" value={money(record?.mooe_utilization)} />
+              <Detail label="CO" value={money(record?.co_utilization)} />
+              <Detail label="WFP Source" value={wfpSource} />
+              <Detail label="WFP Source Code" value={record?.wfp_source_code || record?.wfp_source_master_code} />
+              <Detail label="Disbursement Amount" value={money(record?.disbursement_amount)} />
+              <Detail label="Running Balance" value={money(record?.running_balance)} />
+              <Detail label="Remarks" value={record?.remarks} />
+              <Detail label="Unpaid Utilization" value={money(record?.unpaid_utilization)} />
+            </div>
+          </div>
+
+          <div>
+            <h3 className="text-xs font-bold text-[#17135f] mb-3">Record Status</h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <Detail label="System Status" value={record?.status || record?.derived_status} />
+            </div>
+          </div>
+
+          <div>
+            <h3 className="text-xs font-bold text-[#17135f] mb-3">Record Tracking</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <Detail
+                label="Entered By"
+                value={
+                  record?.created_by_name
+                    ? `${record.created_by_name}${record.created_by_role ? ` (${record.created_by_role})` : ""}`
+                    : "—"
+                }
+              />
+              <Detail
+                label="Updated By"
+                value={
+                  record?.updated_by_name
+                    ? `${record.updated_by_name}${record.updated_by_role ? ` (${record.updated_by_role})` : ""}`
+                    : "—"
+                }
+              />
+            </div>
+          </div>
         </div>
       </Modal>
     );
   }
 
   return (
-    <Modal title={mode === "edit" ? "Edit RBUD Transaction" : "Add RBUD Transaction"} onClose={onClose}>
-      <form onSubmit={onSubmit} className="space-y-5">
-        <div>
-          <h3 className="text-xs font-bold text-[#17135f] mb-3">Registry Information</h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <InputField label="Registry No." value={form.registry_no} onChange={(v) => update("registry_no", v)} required />
-            <InputField label="Entry Date" type="date" value={form.entry_date} onChange={(v) => update("entry_date", v)} required />
-            <InputField label="Fiscal Year" type="number" value={form.fiscal_year} onChange={(v) => update("fiscal_year", v)} />
-            <SelectField label="Fund Cluster" value={form.fund_cluster_id} onChange={(v) => update("fund_cluster_id", v)} options={selectOptions(references.fund_clusters)} />
-            <SelectField label="Fund Source" value={form.fund_source_id} onChange={(v) => update("fund_source_id", v)} options={selectOptions(references.fund_sources)} />
-            <SelectField label="Campus" value={form.campus_id} onChange={(v) => update("campus_id", v)} options={selectOptions(references.campuses)} />
-            <InputField label="BURS Serial No." value={form.burs_serial_no} onChange={(v) => update("burs_serial_no", v)} />
-            <InputField label="Transferred Serial No." value={form.serial_no_transferred} onChange={(v) => update("serial_no_transferred", v)} />
-            <InputField label="Reference No." value={form.ref_no} onChange={(v) => update("ref_no", v)} />
-          </div>
+    <Modal title={mode==="edit" ? "Edit RBUD Transaction" : "Add RBUD Transaction"} onClose={onClose}>
+      <form onSubmit={onSubmit} className="space-y-6">
+        <div className="rounded-lg border border-indigo-100 bg-indigo-50 px-3 py-2 text-[10px] text-indigo-800">
+          <span className="font-bold">Role-based editing:</span>{" "}
+          {role === "Administration"
+            ? "You can manage all RBUD fields."
+            : role === "Budget"
+              ? "You can manage the operational RBUD fields."
+              : "This record is read-only for your role."}
         </div>
+        <div><h3 className="text-xs font-bold text-[#17135f] mb-3">Registry Information</h3><div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div className="rounded-lg border border-blue-100 bg-blue-50/60 px-3 py-2"><div className="text-[10px] font-bold text-slate-500">Registry No.</div><div className="mt-1 font-mono text-sm font-extrabold text-[#17135f]">{mode==="edit"&&record?.registry_no?record.registry_no:"Generated after saving"}</div><div className="text-[10px] text-slate-500">System-generated • locked</div></div>
+          <InputField label="Date" type="date" value={form.entry_date} disabled={!isEditable("entry_date")} onChange={v=>update("entry_date",v)} required/>
+          <InputField label="Year" type="number" value={form.fiscal_year} disabled={!isEditable("fiscal_year")} onChange={v=>update("fiscal_year",v)}/>
+          <SelectField
+            label="Fund Cluster"
+            value={form.fund_cluster_id}
+            disabled={!isEditable("fund_cluster_id")}
+            onChange={updateFundCluster}
+            options={selectOptions(references.fund_clusters)}
+          />
+          <SelectField
+            label="Fund Code"
+            value={form.fund_code}
+            disabled={!form.fund_cluster_id || !isEditable("fund_code")}
+            onChange={updateFundCode}
+            options={fundCodeOptions}
+          />
+          <SelectField label="Campus" value={form.campus_id} disabled={!isEditable("campus_id")} onChange={v=>update("campus_id",v)} options={selectOptions(references.campuses)}/>
+          <div className="rounded-lg border border-blue-100 bg-blue-50/60 px-3 py-2"><div className="text-[10px] font-bold text-slate-500">BURS Serial No.</div><div className="mt-1 font-mono text-sm font-extrabold text-[#17135f]">{mode==="edit"&&record?.burs_serial_no?record.burs_serial_no:"Generated after saving"}</div><div className="text-[10px] text-slate-500">System-generated • locked</div></div>
+          <InputField label="Serial No. Transferred From/To" value={form.serial_no_transferred} disabled={!isEditable("serial_no_transferred")} onChange={v=>update("serial_no_transferred",v)} placeholder="NA / N/A if not applicable"/>
+          <InputField label="Payee / Name" value={form.payee} disabled={!isEditable("payee")} onChange={v=>update("payee",v)}/>
+          <div className="md:col-span-3"><TextAreaField label="Particulars / Description" value={form.particulars} disabled={!isEditable("particulars")} onChange={v=>update("particulars",v)}/></div>
+        </div></div>
 
-        <div>
-          <h3 className="text-xs font-bold text-[#17135f] mb-3">Classification</h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <SelectField label="Responsibility Center" value={form.responsibility_center_id} onChange={(v) => update("responsibility_center_id", v)} options={selectOptions(references.responsibility_centers)} />
-            <SelectField label="PAP / Program" value={form.pap_id} onChange={(v) => update("pap_id", v)} options={selectOptions(references.pap)} />
-            <SelectField label="UACS Code" value={form.uacs_code_id} onChange={(v) => update("uacs_code_id", v)} options={selectOptions(references.uacs_codes, "account_title")} />
-            <SelectField label="Object of Expenditure" value={form.object_expenditure_id} onChange={(v) => update("object_expenditure_id", v)} options={selectOptions(references.object_expenditures)} />
-            <SelectField label="MFO" value={form.mfo_id} onChange={(v) => update("mfo_id", v)} options={selectOptions(references.mfo)} />
-            <SelectField label="Allotment Class" value={form.allotment_class_id} onChange={(v) => update("allotment_class_id", v)} options={selectOptions(references.allotment_classes)} />
-            <InputField label="UACS Funding Source Code" value={form.uacs_funding_source_code} onChange={(v) => update("uacs_funding_source_code", v)} />
-            <InputField label="Month" value={form.month} onChange={(v) => update("month", v)} />
-            <InputField label="Series" value={form.series} onChange={(v) => update("series", v)} />
-            <InputField label="Series2" value={form.series2} onChange={(v) => update("series2", v)} />
-            <InputField label="Quarter" value={form.quarter} onChange={(v) => update("quarter", v)} />
-            <InputField label="WFP Source Code" value={form.wfp_source_code} onChange={(v) => update("wfp_source_code", v)} />
-            <SelectField label="WFP Source" value={form.wfp_source_id} onChange={(v) => update("wfp_source_id", v)} options={selectOptions(references.wfp_sources)} />
-          </div>
-        </div>
+        <div><h3 className="text-xs font-bold text-[#17135f] mb-3">Classification / Reference</h3><div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <SelectField label="Responsibility Center" value={form.responsibility_center_id} disabled={!isEditable("responsibility_center_id")} onChange={v=>update("responsibility_center_id",v)} options={selectOptions(references.responsibility_centers)}/>
+          <SelectField label="PAP" value={form.pap_id} disabled={!isEditable("pap_id")} onChange={v=>update("pap_id",v)} options={selectOptions(references.pap)}/>
+          <SelectField label="UACS Code" value={form.uacs_code_id} disabled={!isEditable("uacs_code_id")} onChange={v=>update("uacs_code_id",v)} options={selectOptions(references.uacs_codes,"account_title")}/>
+          <InputField label="Ref. No." value={form.ref_no} disabled={!isEditable("ref_no")} onChange={v=>update("ref_no",v)}/>
+          <SelectField label="Allotment Class" value={form.allotment_class_id} disabled={!isEditable("allotment_class_id")} onChange={v=>update("allotment_class_id",v)} options={selectOptions(references.allotment_classes)}/>
+          <SelectField label="MFO" value={form.mfo_id} disabled={!isEditable("mfo_id")} onChange={v=>update("mfo_id",v)} options={selectOptions(references.mfo)}/>
+          <div className="rounded-lg border border-blue-100 bg-blue-50/60 px-3 py-2"><div className="text-[10px] font-bold text-blue-700">Month</div><div className="mt-1 text-sm font-extrabold text-[#17135f]">{form.entry_date ? new Date(`${form.entry_date}T00:00:00`).getMonth() + 1 : "—"}</div><div className="text-[10px] text-slate-400">Auto-filled from Date</div></div>
+          <div className="rounded-lg border border-blue-100 bg-blue-50/60 px-3 py-2"><div className="text-[10px] font-bold text-blue-700">Quarter</div><div className="mt-1 text-sm font-extrabold text-[#17135f]">{form.entry_date ? `Q${Math.ceil((new Date(`${form.entry_date}T00:00:00`).getMonth() + 1) / 3)}` : "—"}</div><div className="text-[10px] text-slate-400">Auto-filled from Date</div></div>
+        </div></div>
 
-        <div>
-          <h3 className="text-xs font-bold text-[#17135f] mb-3">Transaction / Utilization Details</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <InputField label="Payee" value={form.payee} onChange={(v) => update("payee", v)} />
-            <InputField label="Particulars" value={form.particulars} onChange={(v) => update("particulars", v)} />
-            <InputField label="DV / Payroll No." value={form.dv_payroll_no} onChange={(v) => update("dv_payroll_no", v)} />
-            <InputField label="Account Title" value={form.account_title} onChange={(v) => update("account_title", v)} />
-            <InputField label="Utilization" type="number" value={form.utilization_amount} onChange={(v) => update("utilization_amount", v)} />
-            <InputField label="Disbursement" type="number" value={form.disbursement_amount} onChange={(v) => update("disbursement_amount", v)} />
-            <InputField label="PS Utilization" type="number" value={form.ps_utilization} onChange={(v) => update("ps_utilization", v)} />
-            <InputField label="MOOE Utilization" type="number" value={form.mooe_utilization} onChange={(v) => update("mooe_utilization", v)} />
-            <InputField label="CO Utilization" type="number" value={form.co_utilization} onChange={(v) => update("co_utilization", v)} />
-            <InputField label="Unpaid Utilization" type="number" value={form.unpaid_utilization} onChange={(v) => update("unpaid_utilization", v)} />
-            <InputField label="Running Balance / Balances" type="number" value={form.running_balance} onChange={(v) => update("running_balance", v)} />
-            <InputField label="PO No." value={form.po_no} onChange={(v) => update("po_no", v)} />
-            <InputField label="Status of PO" value={form.status_of_po} onChange={(v) => update("status_of_po", v)} />
-            <InputField label="Remarks" value={form.remarks} onChange={(v) => update("remarks", v)} />
+        <div><h3 className="text-xs font-bold text-[#17135f] mb-3">Utilization / Disbursement</h3><div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <InputField label="Utilization" type="number" value={form.utilization_amount} disabled={!isEditable("utilization_amount")} onChange={v=>update("utilization_amount",v)}/>
+          <InputField label="PS" type="number" value={form.ps_utilization} disabled={!isEditable("ps_utilization")} onChange={v=>update("ps_utilization",v)}/>
+          <InputField label="MOOE" type="number" value={form.mooe_utilization} disabled={!isEditable("mooe_utilization")} onChange={v=>update("mooe_utilization",v)}/>
+          <InputField label="CO" type="number" value={form.co_utilization} disabled={!isEditable("co_utilization")} onChange={v=>update("co_utilization",v)}/>
+          <SelectField label="WFP Source" value={form.wfp_source_id} disabled={!isEditable("wfp_source_id")} onChange={v=>update("wfp_source_id",v)} options={selectOptions(references.wfp_sources)}/>
+          <InputField label="Disbursement Amount" type="number" value={form.disbursement_amount} disabled={!isEditable("disbursement_amount")} onChange={v=>update("disbursement_amount",v)}/>
+          <div className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2"><div className="text-[10px] font-semibold text-blue-700">Running Balance</div><div className="mt-1 text-sm font-extrabold text-[#17135f]">{mode==="edit"?money(record?.running_balance):"Calculated after saving"}</div></div>
+          <div className="md:col-span-2"><TextAreaField label="Remarks" value={form.remarks} disabled={!isEditable("remarks")} onChange={v=>update("remarks",v)}/></div>
+          <div className="rounded-lg border border-amber-100 bg-amber-50 px-3 py-2">
+            <div className="text-[10px] font-semibold text-amber-700">Unpaid Utilization</div>
+            <div className="mt-1 text-sm font-extrabold text-[#17135f]">{mode === "edit" ? money(record?.unpaid_utilization) : "Calculated after saving"}</div>
+            <div className="text-[10px] text-slate-400">Utilization less Disbursement</div>
           </div>
-        </div>
+        </div></div>
 
-        <div className="flex justify-end gap-2 pt-2 border-t border-gray-100">
-          <button
-            type="button"
-            onClick={onClose}
-            className="h-9 px-4 rounded-lg border border-gray-200 text-xs font-semibold"
-          >
-            Cancel
-          </button>
-          <button
-            type="submit"
-            className="h-9 px-4 rounded-lg bg-[#211b79] text-white text-xs font-semibold"
-          >
-            {mode === "edit" ? "Save Changes" : "Save Transaction"}
-          </button>
-        </div>
+        <div className="flex justify-end gap-2 pt-3 border-t border-gray-100"><button type="button" onClick={onClose} className="h-9 px-4 rounded-lg border border-gray-200 text-xs font-semibold">Cancel</button><button type="submit" disabled={mode === "view" || (mode === "add" && !canCreateRbudRole(role)) || (mode === "edit" && !canEditRbudRole(role))} className="h-9 px-4 rounded-lg bg-[#211b79] text-white text-xs font-semibold disabled:opacity-50 disabled:cursor-not-allowed">{mode==="edit"?"Save Changes":"Save Transaction"}</button></div>
       </form>
     </Modal>
   );
@@ -2942,22 +4151,29 @@ function TabBar({ tabs, value, onChange }) {
   );
 }
 
-function Select({ label, value, onChange, options = [] }) {
+function Select({ label, value, onChange, options = [], disabled = false }) {
+  const normalizedValue =
+    value && typeof value === "object" ? value.value : value;
+
   return (
     <div>
       <label className="block text-[10px] font-semibold text-gray-500 mb-1">{label}</label>
       <select
-        value={typeof value === "object" ? value.value : value}
+        value={normalizedValue ?? ""}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full h-9 border border-gray-200 rounded-lg px-3 text-xs bg-white outline-none"
+        disabled={disabled}
+        className={`w-full h-9 border border-gray-200 rounded-lg px-3 text-xs outline-none ${
+          disabled ? "bg-gray-100 text-gray-500 cursor-not-allowed" : "bg-white"
+        }`}
       >
+        <option value="">Select {label}</option>
         {options.map((option) => {
           const item =
             typeof option === "object"
               ? option
               : { value: option, label: option };
           return (
-            <option key={String(item.value)} value={item.value}>
+            <option key={String(item.value)} value={String(item.value)}>
               {item.label}
             </option>
           );
@@ -2967,11 +4183,29 @@ function Select({ label, value, onChange, options = [] }) {
   );
 }
 
-function SelectField({ label, value, onChange, options }) {
-  return <Select label={label} value={value} onChange={onChange} options={options} />;
+function TextAreaField({ label, value, onChange, required = false, disabled = false }) {
+  return (
+    <div>
+      <label className="block text-xs font-semibold text-gray-600 mb-1.5">{label}</label>
+      <textarea
+        value={value ?? ""}
+        onChange={(event) => onChange(event.target.value)}
+        required={required}
+        disabled={disabled}
+        rows={4}
+        className={`w-full min-h-[92px] rounded-lg border border-gray-200 px-3 py-2 text-xs outline-none ${
+          disabled ? "bg-gray-100 text-gray-500 cursor-not-allowed" : "bg-white focus:border-[#211b79] focus:ring-2 focus:ring-[#211b79]/10"
+        }`}
+      />
+    </div>
+  );
 }
 
-function InputField({ label, value, onChange, type = "text", required = false }) {
+function SelectField({ label, value, onChange, options, disabled = false }) {
+  return <Select label={label} value={value} onChange={onChange} options={options} disabled={disabled} />;
+}
+
+function InputField({ label, value, onChange, type = "text", required = false, disabled = false }) {
   return (
     <div>
       <label className="block text-xs font-semibold text-gray-600 mb-1.5">{label}</label>
@@ -2979,8 +4213,11 @@ function InputField({ label, value, onChange, type = "text", required = false })
         type={type}
         value={value ?? ""}
         required={required}
+        disabled={disabled}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full h-10 border border-gray-200 rounded-lg px-3 text-xs outline-none focus:border-[#211b79]"
+        className={`w-full h-10 border border-gray-200 rounded-lg px-3 text-xs outline-none ${
+          disabled ? "bg-gray-100 text-gray-500 cursor-not-allowed" : "bg-white focus:border-[#211b79]"
+        }`}
       />
     </div>
   );

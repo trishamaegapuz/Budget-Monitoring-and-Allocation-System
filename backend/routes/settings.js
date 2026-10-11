@@ -1,9 +1,3 @@
-// ============================================================
-// BMAS - SETTINGS ROUTES
-// System Settings + User Preferences
-// Compatible with current PostgreSQL schema
-// ============================================================
-
 const express = require('express');
 const router = express.Router();
 
@@ -11,7 +5,6 @@ const pool = require('../db');
 
 const {
   verifyToken,
-  verifyAdmin,
 } = require('../middleware/auth');
 
 
@@ -49,10 +42,15 @@ router.get('/general', verifyToken, async (req, res) => {
     // Verify Administrator
     // ----------------------------------------------------------
 
-    if (
-      String(req.user.role || '').toLowerCase()
-      !== 'administrator'
-    ) {
+    const role = String(req.user?.role || '')
+      .trim()
+      .toLowerCase();
+
+    const isAdministrator =
+      role === 'administrator' ||
+      role === 'administration';
+
+    if (!isAdministrator) {
 
       return res.status(403).json({
         message:
@@ -222,10 +220,15 @@ router.put('/general', verifyToken, async (req, res) => {
     // Verify Administrator
     // ----------------------------------------------------------
 
-    if (
-      String(req.user.role || '').toLowerCase()
-      !== 'administrator'
-    ) {
+    const role = String(req.user?.role || '')
+      .trim()
+      .toLowerCase();
+
+    const isAdministrator =
+      role === 'administrator' ||
+      role === 'administration';
+
+    if (!isAdministrator) {
 
       return res.status(403).json({
         message:
@@ -848,10 +851,23 @@ router.put('/preferences', verifyToken, async (req, res) => {
 router.get(
   '/system-information',
   verifyToken,
-  verifyAdmin,
   async (req, res) => {
 
     try {
+
+      const role = String(req.user?.role || '')
+        .trim()
+        .toLowerCase();
+
+      const isAdministrator =
+        role === 'administrator' ||
+        role === 'administration';
+
+      if (!isAdministrator) {
+        return res.status(403).json({
+          message: 'Access Restricted to Administrator only',
+        });
+      }
 
       const result = await pool.query(`
         SELECT
