@@ -27,6 +27,8 @@ import {
   Cell
 } from 'recharts';
 
+const FISCAL_YEARS = Array.from({ length: 6 }, (_, index) => new Date().getFullYear() - index);
+
 const CHART_COLORS = {
   budget: '#0052cc',
   obligations: '#10b981',
@@ -109,6 +111,33 @@ export default function Dashboard({
   const formatPercentage = (value, decimals = 2) =>
     `${toNumber(value).toFixed(decimals)}%`;
 
+  // Keep the fiscal-year control visible in every Dashboard state, including
+  // the initial loading state and any API error state.
+  const fiscalYearControl = (
+    <div className="flex justify-end items-center mb-3">
+      <div
+        className="inline-flex items-center gap-[7px] h-9 px-[10px] bg-white border border-[#dbe4f0] rounded-lg shadow-sm text-[#334155] text-[10px] font-bold"
+        style={{ boxShadow: '0 2px 8px rgba(15, 23, 42, 0.04)' }}
+      >
+        <CalendarDays className="w-[14px] h-[14px] text-[#123b7a]" aria-hidden="true" />
+        <span>Fiscal Year</span>
+        <div className="relative inline-flex items-center">
+          <select
+            value={selectedYear}
+            onChange={(e) => setSelectedYear(Number(e.target.value))}
+            aria-label="Fiscal Year"
+            className="appearance-none border-0 outline-0 bg-transparent pl-px pr-[19px] text-[10px] font-extrabold text-slate-900 cursor-pointer min-h-6 relative z-[1]"
+          >
+            {FISCAL_YEARS.map((year) => (
+              <option key={year} value={year}>{year}</option>
+            ))}
+          </select>
+          <ChevronDown className="w-[13px] h-[13px] text-slate-500 absolute right-px top-1/2 -translate-y-1/2 pointer-events-none" aria-hidden="true" />
+        </div>
+      </div>
+    </div>
+  );
+
   if (loading) {
     return (
       <Layout
@@ -117,6 +146,7 @@ export default function Dashboard({
         activePath={activePath}
         onNavigate={onNavigate}
       >
+        {fiscalYearControl}
         <div className="flex items-center justify-center h-64">
           <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-700" />
         </div>
@@ -132,6 +162,7 @@ export default function Dashboard({
         activePath={activePath}
         onNavigate={onNavigate}
       >
+        {fiscalYearControl}
         <div className="bg-white rounded-xl border border-red-100 p-8 text-center">
           <p className="text-sm text-red-600 font-medium mb-3">{error}</p>
           <button
@@ -254,29 +285,7 @@ export default function Dashboard({
       activePath={activePath}
       onNavigate={onNavigate}
     >
-      {/* Fiscal Year selector — styled to match Budget Proposal; year rolls forward automatically */}
-      <div className="flex justify-end items-center mb-3">
-        <div
-          className="inline-flex items-center gap-[7px] h-9 px-[10px] bg-white border border-[#dbe4f0] rounded-lg shadow-sm text-[#334155] text-[10px] font-bold"
-          style={{ boxShadow: '0 2px 8px rgba(15, 23, 42, 0.04)' }}
-        >
-          <CalendarDays className="w-[14px] h-[14px] text-[#123b7a]" />
-          <span>Fiscal Year</span>
-          <div className="relative inline-flex items-center">
-            <select
-              value={selectedYear}
-              onChange={(e) => setSelectedYear(Number(e.target.value))}
-              aria-label="Fiscal Year"
-              className="appearance-none border-0 outline-0 bg-transparent pl-px pr-[19px] text-[10px] font-extrabold text-slate-900 cursor-pointer min-h-6 relative z-[1]"
-            >
-              {Array.from({ length: 6 }, (_, index) => new Date().getFullYear() - index).map((year) => (
-                <option key={year} value={year}>{year}</option>
-              ))}
-            </select>
-            <ChevronDown className="w-[13px] h-[13px] text-slate-500 absolute right-px top-1/2 -translate-y-1/2 pointer-events-none" />
-          </div>
-        </div>
-      </div>
+      {fiscalYearControl}
 
       {/* OVERALL KPIs */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3 mb-4">

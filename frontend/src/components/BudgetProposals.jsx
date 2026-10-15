@@ -57,6 +57,12 @@ import {
 // Based on RBUD / RAOD terminology
 // ============================================================
 
+// Keep every Fiscal Year selector in Budget Proposals on the same rolling range as Dashboard and the registry modules.
+const FISCAL_YEARS = Array.from(
+  { length: 6 },
+  (_, index) => new Date().getFullYear() - index
+);
+
 export default function BudgetProposals({
   user,
   onLogout,
@@ -6102,7 +6108,7 @@ export default function BudgetProposals({
               </label>
 
               <select className="bp-form-select" value={selectedYear} onChange={e => setSelectedYear(Number(e.target.value))}>
-                {[2026,2025,2024,2023].map(year => <option key={year} value={year}>FY {year}</option>)}
+                {FISCAL_YEARS.map(year => <option key={year} value={year}>FY {year}</option>)}
               </select>
 
             </div>
@@ -6908,7 +6914,7 @@ export default function BudgetProposals({
                 onChange={(event) => setSelectedYear(Number(event.target.value))}
                 aria-label="Fiscal Year"
               >
-                {Array.from({ length: 6 }, (_, index) => new Date().getFullYear() - index).map((year) => (
+                {FISCAL_YEARS.map((year) => (
                   <option key={year} value={year}>{year}</option>
                 ))}
               </select>
@@ -7026,7 +7032,7 @@ export default function BudgetProposals({
                   onChange={(event) => setSelectedYear(Number(event.target.value))}
                   aria-label="Status fiscal year"
                 >
-                  {Array.from({ length: 6 }, (_, index) => new Date().getFullYear() - index).map((year) => (
+                  {FISCAL_YEARS.map((year) => (
                     <option key={year} value={year}>{year}</option>
                   ))}
                 </select>
