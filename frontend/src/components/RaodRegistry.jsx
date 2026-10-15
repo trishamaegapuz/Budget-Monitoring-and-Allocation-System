@@ -1224,29 +1224,82 @@ function RaodRegistry({ user, onLogout, onNavigate, activePath }) {
 
     return (
       <>
-        {/* FISCAL YEAR SELECTOR */}
-        <div className="mb-4 flex items-center justify-end">
-          <div className="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 shadow-sm">
-            <CalendarDays className="h-3.5 w-3.5 text-[#174fd1]" />
-            <label htmlFor="raod-fiscal-year" className="whitespace-nowrap text-[10px] font-semibold text-slate-600">Fiscal Year</label>
-            <select
-              id="raod-fiscal-year"
-              value={selectedFiscalYear}
-              onChange={(e) => {
-                const year = Number(e.target.value);
-                setSelectedFiscalYear(year);
-                setPage(1);
-                setDepartmentPage(1);
-                setMonitoringPage(1);
-                setSelectedDepartment(null);
-                setDepartmentEntries([]);
-              }}
-              className="h-7 cursor-pointer appearance-auto border-0 bg-transparent py-0 pl-0 pr-1 text-[11px] font-bold text-[#10245b] outline-none focus:ring-0"
-            >
-              {Array.from({ length: Math.max(1, FY - 2021 + 1) }, (_, index) => FY - index).map((year) => (
-                <option key={year} value={year}>{year}</option>
-              ))}
-            </select>
+        {/* Fiscal year selector — mirrors the Budget Proposals selector exactly. */}
+        <div
+          className="bp-dashboard-toolbar"
+          style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", marginBottom: 12 }}
+        >
+          <div
+            className="bp-dashboard-year-selector"
+            style={{
+              height: 36,
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 7,
+              padding: "0 10px",
+              background: "#fff",
+              border: "1px solid #dbe4f0",
+              borderRadius: 8,
+              boxShadow: "0 2px 8px rgba(15, 23, 42, 0.04)",
+              color: "#334155",
+              fontSize: 10,
+              fontWeight: 700,
+            }}
+          >
+            <CalendarDays
+              aria-hidden="true"
+              style={{ width: 14, height: 14, color: "#123b7a", flexShrink: 0 }}
+            />
+            <label htmlFor="raod-fiscal-year" style={{ whiteSpace: "nowrap" }}>Fiscal Year</label>
+            <span style={{ position: "relative", display: "inline-flex", alignItems: "center" }}>
+              <select
+                id="raod-fiscal-year"
+                value={selectedFiscalYear}
+                onChange={(e) => {
+                  const year = Number(e.target.value);
+                  setSelectedFiscalYear(year);
+                  setPage(1);
+                  setDepartmentPage(1);
+                  setMonitoringPage(1);
+                  setSelectedDepartment(null);
+                  setDepartmentEntries([]);
+                }}
+                style={{
+                  appearance: "none",
+                  WebkitAppearance: "none",
+                  border: 0,
+                  outline: 0,
+                  background: "transparent",
+                  padding: "0 19px 0 1px",
+                  color: "#0f172a",
+                  fontSize: 10,
+                  fontWeight: 800,
+                  cursor: "pointer",
+                  minHeight: 24,
+                  position: "relative",
+                  zIndex: 1,
+                  boxShadow: "none",
+                }}
+              >
+                {Array.from({ length: Math.max(1, FY - 2021 + 1) }, (_, index) => FY - index).map((year) => (
+                  <option key={year} value={year}>{year}</option>
+                ))}
+              </select>
+              <ChevronDown
+                aria-hidden="true"
+                style={{
+                  position: "absolute",
+                  right: 1,
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  width: 13,
+                  height: 13,
+                  color: "#64748b",
+                  pointerEvents: "none",
+                  zIndex: 0,
+                }}
+              />
+            </span>
           </div>
         </div>
 

@@ -1343,23 +1343,26 @@ function ModuleHome({
 
   return (
     <div className="w-full min-w-0 pt-0 pb-5">
-      {/* Fiscal year — compact selector, consistent with Budget Proposals */}
-      <div className="flex items-center justify-end mb-3">
-        <label className="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 shadow-sm">
-          <CalendarDays className="h-3.5 w-3.5 text-[#123b7a]" />
-          <span className="text-[10px] font-bold text-slate-700">Fiscal Year</span>
-          <span className="relative inline-flex items-center">
+      {/* Fiscal Year selector — mirrors the Budget Proposals module exactly. */}
+      <div className="bp-dashboard-toolbar" style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", marginBottom: 12 }}>
+        <label
+          className="bp-dashboard-year-selector"
+          style={{ height: 36, display: "inline-flex", alignItems: "center", gap: 7, padding: "0 10px", background: "#fff", border: "1px solid #dbe4f0", borderRadius: 8, boxShadow: "0 2px 8px rgba(15, 23, 42, 0.04)", color: "#334155", fontSize: 10, fontWeight: 700 }}
+        >
+          <CalendarDays aria-hidden="true" style={{ width: 14, height: 14, color: "#123b7a" }} />
+          <span>Fiscal Year</span>
+          <span style={{ position: "relative", display: "inline-flex", alignItems: "center" }}>
             <select
               value={fiscalYear}
               onChange={(e) => setFiscalYear(e.target.value)}
               aria-label="Fiscal Year"
-              className="cursor-pointer appearance-none bg-transparent py-1 pl-0.5 pr-5 text-[10px] font-extrabold text-slate-900 outline-none"
+              style={{ appearance: "none", WebkitAppearance: "none", border: 0, outline: 0, background: "transparent", padding: "0 19px 0 1px", color: "#0f172a", fontSize: 10, fontWeight: 800, cursor: "pointer", minHeight: 24, position: "relative", zIndex: 1 }}
             >
               {YEARS.map((year) => (
                 <option key={year} value={year}>{year}</option>
               ))}
             </select>
-            <ChevronDown className="pointer-events-none absolute right-0 h-3 w-3 text-slate-500" />
+            <ChevronDown aria-hidden="true" style={{ position: "absolute", right: 1, top: "50%", transform: "translateY(-50%)", width: 13, height: 13, color: "#64748b", pointerEvents: "none", marginLeft: -2 }} />
           </span>
         </label>
       </div>

@@ -114,25 +114,76 @@ export default function Dashboard({
   // Keep the fiscal-year control visible in every Dashboard state, including
   // the initial loading state and any API error state.
   const fiscalYearControl = (
-    <div className="flex justify-end items-center mb-3">
+    <div
+      style={{
+        display: 'flex',
+        justifyContent: 'flex-end',
+        alignItems: 'center',
+        marginBottom: 12,
+        width: '100%',
+      }}
+    >
       <div
-        className="inline-flex items-center gap-[7px] h-9 px-[10px] bg-white border border-[#dbe4f0] rounded-lg shadow-sm text-[#334155] text-[10px] font-bold"
-        style={{ boxShadow: '0 2px 8px rgba(15, 23, 42, 0.04)' }}
+        style={{
+          height: 36,
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 7,
+          padding: '0 10px',
+          background: '#ffffff',
+          border: '1px solid #dbe4f0',
+          borderRadius: 8,
+          boxShadow: '0 2px 8px rgba(15, 23, 42, 0.04)',
+          color: '#334155',
+          fontSize: 10,
+          fontWeight: 700,
+          whiteSpace: 'nowrap',
+          boxSizing: 'border-box',
+        }}
       >
-        <CalendarDays className="w-[14px] h-[14px] text-[#123b7a]" aria-hidden="true" />
+        <CalendarDays
+          aria-hidden="true"
+          style={{ width: 14, height: 14, color: '#123b7a', flexShrink: 0 }}
+        />
         <span>Fiscal Year</span>
-        <div className="relative inline-flex items-center">
+        <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
           <select
             value={selectedYear}
             onChange={(e) => setSelectedYear(Number(e.target.value))}
             aria-label="Fiscal Year"
-            className="appearance-none border-0 outline-0 bg-transparent pl-px pr-[19px] text-[10px] font-extrabold text-slate-900 cursor-pointer min-h-6 relative z-[1]"
+            style={{
+              appearance: 'none',
+              WebkitAppearance: 'none',
+              border: 0,
+              outline: 0,
+              background: 'transparent',
+              padding: '0 19px 0 1px',
+              color: '#0f172a',
+              fontSize: 10,
+              fontWeight: 800,
+              cursor: 'pointer',
+              minHeight: 24,
+              position: 'relative',
+              zIndex: 1,
+            }}
           >
             {FISCAL_YEARS.map((year) => (
               <option key={year} value={year}>{year}</option>
             ))}
           </select>
-          <ChevronDown className="w-[13px] h-[13px] text-slate-500 absolute right-px top-1/2 -translate-y-1/2 pointer-events-none" aria-hidden="true" />
+          <ChevronDown
+            aria-hidden="true"
+            style={{
+              position: 'absolute',
+              right: 1,
+              top: '50%',
+              transform: 'translateY(-50%)',
+              width: 13,
+              height: 13,
+              color: '#64748b',
+              pointerEvents: 'none',
+            }}
+          />
         </div>
       </div>
     </div>
