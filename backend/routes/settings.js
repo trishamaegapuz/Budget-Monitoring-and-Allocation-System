@@ -883,6 +883,7 @@ router.get(
         ORDER BY id ASC
         LIMIT 1
       `);
+      const databaseResult = await pool.query('SELECT current_database() AS database_name, CURRENT_TIMESTAMP AS current_time');
 
 
       return res.status(200).json({
@@ -891,12 +892,11 @@ router.get(
           result.rows[0] || null,
 
         server: {
-          node_version:
-            process.version,
-
-          environment:
-            process.env.NODE_ENV || 'development',
-
+          name: 'Node.js / Express',
+          node_version: process.version,
+          environment: process.env.NODE_ENV || 'development',
+          database: databaseResult.rows[0]?.database_name || '',
+          current_time: databaseResult.rows[0]?.current_time || new Date().toISOString(),
         },
 
       });

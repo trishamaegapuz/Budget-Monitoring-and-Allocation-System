@@ -87,7 +87,7 @@ export default function BudgetProposals({
   // STATE
   // ==========================================================
 
-  const [selectedYear, setSelectedYear] = useState(2026);
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
 
   const [selectedSection, setSelectedSection] =
     useState('modules');
@@ -3170,16 +3170,38 @@ export default function BudgetProposals({
       margin-left: -2px;
     }
 
+    .bp-dashboard-year-select-wrap {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+    }
+
     .bp-dashboard-year-selector select {
       appearance: none;
+      -webkit-appearance: none;
       border: 0;
       outline: 0;
       background: transparent;
-      padding: 0 1px;
+      padding: 0 19px 0 1px;
       color: #0f172a;
       font-size: 10px;
       font-weight: 800;
       cursor: pointer;
+      min-height: 24px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .bp-dashboard-year-select-wrap > svg {
+      position: absolute;
+      right: 1px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 13px;
+      height: 13px;
+      color: #64748b;
+      pointer-events: none;
+      z-index: 0;
     }
 
     .bp-dashboard-summary-grid {
@@ -3211,22 +3233,6 @@ export default function BudgetProposals({
       transform: translateY(-1px);
       box-shadow: 0 6px 16px rgba(15, 23, 42, 0.08);
     }
-
-    .bp-dashboard-summary-card::after {
-      content: '';
-      position: absolute;
-      width: 58px;
-      height: 58px;
-      border-radius: 50%;
-      right: -25px;
-      top: -22px;
-      opacity: .12;
-    }
-
-    .summary-blue::after { background: #2563eb; }
-    .summary-green::after { background: #10a968; }
-    .summary-orange::after { background: #f59e0b; }
-    .summary-red::after { background: #ef4444; }
 
     .bp-summary-icon {
       width: 45px;
@@ -3275,27 +3281,6 @@ export default function BudgetProposals({
       color: #94a3b8;
       font-size: 8px;
       white-space: nowrap;
-    }
-
-    .bp-summary-arrow {
-      width: 30px;
-      height: 30px;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      margin-left: auto;
-      flex: 0 0 30px;
-    }
-
-    .summary-blue .bp-summary-arrow { color: #2563eb; background: #eaf2ff; }
-    .summary-green .bp-summary-arrow { color: #10a968; background: #e8f8f0; }
-    .summary-orange .bp-summary-arrow { color: #f59e0b; background: #fff3df; }
-    .summary-red .bp-summary-arrow { color: #ef4444; background: #fee7e7; }
-
-    .bp-summary-arrow svg {
-      width: 15px;
-      height: 15px;
     }
 
     .bp-dashboard-hero-grid {
@@ -4066,6 +4051,148 @@ export default function BudgetProposals({
       .bp-dashboard-status-chart-area {
         gap: 10px;
       }
+    }
+
+
+    /* ==========================================================
+       BMAS DARK THEME PATCH
+       Centralized override for this module's hard-coded light CSS.
+       Keep status/icon accent colors, but normalize surfaces and text.
+    ========================================================== */
+    html.bmas-dark-mode .bp-page,
+    html.bmas-dark-mode .bp-section-page {
+      color: #edf4ff !important;
+    }
+    html.bmas-dark-mode .bp-screen-heading,
+    html.bmas-dark-mode .bp-panel,
+    html.bmas-dark-mode .bp-card,
+    html.bmas-dark-mode .bp-action,
+    html.bmas-dark-mode .bp-year-selector,
+    html.bmas-dark-mode .bp-overview-filter,
+    html.bmas-dark-mode .bp-overview-heading,
+    html.bmas-dark-mode .bp-kpi,
+    html.bmas-dark-mode .bp-chart-card,
+    html.bmas-dark-mode .bp-status-card,
+    html.bmas-dark-mode .bp-table-wrap,
+    html.bmas-dark-mode .bp-table-container,
+    html.bmas-dark-mode .bp-form-card,
+    html.bmas-dark-mode .bp-form-section,
+    html.bmas-dark-mode .bp-modal,
+    html.bmas-dark-mode .bp-modal-content,
+    html.bmas-dark-mode .bp-drawer,
+    html.bmas-dark-mode .bp-empty-state,
+    html.bmas-dark-mode .bp-card-features,
+    html.bmas-dark-mode .bp-overview-two-col > *,
+    html.bmas-dark-mode .bp-dashboard-recent,
+    html.bmas-dark-mode .bp-dashboard-recent-header,
+    html.bmas-dark-mode .bp-recent-search,
+    html.bmas-dark-mode .bp-recent-tools,
+    html.bmas-dark-mode .bp-recent-table-wrap {
+      background-color: #151f30 !important;
+      background-image: none !important;
+      color: #edf4ff !important;
+      border-color: #344258 !important;
+      box-shadow: 0 8px 24px rgba(0,0,0,.18);
+    }
+    html.bmas-dark-mode .bp-back-button,
+    html.bmas-dark-mode .bp-page-button:not(.active),
+    html.bmas-dark-mode .bp-year-select,
+    html.bmas-dark-mode .bp-overview-filter select,
+    html.bmas-dark-mode .bp-page input,
+    html.bmas-dark-mode .bp-page select,
+    html.bmas-dark-mode .bp-page textarea {
+      background-color: #111b2b !important;
+      color: #edf4ff !important;
+      border-color: #465670 !important;
+    }
+    html.bmas-dark-mode .bp-back-button:hover,
+    html.bmas-dark-mode .bp-action:hover,
+    html.bmas-dark-mode .bp-page-button:hover:not(:disabled) {
+      background-color: #25354b !important;
+      color: #ffffff !important;
+    }
+    html.bmas-dark-mode .bp-screen-heading h2,
+    html.bmas-dark-mode .bp-panel-title,
+    html.bmas-dark-mode .bp-card-title,
+    html.bmas-dark-mode .bp-overview-heading-title,
+    html.bmas-dark-mode .bp-kpi-value,
+    html.bmas-dark-mode .bp-proposal-status-donut-hole strong,
+    html.bmas-dark-mode .bp-page h1,
+    html.bmas-dark-mode .bp-page h2,
+    html.bmas-dark-mode .bp-page h3,
+    html.bmas-dark-mode .bp-page h4,
+    html.bmas-dark-mode .bp-page label,
+    html.bmas-dark-mode .bp-page strong {
+      color: #edf4ff !important;
+    }
+    html.bmas-dark-mode .bp-screen-heading p,
+    html.bmas-dark-mode .bp-panel-subtitle,
+    html.bmas-dark-mode .bp-card-description,
+    html.bmas-dark-mode .bp-year-label,
+    html.bmas-dark-mode .bp-action-label,
+    html.bmas-dark-mode .bp-overview-heading-text,
+    html.bmas-dark-mode .bp-kpi-label,
+    html.bmas-dark-mode .bp-kpi-note,
+    html.bmas-dark-mode .bp-page small,
+    html.bmas-dark-mode .bp-page .bp-muted,
+    html.bmas-dark-mode .bp-page .bp-pagination-info {
+      color: #b8c5d8 !important;
+    }
+    html.bmas-dark-mode .bp-page table,
+    html.bmas-dark-mode .bp-page thead,
+    html.bmas-dark-mode .bp-page tbody,
+    html.bmas-dark-mode .bp-page tr,
+    html.bmas-dark-mode .bp-page th,
+    html.bmas-dark-mode .bp-page td {
+      border-color: #344258 !important;
+    }
+    html.bmas-dark-mode .bp-page th {
+      background-color: #1b293d !important;
+      color: #e5edf8 !important;
+    }
+    html.bmas-dark-mode .bp-page td {
+      color: #d8e2f0 !important;
+    }
+    html.bmas-dark-mode .bp-page tr:hover td {
+      background-color: #1b293d !important;
+    }
+    html.bmas-dark-mode .bp-page input::placeholder,
+    html.bmas-dark-mode .bp-page textarea::placeholder {
+      color: #9eacc1 !important;
+      opacity: 1 !important;
+    }
+    html.bmas-dark-mode .bp-page .bp-status-badge,
+    html.bmas-dark-mode .bp-page [class*="status-"],
+    html.bmas-dark-mode .bp-page .bp-badge {
+      border-color: #465670 !important;
+    }
+    html.bmas-dark-mode .bp-page .bp-page-button.active,
+    html.bmas-dark-mode .bp-page .bp-card-button,
+    html.bmas-dark-mode .bp-page .bp-primary-button,
+    html.bmas-dark-mode .bp-page button[type="submit"] {
+      color: #ffffff !important;
+    }
+    html.bmas-dark-mode .bp-page .bp-kpi-icon,
+    html.bmas-dark-mode .bp-page .bp-card-icon,
+    html.bmas-dark-mode .bp-page .bp-module-icon,
+    html.bmas-dark-mode .bp-page .bp-summary-icon {
+      color: #ffffff !important;
+    }
+    html.bmas-dark-mode .bp-page [style*="background: #ffffff"],
+    html.bmas-dark-mode .bp-page [style*="background:#ffffff"],
+    html.bmas-dark-mode .bp-page [style*="background: white"],
+    html.bmas-dark-mode .bp-page [style*="background-color: #ffffff"],
+    html.bmas-dark-mode .bp-page [style*="background-color: white"] {
+      background: #151f30 !important;
+      background-color: #151f30 !important;
+      color: #edf4ff !important;
+    }
+    @media (max-width: 768px) {
+      html.bmas-dark-mode .bp-page { font-size: 13px; }
+      html.bmas-dark-mode .bp-page .bp-card-description,
+      html.bmas-dark-mode .bp-page .bp-kpi-label,
+      html.bmas-dark-mode .bp-page .bp-action-label,
+      html.bmas-dark-mode .bp-page .bp-pagination-info { font-size: 11px !important; }
     }
 
   `;
@@ -6773,19 +6900,20 @@ export default function BudgetProposals({
         {/* Fiscal year */}
         <div className="bp-dashboard-toolbar">
           <div className="bp-dashboard-year-selector">
-            <CalendarDays />
+            <CalendarDays aria-hidden="true" />
             <span>Fiscal Year</span>
-            <select
-              value={selectedYear}
-              onChange={(event) => setSelectedYear(Number(event.target.value))}
-              aria-label="Fiscal Year"
-            >
-              <option value={2026}>2026</option>
-              <option value={2025}>2025</option>
-              <option value={2024}>2024</option>
-              <option value={2023}>2023</option>
-            </select>
-            <ChevronDown />
+            <div className="bp-dashboard-year-select-wrap">
+              <select
+                value={selectedYear}
+                onChange={(event) => setSelectedYear(Number(event.target.value))}
+                aria-label="Fiscal Year"
+              >
+                {Array.from({ length: 6 }, (_, index) => new Date().getFullYear() - index).map((year) => (
+                  <option key={year} value={year}>{year}</option>
+                ))}
+              </select>
+              <ChevronDown aria-hidden="true" />
+            </div>
           </div>
         </div>
 
@@ -6803,7 +6931,6 @@ export default function BudgetProposals({
               <strong>{total}</strong>
               <span>for FY {selectedYear}</span>
             </div>
-            <span className="bp-summary-arrow"><ArrowRight /></span>
           </button>
 
           <button
@@ -6820,7 +6947,6 @@ export default function BudgetProposals({
               <strong>{approved}</strong>
               <span>{percentage(approved)}% of total</span>
             </div>
-            <span className="bp-summary-arrow"><ArrowRight /></span>
           </button>
 
           <button
@@ -6837,7 +6963,6 @@ export default function BudgetProposals({
               <strong>{review}</strong>
               <span>{percentage(review)}% of total</span>
             </div>
-            <span className="bp-summary-arrow"><ArrowRight /></span>
           </button>
 
           <button
@@ -6854,7 +6979,6 @@ export default function BudgetProposals({
               <strong>{rejected}</strong>
               <span>{percentage(rejected)}% of total</span>
             </div>
-            <span className="bp-summary-arrow"><ArrowRight /></span>
           </button>
 
         </div>
@@ -6871,15 +6995,6 @@ export default function BudgetProposals({
                 track approval status, and generate summaries for better
                 financial planning and decision-making.
               </p>
-              {canCreateProposal && (
-                <button
-                  type="button"
-                  className="bp-dashboard-primary-button"
-                  onClick={() => handleSectionClick('create')}
-                >
-                  Create New Proposal <ArrowRight />
-                </button>
-              )}
             </div>
 
             <div className="bp-dashboard-hero-art" aria-hidden="true">
@@ -6911,10 +7026,9 @@ export default function BudgetProposals({
                   onChange={(event) => setSelectedYear(Number(event.target.value))}
                   aria-label="Status fiscal year"
                 >
-                  <option value={2026}>2026</option>
-                  <option value={2025}>2025</option>
-                  <option value={2024}>2024</option>
-                  <option value={2023}>2023</option>
+                  {Array.from({ length: 6 }, (_, index) => new Date().getFullYear() - index).map((year) => (
+                    <option key={year} value={year}>{year}</option>
+                  ))}
                 </select>
                 <ChevronDown />
               </div>

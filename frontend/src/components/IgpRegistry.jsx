@@ -24,8 +24,11 @@ import {
   X,
 } from "lucide-react";
 
-const DEFAULT_FISCAL_YEAR = 2026;
-const FISCAL_YEARS = [2026, 2025, 2024];
+const DEFAULT_FISCAL_YEAR = new Date().getFullYear();
+const FISCAL_YEARS = Array.from(
+  { length: 6 },
+  (_, index) => new Date().getFullYear() - index
+);
 const LIMIT = 30;
 
 const money = (value) =>
@@ -1007,16 +1010,32 @@ export default function IGPRegistry({ user, onLogout, onNavigate, activePath }) 
   const renderModuleHome = () => {
     return (
       <>
+        {/* Fiscal year selector — consistent with Dashboard and Budget Proposals. */}
+        <div className="mb-3 flex justify-end">
+          <label className="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 shadow-sm">
+            <CalendarDays className="h-3.5 w-3.5 text-[#174fd1]" aria-hidden="true" />
+            <span className="text-[10px] font-semibold text-slate-500">Fiscal Year</span>
+            <select
+              value={fiscalYear}
+              onChange={(e) => { setFiscalYear(Number(e.target.value)); setPage(1); }}
+              aria-label="Fiscal Year"
+              className="bg-transparent text-[11px] font-extrabold text-[#10245b] outline-none"
+            >
+              {FISCAL_YEARS.map((year) => <option key={year} value={year}>{year}</option>)}
+            </select>
+          </label>
+        </div>
+
         {/* TOP STATISTICS — overall Fund 161 status. */}
         <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <Metric label="IGP Programs / Projects" value={totalPrograms.toLocaleString()} icon={Landmark} />
-          <Metric label="Beginning Balance" value={money(beginning)} icon={WalletCards} className="bg-slate-50 text-slate-700" />
-          <Metric label="Projected Income" value={money(projected)} icon={TrendingUp} className="bg-blue-50 text-blue-700" />
-          <Metric label="Approved Budget IGP" value={money(approved)} icon={BarChart3} className="bg-violet-50 text-violet-700" />
-          <Metric label="Actual Collection" value={money(income)} icon={TrendingUp} className="bg-emerald-50 text-emerald-700" />
-          <Metric label="Utilization" value={money(utilization)} icon={ArrowDownToLine} className="bg-orange-50 text-orange-700" />
-          <Metric label="Disbursement" value={money(disbursement)} icon={Download} className="bg-indigo-50 text-indigo-700" />
-          <Metric label="Available Balance" value={money(balance)} icon={CheckCircle2} className="bg-emerald-50 text-emerald-700" />
+          <Metric label="IGP Programs / Projects" value={totalPrograms.toLocaleString()} icon={Landmark} className="bg-blue-600 text-white" />
+          <Metric label="Beginning Balance" value={money(beginning)} icon={WalletCards} className="bg-emerald-600 text-white" />
+          <Metric label="Projected Income" value={money(projected)} icon={TrendingUp} className="bg-orange-500 text-white" />
+          <Metric label="Approved Budget IGP" value={money(approved)} icon={BarChart3} className="bg-red-500 text-white" />
+          <Metric label="Actual Collection" value={money(income)} icon={TrendingUp} className="bg-emerald-600 text-white" />
+          <Metric label="Utilization" value={money(utilization)} icon={ArrowDownToLine} className="bg-orange-500 text-white" />
+          <Metric label="Disbursement" value={money(disbursement)} icon={Download} className="bg-indigo-600 text-white" />
+          <Metric label="Available Balance" value={money(balance)} icon={CheckCircle2} className="bg-red-500 text-white" />
         </div>
 
 
@@ -1035,27 +1054,6 @@ export default function IGPRegistry({ user, onLogout, onNavigate, activePath }) 
               <p className="mt-3 max-w-2xl text-[12px] leading-5 text-slate-600 md:text-[13px]">
                 Monitor WFP budget, collections, utilization, disbursement and remaining Fund 161 balance by IGP program and project.
               </p>
-              <div className="mt-5 flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setView("budget")}
-                  className="inline-flex h-10 items-center gap-2 rounded-lg bg-[#174fd1] px-4 text-[10px] font-extrabold text-white shadow-sm transition hover:bg-[#123fa8]"
-                >
-                  Open WFP / Budget &amp; Allocation
-                  <ArrowRight className="h-3.5 w-3.5" />
-                </button>
-                <label className="inline-flex h-10 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 shadow-sm">
-                  <CalendarDays className="h-3.5 w-3.5 text-[#174fd1]" />
-                  <span className="text-[10px] font-semibold text-slate-500">Fiscal Year</span>
-                  <select
-                    value={fiscalYear}
-                    onChange={(e) => { setFiscalYear(Number(e.target.value)); setPage(1); }}
-                    className="bg-transparent text-[11px] font-extrabold text-[#10245b] outline-none"
-                  >
-                    {FISCAL_YEARS.map((year) => <option key={year} value={year}>{year}</option>)}
-                  </select>
-                </label>
-              </div>
             </div>
 
             <div className="flex shrink-0 justify-center md:pr-4">
@@ -1119,7 +1117,7 @@ export default function IGPRegistry({ user, onLogout, onNavigate, activePath }) 
       <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
         <Metric label="Beginning Balance" value={money(beginning)} icon={WalletCards} />
         <Metric label="Projected Income FY" value={money(projected)} icon={TrendingUp} className="bg-blue-50 text-blue-700" />
-        <Metric label="Approved Budget IGP" value={money(approved)} icon={BarChart3} className="bg-violet-50 text-violet-700" />
+        <Metric label="Approved Budget IGP" value={money(approved)} icon={BarChart3} className="bg-red-500 text-white" />
         <Metric label="Available Balance" value={money(balance)} icon={CheckCircle2} className="bg-emerald-50 text-emerald-700" />
       </div>
       <div className="mt-4">
@@ -1437,7 +1435,7 @@ export default function IGPRegistry({ user, onLogout, onNavigate, activePath }) 
 
   return (
     <Layout user={user} onLogout={onLogout} onNavigate={onNavigate} activePath={activePath || "/igp/overview"}>
-      <div className="min-h-full bg-[#f7f9fc] p-4 md:p-5">
+      <div className="min-h-full bg-[#f7faff] pb-8">
         {error && <div className="mb-4 flex items-center justify-between rounded-lg border border-red-100 bg-red-50 px-4 py-3 text-[10px] text-red-700"><span>{error}</span><button type="button" onClick={() => setError("")}><X className="h-4 w-4" /></button></div>}
 
         {view === "module" && renderModuleHome()}

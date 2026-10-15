@@ -5,8 +5,10 @@ import Header from './Header';
 import Footer from './Footer';
 import { getNavItemsForRole } from '../../constants/navigation';
 
-export default function Layout({ children, user, onLogout, activePath, onNavigate }) {
+export default function Layout({ children, user, onLogout, activePath, onNavigate, preferences = {} }) {
   const [collapsed, setCollapsed] = useState(false);
+  // BMAS uses a fixed Light Theme; role-based navigation is unchanged.
+  const isDarkTheme = false;
 
   // Keep the header synchronized with the actual page URL.
   // Some Dashboard links navigate without passing activePath to Layout.
@@ -378,7 +380,7 @@ export default function Layout({ children, user, onLogout, activePath, onNavigat
   });
 
   return (
-    <div className="flex h-screen bg-gray-50 overflow-hidden">
+    <div className="flex h-screen overflow-hidden bg-gray-50 text-slate-900">
       {/* Sidebar highlighting uses canonical navigation paths. */}
       <Sidebar
         collapsed={collapsed}
@@ -401,7 +403,7 @@ export default function Layout({ children, user, onLogout, activePath, onNavigat
           subtitle={subtitle}
         />
 
-        <main className="flex-1 overflow-y-auto p-6 bg-gray-50">
+        <main className="flex-1 overflow-y-auto bg-gray-50 p-6 text-slate-900">
           {children}
         </main>
 

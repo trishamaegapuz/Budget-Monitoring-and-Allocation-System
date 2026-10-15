@@ -1,4 +1,4 @@
-﻿import { API_URL } from '../config/api';
+import { API_URL } from '../config/api';
 // frontend/src/components/Settings.jsx
 
 import React, { useEffect, useState } from 'react';
@@ -195,6 +195,7 @@ export default function Settings({
   // ============================================================
 
   const fetchSettings = async () => {
+    let loadSucceeded = false;
     try {
       setLoading(true);
       setError('');
@@ -287,9 +288,7 @@ export default function Settings({
                 prev.items_per_page
               ),
 
-            theme:
-              pref.theme ??
-              prev.theme,
+            theme: 'Light',
 
             sidebar_position:
               pref.sidebar_position ??
@@ -356,20 +355,24 @@ export default function Settings({
             database:
               info.database ||
               info.database_name ||
+              systemData.server?.database ||
               'PostgreSQL',
 
             server:
-              info.server ||
+              (typeof info.server === 'string' ? info.server : '') ||
               info.server_name ||
+              systemData.server?.name ||
               'Node.js / Express',
 
             node_version:
               info.node_version ||
+              systemData.server?.node_version ||
               '',
 
             current_time:
               info.current_time ||
               info.server_time ||
+              systemData.server?.current_time ||
               '',
           });
         }
@@ -379,6 +382,7 @@ export default function Settings({
           err
         );
       }
+      loadSucceeded = true;
     } catch (err) {
       console.error(
         'Settings loading error:',
@@ -403,6 +407,7 @@ export default function Settings({
     } finally {
       setLoading(false);
     }
+    return loadSucceeded;
   };
 
   // ============================================================
@@ -423,15 +428,18 @@ export default function Settings({
     try {
       setSavingGeneral(true);
 
+      const currencyParts = String(preferences.currency || 'Philippine Peso (PHP)');
+      const currencyCode = currencyParts.includes('(USD)') ? 'USD' : 'PHP';
+      const currencySymbol = currencyCode === 'USD' ? '$' : '?';
       const payload = {
-        institution:
-          generalSettings.institution.trim(),
-
-        system_name:
-          generalSettings.system_name.trim(),
-
-        system_acronym:
-          generalSettings.system_acronym.trim(),
+        institution: generalSettings.institution.trim(),
+        system_name: generalSettings.system_name.trim(),
+        system_acronym: generalSettings.system_acronym.trim() || 'BMAS',
+        default_fiscal_year: Number(preferences.default_fiscal_year) || new Date().getFullYear(),
+        default_date_format: preferences.default_date_format || 'MM/DD/YYYY',
+        default_timezone: 'Asia/Manila',
+        currency_code: currencyCode,
+        currency_symbol: currencySymbol,
       };
 
       if (!payload.institution) {
@@ -489,9 +497,15 @@ export default function Settings({
         });
       }
 
-      showToast(
-        'General settings saved successfully.'
-      );
+      const sharedSettings = {
+        default_fiscal_year: String(payload.default_fiscal_year),
+        default_date_format: payload.default_date_format,
+        currency_code: payload.currency_code,
+        currency_symbol: payload.currency_symbol,
+      };
+      localStorage.setItem('bmasSystemSettings', JSON.stringify(sharedSettings));
+      window.dispatchEvent(new CustomEvent('bmas-system-settings-updated', { detail: sharedSettings }));
+      showToast('General settings saved successfully.');
     } catch (err) {
       console.error(
         'Save general settings error:',
@@ -522,8 +536,7 @@ export default function Settings({
             preferences.items_per_page
           ),
 
-        theme:
-          preferences.theme,
+        theme: 'Light',
 
         sidebar_position:
           preferences.sidebar_position,
@@ -573,9 +586,7 @@ export default function Settings({
               payload.items_per_page
             ),
 
-          theme:
-            updated.theme ??
-            payload.theme,
+          theme: 'Light',
 
           sidebar_position:
             updated.sidebar_position ??
@@ -601,9 +612,18 @@ export default function Settings({
         }));
       }
 
-      showToast(
-        'User preferences saved successfully.'
-      );
+      const sharedPreferences = {
+        items_per_page: Number(payload.items_per_page),
+        theme: 'Light',
+        sidebar_position: payload.sidebar_position,
+        auto_logout_minutes: Number(payload.auto_logout_minutes),
+        confirm_before_delete: payload.confirm_before_delete,
+        enable_animations: payload.enable_animations,
+        dashboard_overview: payload.dashboard_overview,
+      };
+      localStorage.setItem('bmasUserPreferences', JSON.stringify(sharedPreferences));
+      window.dispatchEvent(new CustomEvent('bmas-preferences-updated', { detail: sharedPreferences }));
+      showToast('User preferences saved successfully.');
     } catch (err) {
       console.error(
         'Save preferences error:',
@@ -625,11 +645,9 @@ export default function Settings({
   // ============================================================
 
   const handleRefresh = async () => {
-    await fetchSettings();
-
-    showToast(
-      'Settings refreshed successfully.'
-    );
+    setError('');
+    const refreshed = await fetchSettings();
+    if (refreshed) showToast('Settings refreshed successfully.');
   };
 
   // ============================================================
@@ -718,31 +736,10 @@ export default function Settings({
       <div className="w-full pb-10">
 
         {/* ======================================================
-            HEADER
+            HEADER ACTIONS (page title is already shown in Layout)
         ====================================================== */}
 
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-7">
-
-          <div>
-
-            <div className="flex items-center gap-2.5">
-
-              <div className="w-9 h-9 rounded-lg bg-blue-50 flex items-center justify-center">
-                <SettingsIcon className="w-4.5 h-4.5 text-blue-600" />
-              </div>
-
-              <h1 className="text-xl font-bold text-gray-900">
-                Settings
-              </h1>
-
-            </div>
-
-            <p className="text-xs text-gray-500 mt-2 ml-11">
-              Manage BMAS system configuration and your account preferences.
-            </p>
-
-          </div>
-
+        <div className="flex justify-end mb-5">
           <button
             type="button"
             onClick={handleRefresh}
@@ -830,15 +827,17 @@ export default function Settings({
                   ${
                     active
                       ? `
-                        bg-blue-50
-                        border-blue-200
+                        bg-blue-600
+                        border-blue-600
                         shadow-sm
+                        text-white
                       `
                       : `
                         bg-white
                         border-gray-100
-                        hover:border-blue-100
-                        hover:bg-gray-50
+                        hover:border-blue-200
+                        hover:bg-blue-50
+                        hover:shadow-sm
                       `
                   }
                 `}
@@ -857,8 +856,8 @@ export default function Settings({
                       shrink-0
                       ${
                         active
-                          ? 'bg-blue-600 text-white'
-                          : 'bg-gray-100 text-gray-500 group-hover:bg-blue-50 group-hover:text-blue-600'
+                          ? 'bg-white/20 text-white'
+                          : 'bg-gray-100 text-gray-500 group-hover:bg-blue-100 group-hover:text-blue-700'
                       }
                     `}
                   >
@@ -873,15 +872,15 @@ export default function Settings({
                         font-bold
                         ${
                           active
-                            ? 'text-blue-700'
-                            : 'text-gray-800'
+                            ? 'text-white'
+                            : 'text-gray-800 group-hover:text-blue-700'
                         }
                       `}
                     >
                       {tab.label}
                     </p>
 
-                    <p className="text-[11px] text-gray-400 mt-0.5">
+                    <p className={`text-[11px] mt-0.5 ${active ? 'text-blue-100' : 'text-gray-400'}`} >
                       {tab.description}
                     </p>
 
@@ -1096,23 +1095,12 @@ export default function Settings({
 
                 <FormField
                   label="Theme"
-                  description="Choose the appearance of the application."
+                  description="BMAS uses the standard Light Themefor consistent readability across all modules."
                 >
-
-                  <SelectField
-                    value={preferences.theme}
-                    onChange={(value) =>
-                      setPreferences(prev => ({
-                        ...prev,
-                        theme: value,
-                      }))
-                    }
-                    options={[
-                      ['Light', 'Light'],
-                      ['Dark', 'Dark'],
-                    ]}
-                  />
-
+                  <div className="flex min-h-10 items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-800">
+                    <Monitor className="h-4 w-4 text-blue-600" />
+                    Light Theme
+                  </div>
                 </FormField>
 
                 <FormField

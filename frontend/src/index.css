@@ -1,1 +1,369 @@
 @import "tailwindcss";
+
+/* BMAS unified visual system: keep this stylesheet presentation-only. */
+:root {
+  color-scheme: light;
+  --bmas-page: #f4f7fb;
+  --bmas-surface: #ffffff;
+  --bmas-surface-muted: #f8fafc;
+  --bmas-border: #dfe6ef;
+  --bmas-text: #172b4d;
+  --bmas-muted: #52627a;
+  --bmas-accent: #2563eb;
+  --bmas-accent-hover: #1d4ed8;
+  --bmas-focus: rgba(37, 99, 235, .2);
+}
+
+html { font-size: 16px; }
+body {
+  margin: 0;
+  background: var(--bmas-page);
+  color: var(--bmas-text);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+button, input, select, textarea { font: inherit; }
+button { cursor: pointer; }
+button:disabled { cursor: not-allowed; opacity: .65; }
+input, select, textarea {
+  min-height: 40px;
+  color: #172b4d;
+  background-color: #fff;
+  border-color: #cbd5e1;
+}
+input::placeholder, textarea::placeholder { color: #718096; opacity: 1; }
+input:focus, select:focus, textarea:focus, button:focus-visible {
+  outline: 2px solid var(--bmas-focus);
+  outline-offset: 1px;
+}
+
+/* Prevent tiny, hard-to-read labels used in older screens. */
+[class*="text-[9px]"], [class*="text-[10px]"], [class*="text-[11px]"] {
+  font-size: 12px !important;
+  line-height: 1.45 !important;
+}
+[class~="text-xs"] { font-size: 13px; line-height: 1.45; }
+
+/* Shared surfaces and tables across Dashboard, registries, proposals and settings. */
+main { background: var(--bmas-page); color: var(--bmas-text); }
+main .bg-white { background-color: var(--bmas-surface); }
+main .border-gray-100, main .border-gray-200, main .border-slate-100, main .border-slate-200 {
+  border-color: var(--bmas-border);
+}
+main table { width: 100%; border-collapse: separate; border-spacing: 0; }
+main th {
+  color: #334765;
+  font-weight: 700;
+  letter-spacing: .015em;
+}
+main td, main th { vertical-align: middle; }
+main input, main select, main textarea { border-radius: 8px; }
+main button, main a { transition: color .15s ease, background-color .15s ease, border-color .15s ease, box-shadow .15s ease; }
+
+/* Unified dark mode: cover common Tailwind color families, not only gray/white. */
+.bmas-dark-mode { color-scheme: dark; }
+.bmas-dark-mode body, .bmas-dark-mode #root {
+  background: #0b1220 !important;
+  color: #e5edf8 !important;
+}
+.bmas-dark-mode main {
+  background: #0b1220 !important;
+  color: #e5edf8 !important;
+}
+.bmas-dark-mode main .bg-white,
+.bmas-dark-mode main [class~="bg-gray-50"],
+.bmas-dark-mode main [class~="bg-gray-100"],
+.bmas-dark-mode main [class~="bg-slate-50"],
+.bmas-dark-mode main [class~="bg-slate-100"],
+.bmas-dark-mode main [class~="bg-blue-50"],
+.bmas-dark-mode main [class~="bg-indigo-50"],
+.bmas-dark-mode main [class~="bg-emerald-50"],
+.bmas-dark-mode main [class~="bg-green-50"],
+.bmas-dark-mode main [class~="bg-amber-50"],
+.bmas-dark-mode main [class~="bg-yellow-50"],
+.bmas-dark-mode main [class~="bg-red-50"],
+.bmas-dark-mode main [class~="bg-rose-50"],
+.bmas-dark-mode main [class~="bg-purple-50"] {
+  background-color: #151f30 !important;
+  color: #e5edf8 !important;
+}
+.bmas-dark-mode main [class*="text-gray-"],
+.bmas-dark-mode main [class*="text-slate-"],
+.bmas-dark-mode main [class*="text-blue-800"],
+.bmas-dark-mode main [class*="text-blue-700"],
+.bmas-dark-mode main [class*="text-blue-600"],
+.bmas-dark-mode main [class*="text-indigo-"],
+.bmas-dark-mode main [class*="text-emerald-"],
+.bmas-dark-mode main [class*="text-green-"],
+.bmas-dark-mode main [class*="text-amber-"],
+.bmas-dark-mode main [class*="text-yellow-"],
+.bmas-dark-mode main [class*="text-red-"],
+.bmas-dark-mode main [class*="text-rose-"],
+.bmas-dark-mode main [class*="text-purple-"] {
+  color: #d4deed !important;
+}
+.bmas-dark-mode main [class*="border-gray-"],
+.bmas-dark-mode main [class*="border-slate-"],
+.bmas-dark-mode main [class*="border-blue-"],
+.bmas-dark-mode main [class*="border-indigo-"],
+.bmas-dark-mode main [class*="border-emerald-"],
+.bmas-dark-mode main [class*="border-green-"],
+.bmas-dark-mode main [class*="border-amber-"],
+.bmas-dark-mode main [class*="border-red-"],
+.bmas-dark-mode main [class*="border-purple-"] {
+  border-color: #344258 !important;
+}
+.bmas-dark-mode main input,
+.bmas-dark-mode main select,
+.bmas-dark-mode main textarea {
+  background-color: #0f1929 !important;
+  color: #edf4ff !important;
+  border-color: #40516b !important;
+}
+.bmas-dark-mode main option { background: #0f1929; color: #edf4ff; }
+.bmas-dark-mode main input::placeholder,
+.bmas-dark-mode main textarea::placeholder { color: #9aa9bd !important; }
+.bmas-dark-mode main table thead,
+.bmas-dark-mode main thead [class*="bg-"] { background-color: #1b2940 !important; }
+.bmas-dark-mode main tbody tr:hover { background-color: rgba(96, 165, 250, .08); }
+.bmas-dark-mode main .bg-blue-600,
+.bmas-dark-mode main .bg-blue-700,
+.bmas-dark-mode main .bg-indigo-600 { color: #fff !important; }
+.bmas-dark-mode main .text-white { color: #fff !important; }
+
+@media (max-width: 768px) {
+  main { padding: 1rem !important; }
+  main table { font-size: 12px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}
+
+
+/* FINAL CROSS-MODULE DARK MODE NORMALIZATION
+   Covers custom light utility colors used by RAOD, IGP and transaction screens. */
+.bmas-dark-mode main [class*="bg-white"],
+.bmas-dark-mode main [class*="bg-gray-50"],
+.bmas-dark-mode main [class*="bg-gray-100"],
+.bmas-dark-mode main [class*="bg-gray-200"],
+.bmas-dark-mode main [class*="bg-slate-50"],
+.bmas-dark-mode main [class*="bg-slate-100"],
+.bmas-dark-mode main [class*="bg-slate-200"],
+.bmas-dark-mode main [class*="bg-zinc-50"],
+.bmas-dark-mode main [class*="bg-zinc-100"],
+.bmas-dark-mode main [class*="bg-neutral-50"],
+.bmas-dark-mode main [class*="bg-neutral-100"],
+.bmas-dark-mode main [class*="bg-stone-50"],
+.bmas-dark-mode main [class*="bg-stone-100"],
+.bmas-dark-mode main [class*="bg-[#fff"],
+.bmas-dark-mode main [class*="bg-[#FFF"],
+.bmas-dark-mode main [class*="bg-[#f"],
+.bmas-dark-mode main [class*="bg-[#F"] {
+  background-color: #151f30 !important;
+  color: #e5edf8 !important;
+}
+
+/* Make nested panels, cards, forms and registry content use the same surface. */
+.bmas-dark-mode main .rounded,
+.bmas-dark-mode main .rounded-lg,
+.bmas-dark-mode main .rounded-xl,
+.bmas-dark-mode main .rounded-2xl {
+  border-color: #344258;
+}
+.bmas-dark-mode main [class*="text-slate-900"],
+.bmas-dark-mode main [class*="text-slate-800"],
+.bmas-dark-mode main [class*="text-gray-900"],
+.bmas-dark-mode main [class*="text-gray-800"],
+.bmas-dark-mode main [class*="text-zinc-900"],
+.bmas-dark-mode main [class*="text-neutral-900"],
+.bmas-dark-mode main [class*="text-[#0"],
+.bmas-dark-mode main [class*="text-[#1"] {
+  color: #edf4ff !important;
+}
+.bmas-dark-mode main [class*="text-slate-600"],
+.bmas-dark-mode main [class*="text-slate-500"],
+.bmas-dark-mode main [class*="text-gray-600"],
+.bmas-dark-mode main [class*="text-gray-500"],
+.bmas-dark-mode main [class*="text-zinc-600"],
+.bmas-dark-mode main [class*="text-neutral-600"] {
+  color: #b8c5d8 !important;
+}
+.bmas-dark-mode main table,
+.bmas-dark-mode main thead,
+.bmas-dark-mode main tbody,
+.bmas-dark-mode main tr,
+.bmas-dark-mode main th,
+.bmas-dark-mode main td {
+  border-color: #344258 !important;
+}
+.bmas-dark-mode main th {
+  color: #dbe7f6 !important;
+}
+.bmas-dark-mode main td {
+  color: #d1dced;
+}
+.bmas-dark-mode main hr {
+  border-color: #344258 !important;
+}
+
+/* Light inline backgrounds occasionally used by older screens. */
+.bmas-dark-mode main [style*="background-color: white"],
+.bmas-dark-mode main [style*="background-color: #fff"],
+.bmas-dark-mode main [style*="background-color: #FFF"],
+.bmas-dark-mode main [style*="background: white"],
+.bmas-dark-mode main [style*="background: #fff"],
+.bmas-dark-mode main [style*="background: #FFF"] {
+  background-color: #151f30 !important;
+  color: #e5edf8 !important;
+}
+
+
+/* === BMAS complete dark-mode normalization across all modules === */
+.bmas-dark-mode {
+  color-scheme: dark;
+  --bmas-page: #0b1220;
+  --bmas-surface: #151f30;
+  --bmas-surface-muted: #1b293d;
+  --bmas-border: #344258;
+  --bmas-text: #edf4ff;
+  --bmas-muted: #b8c5d8;
+}
+.bmas-dark-mode body,
+.bmas-dark-mode #root {
+  background: var(--bmas-page) !important;
+  color: var(--bmas-text) !important;
+}
+.bmas-dark-mode main,
+.bmas-dark-mode main > div,
+.bmas-dark-mode main section {
+  color: var(--bmas-text);
+}
+.bmas-dark-mode main [class*="bg-white"],
+.bmas-dark-mode main [class*="bg-gray-50"],
+.bmas-dark-mode main [class*="bg-gray-100"],
+.bmas-dark-mode main [class*="bg-slate-50"],
+.bmas-dark-mode main [class*="bg-slate-100"],
+.bmas-dark-mode main [class*="bg-blue-50"],
+.bmas-dark-mode main [class*="bg-indigo-50"],
+.bmas-dark-mode main [class*="bg-violet-50"],
+.bmas-dark-mode main [class*="bg-purple-50"],
+.bmas-dark-mode main [class*="bg-emerald-50"],
+.bmas-dark-mode main [class*="bg-green-50"],
+.bmas-dark-mode main [class*="bg-amber-50"],
+.bmas-dark-mode main [class*="bg-yellow-50"],
+.bmas-dark-mode main [class*="bg-orange-50"],
+.bmas-dark-mode main [class*="bg-red-50"],
+.bmas-dark-mode main [class*="bg-rose-50"],
+.bmas-dark-mode main [class*="bg-teal-50"],
+.bmas-dark-mode main [class*="bg-cyan-50"],
+.bmas-dark-mode main [class*="bg-sky-50"],
+.bmas-dark-mode main [class*="bg-pink-50"],
+.bmas-dark-mode main [class*="bg-fuchsia-50"] {
+  background-color: var(--bmas-surface) !important;
+  background-image: none !important;
+  color: var(--bmas-text) !important;
+}
+.bmas-dark-mode main [class*="from-white"],
+.bmas-dark-mode main [class*="via-white"],
+.bmas-dark-mode main [class*="to-white"],
+.bmas-dark-mode main [class*="from-blue-50"],
+.bmas-dark-mode main [class*="via-blue-50"],
+.bmas-dark-mode main [class*="to-blue-50"],
+.bmas-dark-mode main [class*="from-indigo-50"],
+.bmas-dark-mode main [class*="via-indigo-50"],
+.bmas-dark-mode main [class*="to-indigo-50"],
+.bmas-dark-mode main [class*="from-slate-50"],
+.bmas-dark-mode main [class*="via-slate-50"],
+.bmas-dark-mode main [class*="to-slate-50"] {
+  --tw-gradient-from: #151f30 !important;
+  --tw-gradient-via: #151f30 !important;
+  --tw-gradient-to: #151f30 !important;
+  background-image: none !important;
+  background-color: var(--bmas-surface) !important;
+}
+.bmas-dark-mode main [class*="text-gray-900"],
+.bmas-dark-mode main [class*="text-gray-800"],
+.bmas-dark-mode main [class*="text-gray-700"],
+.bmas-dark-mode main [class*="text-slate-900"],
+.bmas-dark-mode main [class*="text-slate-800"],
+.bmas-dark-mode main [class*="text-slate-700"],
+.bmas-dark-mode main [class*="text-zinc-900"],
+.bmas-dark-mode main [class*="text-neutral-900"],
+.bmas-dark-mode main [class*="text-indigo-900"],
+.bmas-dark-mode main [class*="text-blue-900"],
+.bmas-dark-mode main [class*="text-[#0"],
+.bmas-dark-mode main [class*="text-[#1"] {
+  color: #edf4ff !important;
+}
+.bmas-dark-mode main [class*="text-gray-600"],
+.bmas-dark-mode main [class*="text-gray-500"],
+.bmas-dark-mode main [class*="text-slate-600"],
+.bmas-dark-mode main [class*="text-slate-500"],
+.bmas-dark-mode main [class*="text-zinc-600"],
+.bmas-dark-mode main [class*="text-neutral-600"],
+.bmas-dark-mode main [class*="text-indigo-700"],
+.bmas-dark-mode main [class*="text-blue-700"] {
+  color: #b8c5d8 !important;
+}
+.bmas-dark-mode main input,
+.bmas-dark-mode main select,
+.bmas-dark-mode main textarea,
+.bmas-dark-mode main option {
+  background-color: #111b2b !important;
+  color: #edf4ff !important;
+  border-color: #465670 !important;
+}
+.bmas-dark-mode main input::placeholder,
+.bmas-dark-mode main textarea::placeholder {
+  color: #9eacc1 !important;
+  opacity: 1;
+}
+.bmas-dark-mode main table,
+.bmas-dark-mode main thead,
+.bmas-dark-mode main tbody,
+.bmas-dark-mode main tr,
+.bmas-dark-mode main th,
+.bmas-dark-mode main td {
+  border-color: #344258 !important;
+}
+.bmas-dark-mode main th {
+  background-color: #1b293d !important;
+  color: #e5edf8 !important;
+}
+.bmas-dark-mode main td {
+  color: #d8e2f0;
+}
+.bmas-dark-mode main tr:hover td {
+  background-color: #1b293d;
+}
+.bmas-dark-mode main [style*="background-color: white"],
+.bmas-dark-mode main [style*="background-color: #fff"],
+.bmas-dark-mode main [style*="background-color:#fff"],
+.bmas-dark-mode main [style*="background: white"],
+.bmas-dark-mode main [style*="background: #fff"],
+.bmas-dark-mode main [style*="background:#fff"] {
+  background-color: var(--bmas-surface) !important;
+  color: var(--bmas-text) !important;
+}
+.bmas-dark-mode main [style*="color: #0f"],
+.bmas-dark-mode main [style*="color:#0f"],
+.bmas-dark-mode main [style*="color: #1"],
+.bmas-dark-mode main [style*="color:#1"] {
+  color: #edf4ff !important;
+}
+.bmas-dark-mode main .shadow,
+.bmas-dark-mode main .shadow-sm,
+.bmas-dark-mode main .shadow-md,
+.bmas-dark-mode main .shadow-lg,
+.bmas-dark-mode main .shadow-xl {
+  box-shadow: 0 8px 24px rgba(0,0,0,.22) !important;
+}
+.bmas-dark-mode main .border,
+.bmas-dark-mode main [class*="border-gray-"],
+.bmas-dark-mode main [class*="border-slate-"] {
+  border-color: var(--bmas-border) !important;
+}

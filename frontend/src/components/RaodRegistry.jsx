@@ -37,7 +37,7 @@ import {
   X,
 } from "lucide-react";
 
-const FY = 2026;
+const FY = new Date().getFullYear();
 const LIMIT = 30;
 const DEPARTMENT_PAGE_SIZE = 30;
 const MONITORING_PAGE_SIZE = 30;
@@ -1226,9 +1226,9 @@ function RaodRegistry({ user, onLogout, onNavigate, activePath }) {
       <>
         {/* FISCAL YEAR SELECTOR */}
         <div className="mb-4 flex items-center justify-end">
-          <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-sm">
-            <CalendarDays className="h-4 w-4 text-[#174fd1]" />
-            <label htmlFor="raod-fiscal-year" className="text-[11px] font-semibold text-slate-500">Fiscal Year</label>
+          <div className="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 shadow-sm">
+            <CalendarDays className="h-3.5 w-3.5 text-[#174fd1]" />
+            <label htmlFor="raod-fiscal-year" className="whitespace-nowrap text-[10px] font-semibold text-slate-600">Fiscal Year</label>
             <select
               id="raod-fiscal-year"
               value={selectedFiscalYear}
@@ -1241,15 +1241,12 @@ function RaodRegistry({ user, onLogout, onNavigate, activePath }) {
                 setSelectedDepartment(null);
                 setDepartmentEntries([]);
               }}
-              className="h-9 rounded-md border border-slate-200 bg-white px-3 text-[12px] font-bold text-[#10245b] outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-200"
+              className="h-7 cursor-pointer appearance-auto border-0 bg-transparent py-0 pl-0 pr-1 text-[11px] font-bold text-[#10245b] outline-none focus:ring-0"
             >
-              <option value="2026">2026</option>
-              <option value="2025">2025</option>
-              <option value="2024">2024</option>
-              <option value="2023">2023</option>
-              <option value="2022">2022</option>
+              {Array.from({ length: Math.max(1, FY - 2021 + 1) }, (_, index) => FY - index).map((year) => (
+                <option key={year} value={year}>{year}</option>
+              ))}
             </select>
-            <ChevronDown className="-ml-7 pointer-events-none h-4 w-4 text-slate-500" />
           </div>
         </div>
 
@@ -1262,7 +1259,7 @@ function RaodRegistry({ user, onLogout, onNavigate, activePath }) {
                 <p className="mt-2 text-[21px] font-extrabold tracking-tight text-[#10245b]">{money(allotment)}</p>
                 <p className="mt-1 text-[11px] text-slate-400">FY {selectedFiscalYear}</p>
               </div>
-              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-blue-50 text-blue-600"><WalletCards className="h-5 w-5" /></span>
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-blue-600 text-white"><WalletCards className="h-5 w-5" /></span>
             </div>
             <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-blue-600" style={{ width: "100%" }} /></div>
             <p className="mt-1 text-right text-[10px] font-semibold text-slate-500">100%</p>
@@ -1275,7 +1272,7 @@ function RaodRegistry({ user, onLogout, onNavigate, activePath }) {
                 <p className="mt-2 text-[21px] font-extrabold tracking-tight text-[#10245b]">{money(obligation)}</p>
                 <p className="mt-1 text-[11px] text-slate-400">of total allotment</p>
               </div>
-              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-emerald-600"><BarChart3 className="h-5 w-5" /></span>
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white"><BarChart3 className="h-5 w-5" /></span>
             </div>
             <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-emerald-500" style={{ width: `${Math.min(100, utilization)}%` }} /></div>
             <p className="mt-1 text-right text-[10px] font-semibold text-slate-500">{utilization.toFixed(2)}%</p>
@@ -1288,9 +1285,9 @@ function RaodRegistry({ user, onLogout, onNavigate, activePath }) {
                 <p className="mt-2 text-[21px] font-extrabold tracking-tight text-[#10245b]">{money(disbursement)}</p>
                 <p className="mt-1 text-[11px] text-slate-400">of total allotment</p>
               </div>
-              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-orange-50 text-orange-600"><ArrowDownToLine className="h-5 w-5" /></span>
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-violet-600 text-white"><ArrowDownToLine className="h-5 w-5" /></span>
             </div>
-            <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-orange-500" style={{ width: `${Math.min(100, disbursementVsAllotment)}%` }} /></div>
+            <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-violet-500" style={{ width: `${Math.min(100, disbursementVsAllotment)}%` }} /></div>
             <p className="mt-1 text-right text-[10px] font-semibold text-slate-500">{disbursementVsAllotment.toFixed(2)}%</p>
           </div>
 
@@ -1301,9 +1298,9 @@ function RaodRegistry({ user, onLogout, onNavigate, activePath }) {
                 <p className="mt-2 text-[21px] font-extrabold tracking-tight text-[#10245b]">{money(unobligated)}</p>
                 <p className="mt-1 text-[11px] text-slate-400">remaining from allotment</p>
               </div>
-              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-violet-50 text-violet-600"><CheckCircle2 className="h-5 w-5" /></span>
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-red-500 text-white"><CheckCircle2 className="h-5 w-5" /></span>
             </div>
-            <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-violet-500" style={{ width: `${Math.min(100, pct(unobligated, allotment))}%` }} /></div>
+            <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-red-500" style={{ width: `${Math.min(100, pct(unobligated, allotment))}%` }} /></div>
             <p className="mt-1 text-right text-[10px] font-semibold text-slate-500">{pct(unobligated, allotment).toFixed(2)}%</p>
           </div>
         </div>
@@ -1315,9 +1312,6 @@ function RaodRegistry({ user, onLogout, onNavigate, activePath }) {
               <p className="text-[13px] font-bold uppercase tracking-wide text-blue-600">RAOD Registry</p>
               <h1 className="mt-2 text-[25px] font-extrabold leading-tight text-[#10245b]">Monitor, Record, and Manage<br className="hidden md:block" /> Allotments, Obligations, and Disbursements</h1>
               <p className="mt-3 text-[13px] leading-5 text-slate-600">Keep track of allotment, obligation, disbursement transactions and generate financial accountability reports in an organized and transparent manner.</p>
-              <button type="button" onClick={() => openView("dashboard")} className="mt-5 inline-flex items-center gap-2 rounded-lg bg-[#174fd1] px-5 py-3 text-[12px] font-bold text-white shadow-sm hover:bg-blue-700">
-                Go to Dashboard <ArrowRight className="h-4 w-4" />
-              </button>
             </div>
             <div className="absolute bottom-0 right-5 flex h-44 w-52 items-center justify-center opacity-90">
               <div className="relative flex h-32 w-40 items-end justify-center rounded-2xl bg-white/80 shadow-lg ring-1 ring-blue-100">

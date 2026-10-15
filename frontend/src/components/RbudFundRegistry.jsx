@@ -50,7 +50,7 @@ const GROUPS = [
   "LAPAZ",
 ];
 
-const YEARS = [2026, 2025, 2024, 2023, 2022];
+const YEARS = Array.from({ length: 6 }, (_, index) => new Date().getFullYear() - index);
 
 const MODULES = [
   {
@@ -1342,22 +1342,25 @@ function ModuleHome({
   const openTransactions = () => onOpen("transactions");
 
   return (
-    <div className="px-6 py-5">
-      {/* Fiscal year */}
-      <div className="flex items-center justify-end mb-4">
-        <label className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 h-10 shadow-sm">
-          <CalendarDays className="h-4 w-4 text-[#211b79]" />
-          <span className="text-[12px] font-semibold text-slate-600">Fiscal Year</span>
-          <select
-            value={fiscalYear}
-            onChange={(e) => setFiscalYear(e.target.value)}
-            className="bg-transparent text-[13px] font-bold text-[#10245b] outline-none cursor-pointer"
-          >
-            {[2026, 2025, 2024, 2023, 2022].map((year) => (
-              <option key={year} value={year}>{year}</option>
-            ))}
-          </select>
-          <ChevronDown className="h-4 w-4 text-slate-500 pointer-events-none" />
+    <div className="w-full min-w-0 pt-0 pb-5">
+      {/* Fiscal year — compact selector, consistent with Budget Proposals */}
+      <div className="flex items-center justify-end mb-3">
+        <label className="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 shadow-sm">
+          <CalendarDays className="h-3.5 w-3.5 text-[#123b7a]" />
+          <span className="text-[10px] font-bold text-slate-700">Fiscal Year</span>
+          <span className="relative inline-flex items-center">
+            <select
+              value={fiscalYear}
+              onChange={(e) => setFiscalYear(e.target.value)}
+              aria-label="Fiscal Year"
+              className="cursor-pointer appearance-none bg-transparent py-1 pl-0.5 pr-5 text-[10px] font-extrabold text-slate-900 outline-none"
+            >
+              {YEARS.map((year) => (
+                <option key={year} value={year}>{year}</option>
+              ))}
+            </select>
+            <ChevronDown className="pointer-events-none absolute right-0 h-3 w-3 text-slate-500" />
+          </span>
         </label>
       </div>
 
@@ -1405,13 +1408,6 @@ function ModuleHome({
               <p className="mt-3 text-[13px] leading-5 text-slate-600">
                 Keep track of approved budget, allocation, utilization, and remaining balance by fund, department, and budget class. Generate financial reports for transparency and decision-making.
               </p>
-              <button
-                type="button"
-                onClick={() => onOpen("overview")}
-                className="mt-4 h-10 rounded-lg bg-blue-600 px-5 text-[13px] font-bold text-white shadow-sm hover:bg-blue-700 inline-flex items-center gap-2"
-              >
-                Go to Dashboard <ChevronRight className="h-4 w-4" />
-              </button>
             </div>
 
             <div className="hidden sm:flex h-40 w-44 shrink-0 items-center justify-center relative">

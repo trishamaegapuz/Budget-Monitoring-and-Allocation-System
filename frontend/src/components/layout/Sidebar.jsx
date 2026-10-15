@@ -1,6 +1,6 @@
 import React from 'react';
 import { LogOut, ChevronLeft, ChevronRight, Database } from 'lucide-react';
-import { navItems, getNavItemsForRole } from '../../constants/navigation';
+import { getNavItemsForRole } from '../../constants/navigation';
 
 export default function Sidebar({
   collapsed,
@@ -11,76 +11,75 @@ export default function Sidebar({
   onNavigate,
 }) {
   /*
-  |--------------------------------------------------------------------------
-  | Check if the current path belongs to a module
-  |--------------------------------------------------------------------------
-  | This allows RBUD and RAOD pages such as:
-  |
-  | /rbud/overview
-  | /rbud/allocation
-  | /rbud/transactions
-  |
-  | to keep RBUD Registry highlighted.
-  |--------------------------------------------------------------------------
-  */
-  // Keep the existing navigation and restore the standalone Master Data module.
-  // If navigation.js already contains Master Data, we do not add a duplicate.
+   * Keep module routes highlighted when navigating to sub-pages.
+   * Master Data remains a separate Administration-only module.
+   */
   const sidebarItems = (() => {
-  const role = user?.role;
+    const role = user?.role;
+    const items = [...getNavItemsForRole(role)];
 
-  // Get only the navigation items allowed for the logged-in role
-  const items = Array.isArray(role)
-    ? [...getNavItemsForRole(role)]
-    : [...getNavItemsForRole(role)];
-
-  /*
-  |--------------------------------------------------------------------------
-  | Master Data
-  |--------------------------------------------------------------------------
-  | Administration only.
-  | This is still added here because the existing system keeps Master Data
-  | as a separate module.
-  |--------------------------------------------------------------------------
-  */
-
-  if (role === 'Administration') {
-    const alreadyExists = items.some(
-      (item) => item?.path === '/master-data'
-    );
-
-    if (!alreadyExists) {
-      const masterDataItem = {
-        label: 'Master Data',
-        path: '/master-data',
-        icon: Database,
-        allowedRoles: ['Administration'],
-      };
-
-      const userIndex = items.findIndex(
-        (item) => item?.path === '/user-management'
+    if (role === 'Administration') {
+      const alreadyExists = items.some(
+        (item) => item?.path === '/master-data'
       );
 
-      if (userIndex >= 0) {
-        items.splice(userIndex, 0, masterDataItem);
-      } else {
-        items.push(masterDataItem);
+      if (!alreadyExists) {
+        const masterDataItem = {
+          label: 'Master Data',
+          path: '/master-data',
+          icon: Database,
+          allowedRoles: ['Administration'],
+        };
+
+        const userIndex = items.findIndex(
+          (item) => item?.path === '/user-management'
+        );
+
+        if (userIndex >= 0) {
+          items.splice(userIndex, 0, masterDataItem);
+        } else {
+          items.push(masterDataItem);
+        }
       }
     }
-  }
 
-  return items;
-})();
+    /*
+     * Place IGP Registry immediately after RAOD Registry.
+     * Match by label/path so this works with either common route naming.
+     */
+    const igpIndex = items.findIndex((item) =>
+      /igp\s*registry/i.test(item?.label || '') ||
+      /\/igp(?:-registry|\/overview|\/)/i.test(item?.path || '')
+    );
+
+    if (igpIndex >= 0) {
+      const [igpItem] = items.splice(igpIndex, 1);
+      const raodIndex = items.findIndex((item) =>
+        /raod\s*registry/i.test(item?.label || '') ||
+        /\/raod(?:-registry|\/overview|\/)/i.test(item?.path || '')
+      );
+
+      if (raodIndex >= 0) {
+        items.splice(raodIndex + 1, 0, igpItem);
+      } else {
+        items.push(igpItem);
+      }
+    }
+
+    return items;
+  })();
 
   const isItemActive = (item) => {
     if (!item?.path) return false;
 
-    // Dashboard
     if (item.path === '/') {
       return activePath === '/';
     }
 
-    // RBUD Registry
-    if (item.path === '/rbud/overview') {
+    if (
+      item.path === '/rbud/overview' ||
+      /rbud\s*registry/i.test(item.label || '')
+    ) {
       return (
         activePath === '/rbud/overview' ||
         activePath === '/rbud-registry' ||
@@ -88,12 +87,25 @@ export default function Sidebar({
       );
     }
 
-    // RAOD Registry
-    if (item.path === '/raod/overview') {
+    if (
+      item.path === '/raod/overview' ||
+      /raod\s*registry/i.test(item.label || '')
+    ) {
       return (
         activePath === '/raod/overview' ||
         activePath === '/raod-registry' ||
         activePath.startsWith('/raod/')
+      );
+    }
+
+    if (
+      /igp\s*registry/i.test(item.label || '') ||
+      /\/igp(?:-registry|\/overview|\/)/i.test(item.path || '')
+    ) {
+      return (
+        activePath === '/igp/overview' ||
+        activePath === '/igp-registry' ||
+        activePath.startsWith('/igp/')
       );
     }
 
@@ -115,35 +127,20 @@ export default function Sidebar({
         h-screen
       `}
     >
-
-      {/* ================================================================
-          LOGO / SYSTEM BRAND
-      ================================================================= */}
+      {/* LOGO / SYSTEM BRAND */}
       <div
         className="
-          flex
-          flex-col
-          items-center
-          justify-center
-          px-3
-          py-4
-          border-b
-          border-white/10
-          relative
-          text-center
+          flex flex-col items-center justify-center
+          px-3 py-4 border-b border-white/10
+          relative text-center
         "
       >
         <img
           src="/UA_logo.jpg"
           alt="University of Abra Logo"
           className="
-            w-10
-            h-10
-            rounded-full
-            object-cover
-            border
-            border-white/20
-            flex-shrink-0
+            w-10 h-10 rounded-full object-cover
+            border border-white/20 flex-shrink-0
           "
         />
 
@@ -151,12 +148,8 @@ export default function Sidebar({
           <div className="flex flex-col items-center justify-center mt-1 w-full">
             <span
               className="
-                text-[11px]
-                font-bold
-                text-white
-                tracking-wide
-                truncate
-                w-full
+                text-[11px] font-bold text-white tracking-wide
+                truncate w-full
               "
             >
               UNIVERSITY OF ABRA
@@ -164,10 +157,7 @@ export default function Sidebar({
 
             <span
               className="
-                text-[9px]
-                text-slate-300
-                leading-tight
-                max-w-[180px]
+                text-[9px] text-slate-300 leading-tight max-w-[180px]
               "
             >
               Budget Monitoring &amp; Allocation System
@@ -181,19 +171,9 @@ export default function Sidebar({
           onClick={onToggleCollapse}
           aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           className="
-            absolute
-            -right-3
-            top-5
-            bg-[#021B54]
-            rounded-full
-            p-1
-            text-slate-300
-            hover:text-white
-            border
-            border-white/20
-            transition
-            shadow-lg
-            z-20
+            absolute -right-3 top-5 bg-[#021B54]
+            rounded-full p-1 text-slate-300 hover:text-white
+            border border-white/20 transition shadow-lg z-20
           "
         >
           {collapsed ? (
@@ -204,14 +184,9 @@ export default function Sidebar({
         </button>
       </div>
 
-
-      {/* ================================================================
-          NAVIGATION
-      ================================================================= */}
+      {/* NAVIGATION */}
       <nav className="flex-1 px-2 py-4 overflow-y-auto">
-
         <div className="space-y-1">
-
           {sidebarItems.map((item, index) => {
             const active = isItemActive(item);
 
@@ -226,18 +201,9 @@ export default function Sidebar({
                 }}
                 title={collapsed ? item.label : undefined}
                 className={`
-                  group
-                  flex
-                  items-center
-                  w-full
-                  rounded-md
-                  transition-all
-                  duration-200
-                  cursor-pointer
-                  ${collapsed
-                    ? 'justify-center px-2 py-2.5'
-                    : 'px-3 py-2.5'
-                  }
+                  group flex items-center gap-3 w-full rounded-md
+                  transition-all duration-200 cursor-pointer
+                  ${collapsed ? 'justify-center px-2 py-2.5' : 'px-3 py-2.5'}
                   ${
                     active
                       ? 'bg-blue-600 text-white shadow-sm'
@@ -245,19 +211,11 @@ export default function Sidebar({
                   }
                 `}
               >
-
                 {/* Icon */}
                 {item.icon && (
                   <item.icon
                     className={`
-                      w-5
-                      h-5
-                      flex-shrink-0
-                      ${
-                        collapsed
-                          ? ''
-                          : 'mr-3'
-                      }
+                      w-5 h-5 flex-shrink-0
                       ${
                         active
                           ? 'text-white'
@@ -271,33 +229,21 @@ export default function Sidebar({
                 {!collapsed && (
                   <span
                     className={`
-                      text-xs
-                      truncate
-                      ${
-                        active
-                          ? 'font-semibold'
-                          : 'font-medium'
-                      }
+                      text-xs truncate
+                      ${active ? 'font-semibold' : 'font-medium'}
                     `}
                   >
                     {item.label}
                   </span>
                 )}
-
               </button>
             );
           })}
-
         </div>
-
       </nav>
 
-
-      {/* ================================================================
-          LOGOUT
-      ================================================================= */}
+      {/* LOGOUT */}
       <div className="p-2 border-t border-white/10">
-
         <button
           type="button"
           onClick={() => {
@@ -307,36 +253,16 @@ export default function Sidebar({
           }}
           title={collapsed ? 'Logout' : undefined}
           className={`
-            group
-            flex
-            items-center
-            w-full
-            rounded-md
-            transition
-            text-slate-200
-            hover:bg-white/10
-            hover:text-white
-            ${
-              collapsed
-                ? 'justify-center px-2 py-2.5'
-                : 'px-3 py-2.5'
-            }
+            group flex items-center gap-3 w-full rounded-md transition
+            text-slate-200 hover:bg-white/10 hover:text-white
+            ${collapsed ? 'justify-center px-2 py-2.5' : 'px-3 py-2.5'}
           `}
         >
-
           <LogOut
-            className={`
-              w-5
-              h-5
-              flex-shrink-0
-              text-slate-300
+            className="
+              w-5 h-5 flex-shrink-0 text-slate-300
               group-hover:text-white
-              ${
-                collapsed
-                  ? ''
-                  : 'mr-3'
-              }
-            `}
+            "
           />
 
           {!collapsed && (
@@ -344,11 +270,8 @@ export default function Sidebar({
               Logout
             </span>
           )}
-
         </button>
-
       </div>
-
     </aside>
   );
 }

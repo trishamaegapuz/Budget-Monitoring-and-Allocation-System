@@ -1288,18 +1288,18 @@ export default function MasterData({
                       tab.id
                     )
                   }
-                  className={`w-full min-h-9 flex items-center justify-center gap-1.5 px-2.5 py-2 rounded-lg text-[11px] font-semibold transition ${
+                  className={`group w-full min-h-9 flex items-center justify-center gap-1.5 px-2.5 py-2 rounded-lg text-[11px] font-semibold transition ${
                     isActive
-                      ? 'bg-blue-50 text-blue-600 border border-blue-100'
-                      : 'text-gray-600 hover:bg-gray-50'
+                      ? 'bg-blue-600 text-white border border-blue-600 shadow-sm'
+                      : 'text-gray-600 border border-transparent hover:bg-blue-50 hover:text-blue-700 hover:border-blue-100'
                   }`}
                 >
 
                   <Icon
                     className={`w-3.5 h-3.5 shrink-0 ${
                       isActive
-                        ? 'text-blue-600'
-                        : 'text-gray-400'
+                        ? 'text-white'
+                        : 'text-gray-400 group-hover:text-blue-600'
                     }`}
                   />
 
@@ -1396,7 +1396,7 @@ export default function MasterData({
                 loading
               }
               title="Refresh"
-              className="p-2 text-gray-500 hover:text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50 transition disabled:opacity-50"
+              className="p-2 text-gray-500 hover:text-gray-700 border border-gray-200 rounded-lg hover:bg-blue-50 hover:text-blue-700 transition disabled:opacity-50"
             >
 
               <RefreshCw
@@ -1556,7 +1556,7 @@ export default function MasterData({
                             item.id ||
                             index
                           }
-                          className="hover:bg-gray-50/50 transition"
+                          className="hover:bg-blue-50/70 transition"
                         >
 
                           <td className="px-4 py-3.5 text-center text-gray-400 font-medium">
@@ -1740,7 +1740,7 @@ export default function MasterData({
                     1 ||
                   loading
                 }
-                className="p-1.5 border border-gray-200 rounded bg-white hover:bg-gray-50 text-gray-400 disabled:opacity-40"
+                className="p-1.5 border border-gray-200 rounded bg-white hover:bg-blue-50 hover:text-blue-700 text-gray-400 disabled:opacity-40"
               >
                 <ChevronLeft className="w-3.5 h-3.5" />
               </button>
@@ -1764,7 +1764,7 @@ export default function MasterData({
                       page ===
                       pagination.page
                         ? 'bg-blue-600 text-white font-semibold'
-                        : 'border border-gray-200 bg-white hover:bg-gray-50 text-gray-700'
+                        : 'border border-gray-200 bg-white hover:bg-blue-50 hover:text-blue-700 text-gray-700'
                     }`}
                   >
                     {
@@ -1787,7 +1787,7 @@ export default function MasterData({
                     pagination.totalPages ||
                   loading
                 }
-                className="p-1.5 border border-gray-200 rounded bg-white hover:bg-gray-50 text-gray-400 disabled:opacity-40"
+                className="p-1.5 border border-gray-200 rounded bg-white hover:bg-blue-50 hover:text-blue-700 text-gray-400 disabled:opacity-40"
               >
                 <ChevronRight className="w-3.5 h-3.5" />
               </button>
@@ -1835,7 +1835,7 @@ export default function MasterData({
                 'info'
               )
             }
-            className="flex items-center justify-center gap-1.5 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 text-xs font-semibold px-4 py-2 rounded-lg transition shadow-sm shrink-0"
+            className="flex items-center justify-center gap-1.5 bg-white border border-gray-200 hover:bg-blue-50 hover:text-blue-700 text-gray-700 text-xs font-semibold px-4 py-2 rounded-lg transition shadow-sm shrink-0"
           >
             <Upload className="w-3.5 h-3.5" />
 
@@ -1879,7 +1879,7 @@ export default function MasterData({
                   disabled={
                     saving
                   }
-                  className="p-1.5 hover:bg-gray-100 rounded-lg disabled:opacity-50"
+                  className="p-1.5 hover:bg-blue-50 hover:text-blue-700 rounded-lg disabled:opacity-50"
                 >
                   <X className="w-5 h-5 text-gray-500" />
                 </button>
@@ -2158,7 +2158,7 @@ export default function MasterData({
                     disabled={
                       saving
                     }
-                    className="px-4 py-2 border border-gray-200 text-xs font-medium text-gray-600 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+                    className="px-4 py-2 border border-gray-200 text-xs font-medium text-gray-600 rounded-lg hover:bg-blue-50 hover:text-blue-700 disabled:opacity-50"
                   >
                     Cancel
                   </button>
@@ -2234,7 +2234,7 @@ export default function MasterData({
                     onClick={
                       closeDeleteModal
                     }
-                    className="px-4 py-2 border border-gray-200 text-xs font-semibold text-gray-600 rounded-lg hover:bg-gray-50"
+                    className="px-4 py-2 border border-gray-200 text-xs font-semibold text-gray-600 rounded-lg hover:bg-blue-50 hover:text-blue-700"
                   >
                     Cancel
                   </button>

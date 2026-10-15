@@ -8,7 +8,9 @@ import {
   PieChart as PieChartIcon,
   ArrowRight,
   Wallet,
-  HelpCircle
+  HelpCircle,
+  CalendarDays,
+  ChevronDown
 } from 'lucide-react';
 
 import {
@@ -175,9 +177,16 @@ export default function Dashboard({
         )
       }));
 
-  const transactions = Array.isArray(s.recentTransactions)
+  // Dashboard Recent Transactions must show RBUD records only.
+  // Support both the API type and the registry reference as identifiers.
+  const transactions = (Array.isArray(s.recentTransactions)
     ? s.recentTransactions
-    : [];
+    : []
+  ).filter((tx) => {
+    const type = String(tx?.type || '').trim().toUpperCase();
+    const reference = String(tx?.ref || tx?.registry_no || '').trim().toUpperCase();
+    return type === 'RBUD' || reference.startsWith('RBUD-');
+  });
 
   const raod = s.raodOverview || {};
   const raodAllotment = toNumber(raod.totalAllotment);
@@ -245,26 +254,27 @@ export default function Dashboard({
       activePath={activePath}
       onNavigate={onNavigate}
     >
-      {/* HEADER */}
-      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-5">
-        <div>
-          <h1 className="text-xl font-bold text-slate-800">Dashboard</h1>
-          <p className="text-xs text-slate-500">
-            Overview of the university's budget status and financial activities.
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-lg px-3 py-1.5 shadow-sm w-fit">
-          <span className="text-xs text-slate-500 font-medium">Fiscal Year</span>
-          <select
-            value={selectedYear}
-            onChange={(e) => setSelectedYear(Number(e.target.value))}
-            className="text-xs font-bold text-slate-700 bg-transparent outline-none cursor-pointer"
-          >
-            <option value={2026}>2026</option>
-            <option value={2025}>2025</option>
-            <option value={2024}>2024</option>
-          </select>
+      {/* Fiscal Year selector — styled to match Budget Proposal; year rolls forward automatically */}
+      <div className="flex justify-end items-center mb-3">
+        <div
+          className="inline-flex items-center gap-[7px] h-9 px-[10px] bg-white border border-[#dbe4f0] rounded-lg shadow-sm text-[#334155] text-[10px] font-bold"
+          style={{ boxShadow: '0 2px 8px rgba(15, 23, 42, 0.04)' }}
+        >
+          <CalendarDays className="w-[14px] h-[14px] text-[#123b7a]" />
+          <span>Fiscal Year</span>
+          <div className="relative inline-flex items-center">
+            <select
+              value={selectedYear}
+              onChange={(e) => setSelectedYear(Number(e.target.value))}
+              aria-label="Fiscal Year"
+              className="appearance-none border-0 outline-0 bg-transparent pl-px pr-[19px] text-[10px] font-extrabold text-slate-900 cursor-pointer min-h-6 relative z-[1]"
+            >
+              {Array.from({ length: 6 }, (_, index) => new Date().getFullYear() - index).map((year) => (
+                <option key={year} value={year}>{year}</option>
+              ))}
+            </select>
+            <ChevronDown className="w-[13px] h-[13px] text-slate-500 absolute right-px top-1/2 -translate-y-1/2 pointer-events-none" />
+          </div>
         </div>
       </div>
 
@@ -447,7 +457,7 @@ export default function Dashboard({
         {/* RECENT TRANSACTIONS */}
         <div className="xl:col-span-3 bg-white rounded-xl shadow-sm border border-slate-100 p-4">
           <div className="flex justify-between items-center mb-3">
-            <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider">RECENT TRANSACTIONS</h3>
+            <h3 className="text-xs font-bold text-slate-700 tracking-wider">Recent Transactions (RBUD)</h3>
             <button
               onClick={() => onNavigate('/rbud')}
               className="text-[10px] text-blue-600 font-medium inline-flex items-center gap-0.5 hover:underline"

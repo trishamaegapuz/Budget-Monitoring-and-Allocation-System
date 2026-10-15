@@ -1,6 +1,7 @@
 // frontend/src/App.jsx
 
 import React, { useState, useEffect } from 'react';
+import { API_URL } from './config/api';
 
 import LoginPage from './components/LoginPage';
 import RegisterPage from './components/RegisterPage';
@@ -96,11 +97,109 @@ function App() {
   const [currentPage, setCurrentPage] = useState('login');
 
   const [user, setUser] = useState(null);
-
+  const [preferences, setPreferences] = useState(() => {
+    try {
+      return {
+        items_per_page: 10, theme: 'Light', sidebar_position: 'Fixed',
+        dashboard_overview: true, auto_logout_minutes: 30,
+        confirm_before_delete: true, enable_animations: true,
+        ...JSON.parse(localStorage.getItem('bmasUserPreferences') || '{}'),
+        theme: 'Light',
+      };
+    } catch {
+      return { items_per_page: 10, theme: 'Light', sidebar_position: 'Fixed', dashboard_overview: true, auto_logout_minutes: 30, confirm_before_delete: true, enable_animations: true };
+    }
+  });
   const [activePath, setActivePath] = useState(() =>
     normalizePath(window.location.pathname)
   );
 
+
+  // Load the signed-in user's saved preferences from the API on login/refresh.
+  useEffect(() => {
+    if (!user) return undefined;
+    let cancelled = false;
+    const loadPreferences = async () => {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+      try {
+        const response = await fetch(`${API_URL}/settings/preferences`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!response.ok) return;
+        const data = await response.json();
+        const saved = data.preferences || data;
+        if (!cancelled && saved && typeof saved === 'object') {
+          const normalized = {
+            items_per_page: Number(saved.items_per_page) || 10,
+            theme: 'Light',
+            sidebar_position: saved.sidebar_position || 'Fixed',
+            dashboard_overview: typeof saved.dashboard_overview === 'boolean' ? saved.dashboard_overview : true,
+            auto_logout_minutes: Number(saved.auto_logout_minutes) || 30,
+            confirm_before_delete: typeof saved.confirm_before_delete === 'boolean' ? saved.confirm_before_delete : true,
+            enable_animations: typeof saved.enable_animations === 'boolean' ? saved.enable_animations : true,
+          };
+          localStorage.setItem('bmasUserPreferences', JSON.stringify(normalized));
+          setPreferences((prev) => ({ ...prev, ...normalized }));
+        }
+      } catch (error) {
+        console.warn('Could not load saved BMAS preferences:', error);
+      }
+    };
+    loadPreferences();
+    return () => { cancelled = true; };
+  }, [user]);
+
+  // Load preferences saved by Settings and keep the shell synchronized.
+  useEffect(() => {
+    const applyPreferences = (event) => {
+      const next = event?.detail;
+      if (next && typeof next === 'object') setPreferences((prev) => ({ ...prev, ...next, theme: 'Light' }));
+    };
+    const applyStored = () => {
+      try { setPreferences((prev) => ({ ...prev, ...JSON.parse(localStorage.getItem('bmasUserPreferences') || '{}'), theme: 'Light' })); } catch { /* ignore malformed local preference cache */ }
+    };
+    window.addEventListener('bmas-preferences-updated', applyPreferences);
+    window.addEventListener('storage', applyStored);
+    return () => {
+      window.removeEventListener('bmas-preferences-updated', applyPreferences);
+      window.removeEventListener('storage', applyStored);
+    };
+  }, []);
+
+  useEffect(() => {
+    // BMAS now uses one fixed Light Theme across every module.
+    // Remove any stale dark-mode class left by older saved preferences.
+    document.documentElement.classList.remove('bmas-dark-mode');
+    document.documentElement.style.colorScheme = 'light';
+    try {
+      const stored = JSON.parse(localStorage.getItem('bmasUserPreferences') || '{}');
+      if (stored.theme !== 'Light') {
+        localStorage.setItem('bmasUserPreferences', JSON.stringify({ ...stored, theme: 'Light' }));
+      }
+    } catch { /* ignore malformed local preference cache */ }
+    if (preferences.theme !== 'Light') {
+      setPreferences((prev) => ({ ...prev, theme: 'Light' }));
+    }
+  }, [preferences.theme]);
+
+  // Enforce configured inactivity timeout for the authenticated session.
+  useEffect(() => {
+    if (!user) return undefined;
+    const minutes = Number(preferences.auto_logout_minutes) || 30;
+    let timer;
+    const resetTimer = () => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => handleLogout(), minutes * 60 * 1000);
+    };
+    const events = ['mousemove', 'mousedown', 'keydown', 'scroll', 'touchstart', 'click'];
+    events.forEach((name) => window.addEventListener(name, resetTimer, { passive: true }));
+    resetTimer();
+    return () => {
+      window.clearTimeout(timer);
+      events.forEach((name) => window.removeEventListener(name, resetTimer));
+    };
+  }, [user, preferences.auto_logout_minutes]);
 
   // ==========================================================
   // CHECK LOGIN SESSION + DIRECT URL

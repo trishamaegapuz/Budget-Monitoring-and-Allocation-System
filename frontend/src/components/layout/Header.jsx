@@ -18,7 +18,11 @@ export default function Header({
   const [unreadCount, setUnreadCount] = useState(0);
 
   const displayName = user?.full_name || user?.name || 'User';
-  const displayRole = user?.role || 'Role';
+  const rawRole = user?.role || 'Role';
+  // Show a user-friendly label without changing the actual role used for permissions.
+  const displayRole = String(rawRole).trim().toLowerCase() === 'administration'
+    ? 'Administrator'
+    : rawRole;
   const initial = displayName.charAt(0).toUpperCase();
 
   /*

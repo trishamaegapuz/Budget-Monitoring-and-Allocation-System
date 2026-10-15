@@ -60,7 +60,7 @@ export default function UserManagement({ user: currentUser, onLogout, onNavigate
   const [editForm, setEditForm] = useState({});
 
   // Determine if current user is Administration
-  const isAdmin = currentUser?.role === 'Administration';
+  const isAdmin = ['Administrator', 'Administration'].includes(String(currentUser?.role || '').trim());
 
   // --- Data Fetching ---
   const fetchStats = async () => {
@@ -87,7 +87,7 @@ export default function UserManagement({ user: currentUser, onLogout, onNavigate
 
       const query = new URLSearchParams({
         search: filters.search || '',
-        role: filters.role || '',
+        role: filters.role === 'Administration' ? 'Administrator' : (filters.role || ''),
         status: statusParam || '',
         page: filters.page,
         limit: filters.limit,
@@ -234,14 +234,15 @@ export default function UserManagement({ user: currentUser, onLogout, onNavigate
   // --- UI Helpers ---
   const getRoleBadge = (role) => {
     const styles = {
-      Administration: 'bg-blue-100 text-blue-600',
+      Administrator: 'bg-blue-100 text-blue-700',
+      Administration: 'bg-blue-100 text-blue-700',
       Budget: 'bg-blue-100 text-blue-600',
       Procurement: 'bg-amber-100 text-amber-700',
       Accountant: 'bg-emerald-100 text-emerald-700',
     };
     return (
       <span className={`px-2.5 py-1 rounded text-[11px] font-semibold ${styles[role] || 'bg-gray-100 text-gray-700'}`}>
-        {role}
+        {role === 'Administration' ? 'Administrator' : role}
       </span>
     );
   };
@@ -340,7 +341,7 @@ export default function UserManagement({ user: currentUser, onLogout, onNavigate
               onChange={(e) => setFilters({ ...filters, role: e.target.value, page: 1 })}
             >
               <option value="">All Roles</option>
-              <option value="Administration">Administration</option>
+              <option value="Administrator">Administrator</option>
               <option value="Budget">Budget</option>
               <option value="Procurement">Procurement</option>
               <option value="Accountant">Accountant</option>
@@ -558,7 +559,7 @@ export default function UserManagement({ user: currentUser, onLogout, onNavigate
               <div>
                 <label className="block font-medium text-gray-700 mb-1">Role</label>
                 <select className="w-full px-3 py-2 border rounded-lg" value={addForm.role} onChange={(e) => setAddForm({ ...addForm, role: e.target.value })}>
-                  <option value="Administration">Administration</option>
+                  <option value="Administrator">Administrator</option>
                   <option value="Budget">Budget</option>
                   <option value="Procurement">Procurement</option>
                   <option value="Accountant">Accountant</option>
@@ -621,7 +622,7 @@ export default function UserManagement({ user: currentUser, onLogout, onNavigate
               <div>
                 <label className="block font-medium text-gray-700 mb-1">Role</label>
                 <select className="w-full px-3 py-2 border rounded-lg" value={editForm.role || 'Budget'} onChange={(e) => setEditForm({ ...editForm, role: e.target.value })}>
-                  <option value="Administration">Administration</option>
+                  <option value="Administrator">Administrator</option>
                   <option value="Budget">Budget</option>
                   <option value="Procurement">Procurement</option>
                   <option value="Accountant">Accountant</option>
