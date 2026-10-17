@@ -41,7 +41,7 @@ const ROLE_ACCESS = {
   '/raod-registry': ['Administration', 'Budget', 'Procurement', 'Accountant'],
   '/user-management': ['Administration'],
   '/fund-sources': ['Administration'],
-  '/master-data': ['Administration'],
+  '/master-data': ['Administration', 'Budget'],
   '/settings': ['Administration'],
   '/reports': ['Administration', 'Budget', 'Procurement', 'Accountant'],
   '/exports': ['Administration', 'Budget', 'Procurement', 'Accountant'],

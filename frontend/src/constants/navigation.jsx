@@ -4,6 +4,7 @@ import {
   FileText,
   Users,
   Settings,
+  Database,
 } from 'lucide-react';
 
 /*
@@ -142,6 +143,21 @@ export const navItems = [
       'Accountant',
       'Procurement',
     ],
+  },
+
+  /*
+  |--------------------------------------------------------------------------
+  | Master Data
+  |--------------------------------------------------------------------------
+  | Administration and Budget can maintain shared reference data.
+  | Other roles do not receive this module in their navigation.
+  |--------------------------------------------------------------------------
+  */
+  {
+    label: 'Master Data',
+    icon: Database,
+    path: '/master-data',
+    allowedRoles: ['Administration', 'Budget'],
   },
 
   /*
