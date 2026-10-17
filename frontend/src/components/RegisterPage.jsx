@@ -84,47 +84,47 @@ export default function RegisterPage({ onSwitchToLogin }) {
   };
 
   return (
-    <div className="h-screen overflow-hidden flex flex-col lg:flex-row bg-gray-100 font-sans">
+    <div className="min-h-screen lg:h-screen overflow-x-hidden lg:overflow-hidden flex flex-col lg:flex-row bg-gray-100 font-sans">
       {/* LEFT PANEL - unchanged */}
-      <div className="w-full lg:w-[58%] bg-[#1a237e] text-white p-6 lg:p-10 flex flex-col justify-between items-center relative">
+      <div className="w-full lg:w-[58%] bg-[#1a237e] text-white p-4 sm:p-6 lg:p-10 flex flex-col justify-start lg:justify-between gap-4 lg:gap-0 items-center relative">
         <div className="w-full flex flex-col items-center text-center">
-          <img src="/UA_logo.jpg" alt="University of Abra Logo" className="w-20 h-20 rounded-full border-2 border-white shadow-lg object-cover mb-2" />
-          <h1 className="text-2xl lg:text-3xl font-extrabold tracking-wide text-white">UNIVERSITY OF ABRA</h1>
+          <img src="/UA_logo.jpg" alt="University of Abra Logo" className="w-14 h-14 sm:w-16 sm:h-16 lg:w-20 lg:h-20 rounded-full border-2 border-white shadow-lg object-cover mb-2" />
+          <h1 className="text-xl sm:text-2xl lg:text-3xl font-extrabold tracking-wide text-white">UNIVERSITY OF ABRA</h1>
           <p className="text-blue-200 text-sm mt-0.5">Budget Monitoring & Allocation System (BMAS)</p>
         </div>
-        <div className="flex-1 flex items-center justify-center w-full my-1">
-          <div className="w-full max-w-sm bg-white/10 backdrop-blur-sm rounded-2xl p-3 border border-white/20 shadow-xl text-center">
-            <img src="/hero_photo.png" alt="Budget dashboard" className="w-full h-auto rounded-lg max-h-28 object-cover" />
+        <div className="w-full flex items-center justify-center my-1 lg:flex-1">
+          <div className="w-full max-w-sm bg-white/10 backdrop-blur-sm rounded-2xl p-2.5 sm:p-3 border border-white/20 shadow-xl text-center">
+            <img src="/hero_photo.png" alt="Budget dashboard" className="w-full h-auto rounded-lg max-h-20 sm:max-h-24 lg:max-h-28 object-cover" />
             <p className="text-[10px] text-blue-100 mt-1 font-medium">Visual Insights & Analytics â€“ Graphical overview of university budget utilization</p>
           </div>
         </div>
-        <div className="w-full grid grid-cols-2 md:grid-cols-4 gap-3 border-t border-blue-800/60 pt-4 mt-1">
+        <div className="w-full grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3 border-t border-blue-800/60 pt-3 lg:pt-4 mt-0 lg:mt-1">
           <div className="flex flex-col items-center text-center px-1">
             <div className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center mb-1"><ShieldCheck className="w-4 h-4 text-blue-200" /></div>
             <span className="text-[11px] font-bold tracking-wide leading-tight">SECURE ACCESS</span>
-            <span className="text-[10px] text-blue-100 leading-snug mt-0.5">Protection for all user accounts and data</span>
+            <span className="hidden lg:block text-[10px] text-blue-100 leading-snug mt-0.5">Protection for all user accounts and data</span>
           </div>
           <div className="flex flex-col items-center text-center px-1">
             <div className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center mb-1"><Activity className="w-4 h-4 text-blue-200" /></div>
             <span className="text-[11px] font-bold tracking-wide leading-tight">REAL-TIME MONITORING</span>
-            <span className="text-[10px] text-blue-100 leading-snug mt-0.5">Live updates of budget utilization</span>
+            <span className="hidden lg:block text-[10px] text-blue-100 leading-snug mt-0.5">Live updates of budget utilization</span>
           </div>
           <div className="flex flex-col items-center text-center px-1">
             <div className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center mb-1"><PieChart className="w-4 h-4 text-blue-200" /></div>
             <span className="text-[11px] font-bold tracking-wide leading-tight">SMART ALLOCATION</span>
-            <span className="text-[10px] text-blue-100 leading-snug mt-0.5">Intelligent tools for optimal budget planning</span>
+            <span className="hidden lg:block text-[10px] text-blue-100 leading-snug mt-0.5">Intelligent tools for optimal budget planning</span>
           </div>
           <div className="flex flex-col items-center text-center px-1">
             <div className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center mb-1"><FileText className="w-4 h-4 text-blue-200" /></div>
             <span className="text-[11px] font-bold tracking-wide leading-tight">ACCURATE REPORTS</span>
-            <span className="text-[10px] text-blue-100 leading-snug mt-0.5">Detailed analysis and insight generation</span>
+            <span className="hidden lg:block text-[10px] text-blue-100 leading-snug mt-0.5">Detailed analysis and insight generation</span>
           </div>
         </div>
       </div>
 
       {/* RIGHT PANEL â€“ Registration Form */}
-      <div className="w-full lg:w-[42%] bg-gray-50 flex items-center justify-center p-6 lg:p-10 overflow-y-auto">
-        <div className="w-full max-w-md bg-white p-8 lg:p-10 rounded-3xl shadow-xl border border-gray-100">
+      <div className="w-full lg:w-[42%] bg-gray-50 flex items-center justify-center p-4 sm:p-6 lg:p-10 overflow-y-visible lg:overflow-y-auto">
+        <div className="w-full max-w-md bg-white p-5 sm:p-8 lg:p-10 rounded-2xl lg:rounded-3xl shadow-xl border border-gray-100 my-2 sm:my-4 lg:my-0">
           <div className="text-center mb-6">
             <h2 className="text-2xl font-bold text-gray-800">Create an Account</h2>
             <p className="text-xs text-gray-500 mt-1">BMAS User Registration</p>
