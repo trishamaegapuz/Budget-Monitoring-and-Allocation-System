@@ -282,7 +282,7 @@ export default function Layout({ children, user, onLogout, activePath, onNavigat
                   return (
                     <div key={sgIdx}>
                       <div
-                        className={`flex items-center justify-between px-3 py-1.5 text-xs font-semibold rounded cursor-pointer ${
+                        className={`flex items-center justify-between gap-2 px-3 py-2 text-xs font-semibold rounded-md cursor-pointer ${
                           hasActiveSubGroup || sidebarActivePath === subGroup?.path
                             ? 'bg-blue-600/20 text-white'
                             : 'text-blue-100 hover:text-white hover:bg-white/5'
@@ -300,7 +300,14 @@ export default function Layout({ children, user, onLogout, activePath, onNavigat
                           }
                         }}
                       >
-                        <span>{subGroup.label}</span>
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          {subGroup.icon ? (
+                            <subGroup.icon className="w-4 h-4 flex-shrink-0 text-blue-200" />
+                          ) : (
+                            <span aria-hidden="true" className="w-4 h-4 flex-shrink-0 inline-block" />
+                          )}
+                          <span className="truncate">{subGroup.label}</span>
+                        </div>
                         <ChevronDown
                           className={`w-3 h-3 transition-transform duration-200 cursor-pointer ${
                             isSubOpen ? 'transform rotate-180' : ''
@@ -351,7 +358,7 @@ export default function Layout({ children, user, onLogout, activePath, onNavigat
                 {item.sub.map((subItem, sIdx) => (
                   <div
                     key={sIdx}
-                    className={`px-3 py-1.5 text-xs rounded cursor-pointer transition ${
+                    className={`flex items-center gap-2.5 px-3 py-2 text-xs rounded-md cursor-pointer transition ${
                       sidebarActivePath === subItem?.path
                         ? 'bg-blue-600/30 text-white font-medium'
                         : 'text-blue-200/80 hover:text-white hover:bg-white/5'
@@ -363,7 +370,12 @@ export default function Layout({ children, user, onLogout, activePath, onNavigat
                       }
                     }}
                   >
-                    {subItem.label}
+                    {subItem.icon ? (
+                      <subItem.icon className="w-4 h-4 flex-shrink-0" />
+                    ) : (
+                      <span aria-hidden="true" className="w-4 h-4 flex-shrink-0 inline-block" />
+                    )}
+                    <span className="truncate">{subItem.label}</span>
                   </div>
                 ))}
               </div>
@@ -375,7 +387,7 @@ export default function Layout({ children, user, onLogout, activePath, onNavigat
       return (
         <div
           key={idx}
-          className={`flex items-center px-3 py-2 text-[11px] font-semibold rounded-md transition cursor-pointer ${
+          className={`flex items-center gap-3 px-3 py-2.5 text-xs font-medium rounded-md transition cursor-pointer ${
             sidebarActivePath === item?.path
               ? 'bg-blue-600/30 text-white'
               : 'text-blue-200/70 hover:text-white hover:bg-white/5'
@@ -387,7 +399,7 @@ export default function Layout({ children, user, onLogout, activePath, onNavigat
             }
           }}
         >
-          {item.icon && <item.icon className="w-4 h-4 mr-2.5 flex-shrink-0" />}
+          {item.icon && <item.icon className="w-5 h-5 flex-shrink-0" />}
           <span className="truncate">{item.label}</span>
         </div>
       );
