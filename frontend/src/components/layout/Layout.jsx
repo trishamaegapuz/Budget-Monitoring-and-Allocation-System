@@ -78,7 +78,7 @@ export default function Layout({ children, user, onLogout, activePath, onNavigat
     // Get only navigation items allowed for this role
     const items = [...getNavItemsForRole(role)];
 
-    // Master Data is available to Administration
+    // Master Data is available to Administration, in the same position as desktop.
     if (role === 'Administration') {
       const alreadyExists = items.some(
         (item) => item?.path === '/master-data'
@@ -101,6 +101,27 @@ export default function Layout({ children, user, onLogout, activePath, onNavigat
         } else {
           items.push(masterDataItem);
         }
+      }
+    }
+
+    // Keep the mobile top-level order identical to Sidebar.jsx:
+    // IGP Registry should appear immediately after RAOD Registry.
+    const igpIndex = items.findIndex((item) =>
+      /igp\s*registry/i.test(item?.label || '') ||
+      /\/igp(?:-registry|\/overview|\/)/i.test(item?.path || '')
+    );
+
+    if (igpIndex >= 0) {
+      const [igpItem] = items.splice(igpIndex, 1);
+      const raodIndex = items.findIndex((item) =>
+        /raod\s*registry/i.test(item?.label || '') ||
+        /\/raod(?:-registry|\/overview|\/)/i.test(item?.path || '')
+      );
+
+      if (raodIndex >= 0) {
+        items.splice(raodIndex + 1, 0, igpItem);
+      } else {
+        items.push(igpItem);
       }
     }
 
