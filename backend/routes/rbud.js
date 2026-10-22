@@ -2665,6 +2665,28 @@ router.post("/fees", async (req, res) => {
   }
 });
 
+// Only Administration/Administrator may permanently delete fee transaction records.
+router.delete("/fees/:id", async (req, res) => {
+  const authUser = getRbudAuthUser(req);
+  const role = normalizeRbudRoleValue(authUser?.role || authUser?.user_role || authUser?.userRole);
+  if (role !== "Administration") {
+    return res.status(403).json({ error: "Only the Administrator can delete Fee Monitoring records." });
+  }
+  const id = int(req.params.id);
+  if (!id || id < 1) return res.status(400).json({ error: "A valid fee record ID is required." });
+  try {
+    const result = await pool.query(
+      "DELETE FROM rbud_fee_monitoring WHERE id = $1 RETURNING id",
+      [id]
+    );
+    if (!result.rowCount) return res.status(404).json({ error: "Fee record not found." });
+    return res.json({ message: "Fee Monitoring record deleted successfully.", id: result.rows[0].id });
+  } catch (error) {
+    console.error("RBUD fee monitoring delete error:", error);
+    return res.status(500).json({ error: error.message, code: error.code || null });
+  }
+});
+
 router.put("/fees/:id", async (req, res) => {
   if (!feeAccessAllowed(req)) return res.status(403).json({ error: "Fee Monitoring is restricted to Administrator and Budget roles." });
   const b = req.body || {};
