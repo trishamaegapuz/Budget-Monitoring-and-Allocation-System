@@ -1476,9 +1476,9 @@ function FeeMonitoringView({ year, rows, loading, error, form, setForm, campusOp
   const inputClass = "w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100";
   const labelClass = "mb-1 block text-xs font-bold text-slate-600";
   return <div className="space-y-5">
-    <div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-wide text-blue-700">RBUD Registry / Submodule 8</p><h2 className="text-xl font-extrabold text-slate-900">Fee Monitoring — FY {year}</h2><p className="mt-1 text-sm text-slate-500">Billing and collection are tracked separately from obligations and disbursements.</p></div><button type="button" onClick={onRefresh} className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50">Refresh</button></div>
+    <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center"><div className="min-w-0"><p className="text-xs font-bold uppercase tracking-wide text-blue-700">RBUD Registry / Submodule 8</p><h2 className="text-xl font-extrabold text-slate-900">Fee Monitoring — FY {year}</h2><p className="mt-1 text-sm text-slate-500">Billing and collection are tracked separately from obligations and disbursements.</p></div><button type="button" onClick={onRefresh} className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50 sm:w-auto">Refresh</button></div>
     {error && <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}<p className="mt-1 text-xs">If a new enrollment/reference table is missing, run the Fee Monitoring planning migration SQL first.</p></div>}
-    <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+    <section className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:p-5">
       <div className="mb-3"><h3 className="font-extrabold text-slate-900">Enrollment Inputs</h3><p className="text-xs text-slate-500 mt-1">Encode the official enrollee count from the Registrar's enrollment report. BMAS does not guess or calculate enrollee counts from fee amounts.</p></div>
       <form onSubmit={onSaveEnrollment} className="grid grid-cols-1 gap-3 sm:grid-cols-3 items-end">
         <label><span className={labelClass}>Campus *</span><select required className={inputClass} value={enrollmentForm?.campus || ""} onChange={e=>setEnrollmentForm(old=>({...old,campus:e.target.value}))}><option value="">Select campus</option>{campusOptions.map(c=><option key={c}>{c}</option>)}</select></label>
@@ -1487,7 +1487,7 @@ function FeeMonitoringView({ year, rows, loading, error, form, setForm, campusOp
       </form>
       <div className="mt-3 overflow-x-auto"><table className="w-full text-xs"><thead className="bg-slate-50"><tr>{["Campus","Semester / Period","No. of Enrollees"].map(h=><th key={h} className="px-3 py-2 text-left">{h}</th>)}</tr></thead><tbody>{enrollmentRows.length ? enrollmentRows.map(r=><tr key={r.id} className="border-t"><td className="px-3 py-2">{r.campus}</td><td className="px-3 py-2">{r.billing_period}</td><td className="px-3 py-2 font-bold">{Number(r.enrollee_count||0).toLocaleString()}</td></tr>) : <tr><td colSpan="3" className="px-3 py-4 text-center text-slate-500">No enrollment counts entered for FY {year}.</td></tr>}</tbody></table></div>
     </section>
-    <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+    <section className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:p-5">
       <div className="mb-3"><h3 className="font-extrabold text-slate-900">WFP Budget Reference</h3><p className="text-xs text-slate-500 mt-1">Encode the approved/projected amount from the WFP PRE sheet. These amounts are references only, not actual billing or collections.</p></div>
       <form onSubmit={onSaveBudgetReference} className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5 items-end">
         <label><span className={labelClass}>Campus *</span><select required className={inputClass} value={budgetReferenceForm?.campus || ""} onChange={e=>setBudgetReferenceForm(old=>({...old,campus:e.target.value}))}><option value="">Select campus</option>{campusOptions.map(c=><option key={c}>{c}</option>)}</select></label>
@@ -1500,7 +1500,7 @@ function FeeMonitoringView({ year, rows, loading, error, form, setForm, campusOp
       <div className="mt-3 overflow-x-auto"><table className="w-full text-xs"><thead className="bg-slate-50"><tr>{["Campus","Category","Particular","WFP Amount","Source"].map(h=><th key={h} className="px-3 py-2 text-left">{h}</th>)}</tr></thead><tbody>{budgetReferences.length ? budgetReferences.map(r=><tr key={r.id} className="border-t"><td className="px-3 py-2">{r.campus}</td><td className="px-3 py-2">{r.fee_category}</td><td className="px-3 py-2">{r.particulars}</td><td className="px-3 py-2 font-bold">{feeMoney(r.budget_amount)}</td><td className="px-3 py-2">{r.source_reference || "WFP PRE sheet"}</td></tr>) : <tr><td colSpan="5" className="px-3 py-4 text-center text-slate-500">No WFP reference amounts entered for FY {year}.</td></tr>}</tbody></table></div>
     </section>
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">{[["Actual Billing",totals.billing],["Collected",totals.collected],["Uncollected Billing",totals.billing-totals.collected],["Unpaid Obligations",totals.obligated-totals.disbursed]].map(([label,value])=><div key={label} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">{label}</p><p className="mt-2 text-lg font-extrabold text-slate-900">{feeMoney(value)}</p></div>)}</div>
-    <form onSubmit={onSubmit} className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm"><div className="mb-4 flex items-center justify-between"><h3 className="font-extrabold text-slate-900">{editingId ? "Edit Fee Record" : "Add Fee Record"}</h3>{editingId && <button type="button" onClick={onCancelEdit} className="text-xs font-bold text-slate-500">Cancel edit</button>}</div>
+    <form onSubmit={onSubmit} className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:p-5"><div className="mb-4 flex flex-wrap items-center justify-between gap-2"><h3 className="font-extrabold text-slate-900">{editingId ? "Edit Fee Record" : "Add Fee Record"}</h3>{editingId && <button type="button" onClick={onCancelEdit} className="text-xs font-bold text-slate-500">Cancel edit</button>}</div>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <label><span className={labelClass}>Fiscal Year *</span><select required className={inputClass} value={form.fiscal_year} onChange={e=>set("fiscal_year",e.target.value)}>{Array.from({length:7},(_,i)=>new Date().getFullYear()-i).map(y=><option key={y}>{y}</option>)}</select></label>
         <label><span className={labelClass}>Fee Category *</span><select required className={inputClass} value={form.fee_category} onChange={e=>setForm(old=>({...old,fee_category:e.target.value,particulars:""}))}><option>Fiduciary Fees</option><option>Non-Fiduciary Fees</option></select></label>
@@ -1512,7 +1512,9 @@ function FeeMonitoringView({ year, rows, loading, error, form, setForm, campusOp
         <label className="sm:col-span-2 xl:col-span-4"><span className={labelClass}>Remarks</span><textarea className={inputClass} rows="2" value={form.remarks||""} onChange={e=>set("remarks",e.target.value)} /></label>
       </div><div className="mt-4 flex justify-end"><button className="rounded-lg bg-blue-700 px-5 py-2.5 text-sm font-bold text-white hover:bg-blue-800" type="submit">{editingId ? "Save Changes" : "Save Fee Record"}</button></div>
     </form>
-    <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm"><div className="flex items-center justify-between border-b border-slate-100 px-4 py-3"><h3 className="font-extrabold text-slate-900">Fee Transactions</h3><span className="text-xs text-slate-500">{rows.length} record(s)</span></div><div className="overflow-x-auto"><table className="min-w-[1150px] w-full text-left text-xs"><thead className="bg-slate-50 text-[11px] uppercase tracking-wide text-slate-500"><tr>{["Year / Period","Category / Particulars","Campus","Billing","Collected","Uncollected","Obligated","Disbursed","Unpaid Obligation","Actions"].map(h=><th key={h} className="px-3 py-3 font-extrabold">{h}</th>)}</tr></thead><tbody className="divide-y divide-slate-100">{loading?<tr><td colSpan="10" className="px-4 py-8 text-center text-slate-500">Loading fee records…</td></tr>:rows.length===0?<tr><td colSpan="10" className="px-4 py-8 text-center text-slate-500">No fee records for this fiscal year yet.</td></tr>:rows.map(r=><tr key={r.id} className="hover:bg-slate-50"><td className="px-3 py-3"><b>{r.fiscal_year}</b><p className="mt-1 text-slate-500">{r.billing_period||"—"}</p></td><td className="px-3 py-3"><b>{r.fee_category}</b><p className="mt-1 text-slate-500">{r.particulars}</p></td><td className="px-3 py-3">{r.campus}</td><td className="px-3 py-3">{feeMoney(r.billing_amount)}</td><td className="px-3 py-3">{feeMoney(r.collected_amount)}</td><td className="px-3 py-3 font-bold text-amber-700">{feeMoney(Number(r.billing_amount||0)-Number(r.collected_amount||0))}</td><td className="px-3 py-3">{feeMoney(r.obligated_amount)}</td><td className="px-3 py-3">{feeMoney(r.disbursed_amount)}</td><td className="px-3 py-3 font-bold text-rose-700">{feeMoney(Number(r.obligated_amount||0)-Number(r.disbursed_amount||0))}</td><td className="px-3 py-3"><div className="flex items-center justify-center gap-2"><button type="button" onClick={()=>onEdit(r)} title="Edit fee record" aria-label="Edit fee record" className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 transition hover:bg-gray-50 hover:text-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-300"><Edit2 className="h-4 w-4" /></button>{role === "Administration" && <button type="button" onClick={()=>onDelete(r)} title="Delete fee record" aria-label="Delete fee record" className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 transition hover:bg-gray-50 hover:text-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-300"><Trash2 className="h-4 w-4" /></button>}</div></td></tr>)}</tbody></table></div></div>
+    <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm"><div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-3 py-3 sm:px-4"><h3 className="font-extrabold text-slate-900">Fee Transactions</h3><span className="text-xs text-slate-500">{rows.length} record(s)</span></div>
+      <div className="space-y-3 p-3 sm:hidden">{loading ? <p className="py-6 text-center text-sm text-slate-500">Loading fee records…</p> : rows.length === 0 ? <p className="py-6 text-center text-sm text-slate-500">No fee records for this fiscal year yet.</p> : rows.map(r => <article key={`mobile-${r.id}`} className="rounded-lg border border-slate-200 p-3"><div className="flex items-start justify-between gap-2"><div className="min-w-0"><p className="text-xs font-bold text-slate-500">FY {r.fiscal_year}{r.billing_period ? ` · ${r.billing_period}` : ""}</p><h4 className="mt-1 break-words text-sm font-extrabold text-slate-900">{r.particulars}</h4><p className="mt-1 break-words text-xs text-slate-600">{r.fee_category} · {r.campus}</p></div><div className="flex shrink-0 gap-1"><button type="button" onClick={() => onEdit(r)} aria-label="Edit fee record" title="Edit fee record" className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600"><Edit2 className="h-4 w-4" /></button>{role === "Administration" && <button type="button" onClick={() => onDelete(r)} aria-label="Delete fee record" title="Delete fee record" className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-rose-600"><Trash2 className="h-4 w-4" /></button>}</div></div><div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 border-t border-slate-100 pt-3">{[["Billing",r.billing_amount],["Collected",r.collected_amount],["Uncollected",Number(r.billing_amount||0)-Number(r.collected_amount||0)],["Obligated",r.obligated_amount],["Disbursed",r.disbursed_amount],["Unpaid obligation",Number(r.obligated_amount||0)-Number(r.disbursed_amount||0)]].map(([label,value]) => <div key={label} className="min-w-0"><p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">{label}</p><p className="mt-0.5 break-words text-xs font-semibold text-slate-800">{feeMoney(value)}</p></div>)}</div></article>)}</div>
+      <div className="hidden overflow-x-auto sm:block"><table className="min-w-[1150px] w-full text-left text-xs"><thead className="bg-slate-50 text-[11px] uppercase tracking-wide text-slate-500"><tr>{["Year / Period","Category / Particulars","Campus","Billing","Collected","Uncollected","Obligated","Disbursed","Unpaid Obligation","Actions"].map(h=><th key={h} className="px-3 py-3 font-extrabold">{h}</th>)}</tr></thead><tbody className="divide-y divide-slate-100">{loading?<tr><td colSpan="10" className="px-4 py-8 text-center text-slate-500">Loading fee records…</td></tr>:rows.length===0?<tr><td colSpan="10" className="px-4 py-8 text-center text-slate-500">No fee records for this fiscal year yet.</td></tr>:rows.map(r=><tr key={r.id} className="hover:bg-slate-50"><td className="px-3 py-3"><b>{r.fiscal_year}</b><p className="mt-1 text-slate-500">{r.billing_period||"—"}</p></td><td className="px-3 py-3"><b>{r.fee_category}</b><p className="mt-1 text-slate-500">{r.particulars}</p></td><td className="px-3 py-3">{r.campus}</td><td className="px-3 py-3">{feeMoney(r.billing_amount)}</td><td className="px-3 py-3">{feeMoney(r.collected_amount)}</td><td className="px-3 py-3 font-bold text-amber-700">{feeMoney(Number(r.billing_amount||0)-Number(r.collected_amount||0))}</td><td className="px-3 py-3">{feeMoney(r.obligated_amount)}</td><td className="px-3 py-3">{feeMoney(r.disbursed_amount)}</td><td className="px-3 py-3 font-bold text-rose-700">{feeMoney(Number(r.obligated_amount||0)-Number(r.disbursed_amount||0))}</td><td className="px-3 py-3"><div className="flex items-center justify-center gap-2"><button type="button" onClick={()=>onEdit(r)} title="Edit fee record" aria-label="Edit fee record" className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 transition hover:bg-gray-50 hover:text-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-300"><Edit2 className="h-4 w-4" /></button>{role === "Administration" && <button type="button" onClick={()=>onDelete(r)} title="Delete fee record" aria-label="Delete fee record" className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 transition hover:bg-gray-50 hover:text-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-300"><Trash2 className="h-4 w-4" /></button>}</div></td></tr>)}</tbody></table></div></div>
   </div>;
 }
 
@@ -3032,8 +3034,8 @@ function FinancialReportsView({
 
   return (
     <div>
-      <div className="bg-white border border-gray-100 rounded-xl shadow-sm p-4 mb-4">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+      <div className="bg-white border border-gray-100 rounded-xl shadow-sm p-3 sm:p-4 mb-4 min-w-0">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 min-w-0">
           <Select
             label="Report Type"
             value={reportType}
@@ -3794,8 +3796,8 @@ function FeeMonitoringReport({ feeRows = [], enrollmentRows = [], budgetReferenc
         }, { billing: 0, collected: 0, uncollected: 0, obligated: 0, disbursed: 0, unpaid: 0 });
         return <div className="fee-stat-cards grid grid-cols-2 md:grid-cols-3 gap-2 mb-4">{[["Actual Billing", totals.billing], ["Collected", totals.collected], ["Uncollected", totals.uncollected], ["Obligated", totals.obligated], ["Disbursed", totals.disbursed], ["Unpaid Obligations", totals.unpaid]].map(([label, amount]) => <div key={label} className="border border-gray-200 rounded-lg p-2"><p className="text-[9px] uppercase font-semibold text-gray-500">{label}</p><p className="text-xs font-bold mt-1">{currency(amount)}</p></div>)}</div>;
       })()}
-      <div className="fee-report-table-wrap">
-        <table className="fee-report-table w-full text-[8px] border-collapse">
+      <div className="fee-report-table-wrap w-full max-w-full overflow-x-auto overscroll-x-contain">
+        <table className="fee-report-table w-full min-w-[900px] text-[8px] border-collapse">
           <thead>
             <tr>
               <th rowSpan={2} className="border border-black px-1 py-1">Particulars</th>
@@ -3842,18 +3844,20 @@ function FeeMonitoringReport({ feeRows = [], enrollmentRows = [], budgetReferenc
         </table>
       </div>
       <h4 className="text-[10px] font-bold mt-4 mb-1">Obligations and Disbursements Summary</h4>
-      <table className="fee-report-table w-full text-[8px] border-collapse">
-        <thead><tr>{["Particulars", "Campus", "Actual Billing", "Collected", "Uncollected", "Obligated", "Disbursed", "Unpaid Obligations"].map((h) => <th key={h} className="border border-black px-1 py-1">{h}</th>)}</tr></thead>
-        <tbody>
-          {feeRows.length ? feeRows.map((r, i) => {
-            const billing = Number(r.billing_amount || 0), collected = Number(r.collected_amount || 0), obligated = Number(r.obligated_amount || 0), disbursed = Number(r.disbursed_amount || 0);
-            return <tr key={r.id || `${r.particulars}-${r.campus}-${i}`}>
-              <td className="border border-black px-1 py-1">{r.particulars || "—"}</td><td className="border border-black px-1 py-1">{r.campus || "—"}</td>
-              {[billing, collected, billing-collected, obligated, disbursed, obligated-disbursed].map((v, j) => <td key={j} className="border border-black px-1 py-1 text-right">{currency(v)}</td>)}
-            </tr>;
-          }) : <tr><td colSpan={8} className="border border-black px-2 py-4 text-center">No Fee Monitoring entries saved for FY {year}.</td></tr>}
-        </tbody>
-      </table>
+      <div className="fee-report-summary-wrap w-full max-w-full min-w-0 overflow-x-auto overscroll-x-contain">
+        <table className="fee-report-table fee-report-summary-table w-full min-w-[680px] text-[8px] border-collapse">
+          <thead><tr>{["Particulars", "Campus", "Actual Billing", "Collected", "Uncollected", "Obligated", "Disbursed", "Unpaid Obligations"].map((h) => <th key={h} className="border border-black px-1 py-1">{h}</th>)}</tr></thead>
+          <tbody>
+            {feeRows.length ? feeRows.map((r, i) => {
+              const billing = Number(r.billing_amount || 0), collected = Number(r.collected_amount || 0), obligated = Number(r.obligated_amount || 0), disbursed = Number(r.disbursed_amount || 0);
+              return <tr key={r.id || `${r.particulars}-${r.campus}-${i}`}>
+                <td className="border border-black px-1 py-1">{r.particulars || "—"}</td><td className="border border-black px-1 py-1">{r.campus || "—"}</td>
+                {[billing, collected, billing-collected, obligated, disbursed, obligated-disbursed].map((v, j) => <td key={j} className="border border-black px-1 py-1 text-right">{currency(v)}</td>)}
+              </tr>;
+            }) : <tr><td colSpan={8} className="border border-black px-2 py-4 text-center">No Fee Monitoring entries saved for FY {year}.</td></tr>}
+          </tbody>
+        </table>
+      </div>
       <p className="text-[8px] mt-2">Note: Enrollee counts are encoded from official enrollment information. GAA/WFP amounts are references entered from the WFP PRE sheet and are not actual collections. Uncollected = Actual Billing − Collected; Unpaid Obligations = Obligated − Disbursed.</p>
       {signatureBlock}
     </div>
@@ -3912,8 +3916,8 @@ function ReportsExportView({
 
   return (
     <div>
-      <div className="bg-white border border-gray-100 rounded-xl shadow-sm p-4 mb-4">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+      <div className="bg-white border border-gray-100 rounded-xl shadow-sm p-3 sm:p-4 mb-4 min-w-0">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 min-w-0">
           <Select
             label="Report Type"
             value={reportChoice}
@@ -3941,7 +3945,7 @@ function ReportsExportView({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 min-w-0">
         <ReportAction icon={FileText} title="FAR 2" description="Utilization and disbursement summary" onClick={() => openReportPreview("FAR 2")} />
         <ReportAction icon={FileText} title="FAR 2A" description="Utilization by object of expenditure" onClick={() => openReportPreview("FAR 2A")} />
         <ReportAction icon={FileText} title="FAR 2A 2A" description="Detailed utilization schedule" onClick={() => openReportPreview("FAR 2A 2A")} />
@@ -3956,7 +3960,7 @@ function ReportsExportView({
         title="Fee Monitoring Statistics"
         subtitle={`FY ${year} • ${feeRows.length} fee record(s)`}
         className="mt-4"
-        action={<div className="flex items-center gap-2 screen-only"><button type="button" onClick={() => window.print()} className="h-9 px-3 border border-gray-200 rounded-lg text-[10px] font-semibold inline-flex items-center gap-1.5"><Printer className="w-3.5 h-3.5"/>Print</button><button type="button" onClick={exportFeeMonitoring} className="h-9 px-3 bg-[#211b79] text-white rounded-lg text-[10px] font-semibold inline-flex items-center gap-1.5"><Download className="w-3.5 h-3.5"/>Export</button></div>}
+        action={<div className="flex flex-wrap items-center gap-2 screen-only"><button type="button" onClick={() => window.print()} className="h-9 px-3 border border-gray-200 rounded-lg text-[10px] font-semibold inline-flex items-center gap-1.5"><Printer className="w-3.5 h-3.5"/>Print</button><button type="button" onClick={exportFeeMonitoring} className="h-9 px-3 bg-[#211b79] text-white rounded-lg text-[10px] font-semibold inline-flex items-center gap-1.5"><Download className="w-3.5 h-3.5"/>Export</button></div>}
       >
         <FeeMonitoringReport feeRows={feeRows} enrollmentRows={enrollmentRows} budgetReferences={budgetReferences} year={year} />
       </Panel></div>}
@@ -3966,7 +3970,7 @@ function ReportsExportView({
         subtitle={`${entries.length} current RBUD registry record(s) • FY ${year}`}
         className="mt-4"
         action={
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <button type="button" onClick={onPrint} className="h-8 px-3 border border-gray-200 rounded-lg text-[10px] font-semibold flex items-center gap-1.5">
               <Printer className="w-3.5 h-3.5" />
               Print
@@ -3978,8 +3982,8 @@ function ReportsExportView({
           </div>
         }
       >
-        <div className="bg-gray-50 border border-gray-100 rounded-xl p-4">
-          <div className="bg-white border border-gray-200 rounded-lg p-5 max-w-5xl mx-auto">
+        <div className="bg-gray-50 border border-gray-100 rounded-xl p-2 sm:p-4 min-w-0 max-w-full overflow-hidden">
+          <div className="bg-white border border-gray-200 rounded-lg p-2 sm:p-5 max-w-5xl mx-auto min-w-0 overflow-x-auto">
             <SelectedRbudReport
               reportChoice={reportChoice}
               entries={entries}
@@ -4029,6 +4033,7 @@ function ReportsExportView({
           .rbud-print-report .fee-stat-cards,
           .rbud-print-report .screen-only,
           .rbud-print-report .report-stat-cards { display: none !important; }
+          .rbud-print-report .fee-report-summary-wrap { overflow: visible !important; }
           .rbud-print-report .fee-report-table th,
           .rbud-print-report .fee-report-table td { font-size: 6.5px !important; padding: 2px !important; }
           .rbud-print-report th,
@@ -4070,8 +4075,8 @@ function ReportsExportView({
       </div>}
 
       {preview && (
-        <div className="fixed inset-0 z-[100] bg-black/40 flex items-center justify-center p-5">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-6xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 z-[100] bg-black/40 flex items-center justify-center p-2 sm:p-5">
+          <div className="bg-white rounded-xl sm:rounded-2xl shadow-2xl max-w-6xl w-full max-h-[94dvh] sm:max-h-[90vh] overflow-y-auto overflow-x-hidden min-w-0">
             <div className="sticky top-0 bg-white border-b border-gray-100 px-5 py-4 flex items-center justify-between">
               <h2 className="text-sm font-bold text-[#17135f]">{reportChoice} Preview</h2>
               <button type="button" onClick={closePreview} className="w-8 h-8 rounded-lg hover:bg-gray-100 flex items-center justify-center">

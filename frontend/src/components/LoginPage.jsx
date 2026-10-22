@@ -104,7 +104,7 @@ export default function LoginPage({ onSwitchToRegister, onLoginSuccess }) {
                 className="w-full h-auto rounded-lg max-h-20 sm:max-h-24 lg:max-h-28 object-cover"
               />
               <p className="text-[10px] text-blue-100 mt-1 font-medium">
-                Visual Insights & Analytics â€“ Graphical overview of university budget utilization
+                Visual Insights & Analytics - Graphical overview of university budget utilization
               </p>
             </div>
           </div>
