@@ -3997,6 +3997,12 @@ function ReportsExportView({
           body * { visibility: hidden !important; }
           .rbud-print-report,
           .rbud-print-report * { visibility: visible !important; }
+          /* The on-screen Fee Monitoring Statistics panel contains its own
+             FeeMonitoringReport. Hide it during printing because the dedicated
+             print-only report below renders the same report and signatures. */
+          .rbud-print-report.rbud-fee-monitoring-panel {
+            display: none !important;
+          }
           .rbud-print-report {
             display: block !important;
             position: absolute !important;
