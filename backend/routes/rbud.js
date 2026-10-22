@@ -2606,6 +2606,167 @@ router.get("/master-data", async (req, res) => {
 
 
 
+/*
+|--------------------------------------------------------------------------
+| FEE MONITORING
+|--------------------------------------------------------------------------
+| Uses dedicated fee tables so fee collection records do not duplicate or
+| alter existing RBUD transaction rows.
+*/
+// Fee Monitoring is restricted to Administration and Budget roles only.
+// The role normalizer returns canonical title-case role names.
+const feeAccessAllowed = (req) => {
+  const authUser = getRbudAuthUser(req);
+  const role = normalizeRbudRoleValue(authUser?.role || authUser?.user_role || authUser?.userRole);
+  return ["Administration", "Budget"].includes(role);
+};
+
+router.get("/fees", async (req, res) => {
+  if (!feeAccessAllowed(req)) {
+    return res.status(403).json({ error: "Fee Monitoring is restricted to Administrator and Budget roles." });
+  }
+  try {
+    const fy = year(req.query.year);
+    const result = await pool.query(
+      `SELECT * FROM rbud_fee_monitoring WHERE fiscal_year = $1 ORDER BY fee_category, particulars, campus, id DESC`,
+      [fy]
+    );
+    res.json({ rows: result.rows, fiscal_year: fy });
+  } catch (error) {
+    console.error("RBUD fee monitoring list error:", error);
+    res.status(500).json({ error: error.message, code: error.code || null });
+  }
+});
+
+router.post("/fees", async (req, res) => {
+  if (!feeAccessAllowed(req)) return res.status(403).json({ error: "Fee Monitoring is restricted to Administrator and Budget roles." });
+  const b = req.body || {};
+  const category = String(b.fee_category || "").trim();
+  const particulars = String(b.particulars || "").trim();
+  const campus = String(b.campus || "").trim();
+  const validCategories = ["Fiduciary Fees", "Non-Fiduciary Fees"];
+  if (!validCategories.includes(category) || !particulars || !campus) {
+    return res.status(400).json({ error: "Select a valid fee category, particulars, and campus from Master Data." });
+  }
+  const amounts = ["billing_amount", "collected_amount", "obligated_amount", "disbursed_amount"].map((k) => Number(b[k] || 0));
+  if (amounts.some((n) => !Number.isFinite(n) || n < 0)) return res.status(400).json({ error: "Amounts must be valid non-negative numbers." });
+  try {
+    const campusCheck = await pool.query("SELECT 1 FROM campuses WHERE is_active = TRUE AND LOWER(TRIM(name)) = LOWER(TRIM($1)) LIMIT 1", [campus]);
+    if (!campusCheck.rowCount) return res.status(400).json({ error: "Select an active campus from Master Data." });
+    const result = await pool.query(
+      `INSERT INTO rbud_fee_monitoring (fiscal_year, fee_category, particulars, campus, billing_period, reference_no, billing_amount, collected_amount, obligated_amount, disbursed_amount, remarks, created_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
+      [Number(b.fiscal_year) || new Date().getFullYear(), category, particulars, campus, b.billing_period || null, b.reference_no || null, ...amounts, b.remarks || null, getRbudAuthUser(req)?.id ?? getRbudAuthUser(req)?.user_id ?? null]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (error) {
+    console.error("RBUD fee monitoring create error:", error);
+    res.status(500).json({ error: error.message, code: error.code || null });
+  }
+});
+
+router.put("/fees/:id", async (req, res) => {
+  if (!feeAccessAllowed(req)) return res.status(403).json({ error: "Fee Monitoring is restricted to Administrator and Budget roles." });
+  const b = req.body || {};
+  const category = String(b.fee_category || "").trim();
+  const particulars = String(b.particulars || "").trim();
+  const campus = String(b.campus || "").trim();
+  if (!["Fiduciary Fees", "Non-Fiduciary Fees"].includes(category) || !particulars || !campus) {
+    return res.status(400).json({ error: "Select a valid fee category, particulars, and campus from Master Data." });
+  }
+  const amounts = ["billing_amount", "collected_amount", "obligated_amount", "disbursed_amount"].map((k) => Number(b[k] || 0));
+  if (amounts.some((n) => !Number.isFinite(n) || n < 0)) return res.status(400).json({ error: "Amounts must be valid non-negative numbers." });
+  try {
+    const campusCheck = await pool.query("SELECT 1 FROM campuses WHERE is_active = TRUE AND LOWER(TRIM(name)) = LOWER(TRIM($1)) LIMIT 1", [campus]);
+    if (!campusCheck.rowCount) return res.status(400).json({ error: "Select an active campus from Master Data." });
+    const result = await pool.query(
+      `UPDATE rbud_fee_monitoring SET fiscal_year=$1, fee_category=$2, particulars=$3, campus=$4, billing_period=$5, reference_no=$6, billing_amount=$7, collected_amount=$8, obligated_amount=$9, disbursed_amount=$10, remarks=$11, updated_by=$12, updated_at=CURRENT_TIMESTAMP WHERE id=$13 RETURNING *`,
+      [Number(b.fiscal_year) || new Date().getFullYear(), category, particulars, campus, b.billing_period || null, b.reference_no || null, ...amounts, b.remarks || null, getRbudAuthUser(req)?.id ?? getRbudAuthUser(req)?.user_id ?? null, int(req.params.id)]
+    );
+    if (!result.rows.length) return res.status(404).json({ error: "Fee record not found." });
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error("RBUD fee monitoring update error:", error);
+    res.status(500).json({ error: error.message, code: error.code || null });
+  }
+});
+
+// Enrollment counts and WFP reference amounts are stored separately from actual fee transactions.
+router.get("/fee-enrollment", async (req, res) => {
+  if (!feeAccessAllowed(req)) return res.status(403).json({ error: "Fee Monitoring is restricted to Administrator and Budget roles." });
+  try {
+    const fy = year(req.query.year);
+    const result = await pool.query(`SELECT * FROM rbud_fee_enrollment WHERE fiscal_year=$1 ORDER BY campus, billing_period`, [fy]);
+    res.json({ rows: result.rows, fiscal_year: fy });
+  } catch (error) {
+    console.error("RBUD fee enrollment list error:", error);
+    res.status(500).json({ error: error.message, code: error.code || null });
+  }
+});
+
+router.post("/fee-enrollment", async (req, res) => {
+  if (!feeAccessAllowed(req)) return res.status(403).json({ error: "Fee Monitoring is restricted to Administrator and Budget roles." });
+  const b = req.body || {};
+  const fy = Number(b.fiscal_year) || new Date().getFullYear();
+  const campus = String(b.campus || "").trim();
+  const period = String(b.billing_period || "").trim();
+  const count = Number(b.enrollee_count);
+  if (!campus || !period || !Number.isInteger(count) || count < 0) return res.status(400).json({ error: "Campus, semester/billing period, and a non-negative whole enrollee count are required." });
+  try {
+    const campusCheck = await pool.query("SELECT 1 FROM campuses WHERE is_active=TRUE AND LOWER(TRIM(name))=LOWER(TRIM($1)) LIMIT 1", [campus]);
+    if (!campusCheck.rowCount) return res.status(400).json({ error: "Select an active campus from Master Data." });
+    const result = await pool.query(
+      `INSERT INTO rbud_fee_enrollment (fiscal_year, campus, billing_period, enrollee_count, created_by, updated_by)
+       VALUES ($1,$2,$3,$4,$5,$5)
+       ON CONFLICT (fiscal_year, campus, billing_period) DO UPDATE SET enrollee_count=EXCLUDED.enrollee_count, updated_by=EXCLUDED.updated_by, updated_at=CURRENT_TIMESTAMP
+       RETURNING *`,
+      [fy, campus, period, count, getRbudAuthUser(req)?.id ?? getRbudAuthUser(req)?.user_id ?? null]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (error) {
+    console.error("RBUD fee enrollment save error:", error);
+    res.status(500).json({ error: error.message, code: error.code || null });
+  }
+});
+
+router.get("/fee-budget-reference", async (req, res) => {
+  if (!feeAccessAllowed(req)) return res.status(403).json({ error: "Fee Monitoring is restricted to Administrator and Budget roles." });
+  try {
+    const fy = year(req.query.year);
+    const result = await pool.query(`SELECT * FROM rbud_fee_budget_reference WHERE fiscal_year=$1 ORDER BY fee_category, particulars, campus`, [fy]);
+    res.json({ rows: result.rows, fiscal_year: fy });
+  } catch (error) {
+    console.error("RBUD fee budget reference list error:", error);
+    res.status(500).json({ error: error.message, code: error.code || null });
+  }
+});
+
+router.post("/fee-budget-reference", async (req, res) => {
+  if (!feeAccessAllowed(req)) return res.status(403).json({ error: "Fee Monitoring is restricted to Administrator and Budget roles." });
+  const b = req.body || {};
+  const fy = Number(b.fiscal_year) || new Date().getFullYear();
+  const campus = String(b.campus || "").trim();
+  const category = String(b.fee_category || "").trim();
+  const particulars = String(b.particulars || "").trim();
+  const amount = Number(b.budget_amount);
+  if (!campus || !["Fiduciary Fees", "Non-Fiduciary Fees"].includes(category) || !particulars || !Number.isFinite(amount) || amount < 0) return res.status(400).json({ error: "Campus, valid fee category, particular, and non-negative WFP amount are required." });
+  try {
+    const campusCheck = await pool.query("SELECT 1 FROM campuses WHERE is_active=TRUE AND LOWER(TRIM(name))=LOWER(TRIM($1)) LIMIT 1", [campus]);
+    if (!campusCheck.rowCount) return res.status(400).json({ error: "Select an active campus from Master Data." });
+    const result = await pool.query(
+      `INSERT INTO rbud_fee_budget_reference (fiscal_year, campus, fee_category, particulars, budget_amount, source_reference, created_by, updated_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$7)
+       ON CONFLICT (fiscal_year, campus, fee_category, particulars) DO UPDATE SET budget_amount=EXCLUDED.budget_amount, source_reference=EXCLUDED.source_reference, updated_by=EXCLUDED.updated_by, updated_at=CURRENT_TIMESTAMP
+       RETURNING *`,
+      [fy, campus, category, particulars, amount, String(b.source_reference || "WFP PRE sheet").trim(), getRbudAuthUser(req)?.id ?? getRbudAuthUser(req)?.user_id ?? null]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (error) {
+    console.error("RBUD fee budget reference save error:", error);
+    res.status(500).json({ error: error.message, code: error.code || null });
+  }
+});
+
 router.get("/:id", async (req, res) => {
   try {
     const id = int(req.params.id);

@@ -108,8 +108,17 @@ const MODULES = [
     tabs: ["By Fund / Project", "Budget", "Utilization", "Disbursement"],
   },
   {
-    id: "reports",
+    id: "feeMonitoring",
     number: "7",
+    title: "Fee Monitoring",
+    description: "Track fee billing, collections, uncollected amounts, obligations, disbursements, and balances by campus.",
+    icon: CircleDollarSign,
+    tone: "blue",
+    tabs: ["Fee Monitoring", "Add Fee Record", "Fee Transactions"],
+  },
+  {
+    id: "reports",
+    number: "8",
     title: "Reports & Export",
     description: "Generate FAR reports, RBUD reports, and export or print the selected records.",
     icon: FileText,
@@ -377,6 +386,8 @@ export default function RbudFundRegistry({
     user?.role || getStoredRbudRole()
   );
   const canViewRbud = ["Administration", "Budget"].includes(role);
+  // Fee Monitoring is available only to Administration and Budget.
+  const canViewFeeMonitoring = ["Administration", "Budget"].includes(role);
   const canCreateRbud = canCreateRbudRole(role);
   const canEditRbud = canEditRbudRole(role);
   const canDeleteRbud = role === "Administration";
@@ -452,6 +463,16 @@ export default function RbudFundRegistry({
   const [utilizationTab, setUtilizationTab] = useState("Summary");
   const [monitoringTab, setMonitoringTab] = useState("Overall");
   const [reportChoice, setReportChoice] = useState("FAR 2");
+  const [feeRows, setFeeRows] = useState([]);
+  const [feeEnrollmentRows, setFeeEnrollmentRows] = useState([]);
+  const [feeBudgetReferences, setFeeBudgetReferences] = useState([]);
+  const [enrollmentForm, setEnrollmentForm] = useState({ campus: "", billing_period: "2nd Sem AY 2025–2026", enrollee_count: "0" });
+  const [budgetReferenceForm, setBudgetReferenceForm] = useState({ campus: "", fee_category: "Non-Fiduciary Fees", particulars: "", source_reference: "WFP PRE sheet", budget_amount: "0" });
+  const [feeCampusOptions, setFeeCampusOptions] = useState([]);
+  const [feeLoading, setFeeLoading] = useState(false);
+  const [feeError, setFeeError] = useState("");
+  const [feeForm, setFeeForm] = useState({ fiscal_year: "2026", fee_category: "Non-Fiduciary Fees", particulars: "", campus: "La Paz", billing_amount: "0", collected_amount: "0", obligated_amount: "0", disbursed_amount: "0", billing_period: "", reference_no: "", remarks: "" });
+  const [feeEditingId, setFeeEditingId] = useState(null);
   const [fundGroupTab, setFundGroupTab] = useState("All");
   const [referenceTab, setReferenceTab] = useState("Fund Codes");
   const [referenceSearch, setReferenceSearch] = useState("");
@@ -486,6 +507,85 @@ export default function RbudFundRegistry({
     },
     [headers]
   );
+
+  const loadFeeCampuses = useCallback(async () => {
+    try {
+      const data = await query("/masterdata/others?type=campuses&limit=1000");
+      const activeCampuses = (data.items || [])
+        .filter((item) => item.is_active !== false && String(item.status || "Active").toLowerCase() !== "inactive")
+        .map((item) => String(item.name || "").trim())
+        .filter(Boolean);
+      setFeeCampusOptions(activeCampuses);
+      setEnrollmentForm((old) => ({ ...old, campus: activeCampuses.includes(old.campus) ? old.campus : (activeCampuses[0] || "") }));
+      setBudgetReferenceForm((old) => ({ ...old, campus: activeCampuses.includes(old.campus) ? old.campus : (activeCampuses[0] || "") }));
+      setFeeForm((old) => ({
+        ...old,
+        campus: activeCampuses.includes(old.campus) ? old.campus : (activeCampuses[0] || ""),
+      }));
+    } catch (error) {
+      setFeeError(`Unable to load campuses from Master Data: ${error.message || "Request failed."}`);
+    }
+  }, [query]);
+
+  useEffect(() => { loadFeeCampuses(); }, [loadFeeCampuses]);
+
+  const loadFeeRows = useCallback(async () => {
+    setFeeLoading(true); setFeeError("");
+    try { const data = await query(`/rbud/fees?year=${encodeURIComponent(selectedFiscalYear)}`); setFeeRows(data.rows || []); }
+    catch (error) { setFeeError(error.message || "Unable to load fee records."); }
+    finally { setFeeLoading(false); }
+  }, [query, selectedFiscalYear]);
+
+  const loadFeePlanningData = useCallback(async () => {
+    try {
+      const [enrollmentData, budgetData] = await Promise.all([
+        query(`/rbud/fee-enrollment?year=${encodeURIComponent(selectedFiscalYear)}`),
+        query(`/rbud/fee-budget-reference?year=${encodeURIComponent(selectedFiscalYear)}`),
+      ]);
+      setFeeEnrollmentRows(enrollmentData.rows || []);
+      setFeeBudgetReferences(budgetData.rows || []);
+    } catch (error) {
+      setFeeError(error.message || "Unable to load enrollment and WFP reference data.");
+    }
+  }, [query, selectedFiscalYear]);
+
+  const saveFeeEnrollment = async (event) => {
+    event.preventDefault();
+    setFeeError("");
+    try {
+      await query("/rbud/fee-enrollment", {
+        method: "POST",
+        body: JSON.stringify({ fiscal_year: Number(selectedFiscalYear), ...enrollmentForm, enrollee_count: Number(enrollmentForm.enrollee_count || 0) }),
+      });
+      await loadFeePlanningData();
+      showToast("Enrollment count saved.");
+    } catch (error) { setFeeError(error.message || "Unable to save enrollment count."); }
+  };
+
+  const saveFeeBudgetReference = async (event) => {
+    event.preventDefault();
+    setFeeError("");
+    try {
+      await query("/rbud/fee-budget-reference", {
+        method: "POST",
+        body: JSON.stringify({ fiscal_year: Number(selectedFiscalYear), ...budgetReferenceForm, budget_amount: Number(budgetReferenceForm.budget_amount || 0) }),
+      });
+      setBudgetReferenceForm((old) => ({ ...old, particulars: "", budget_amount: "0" }));
+      await loadFeePlanningData();
+      showToast("WFP budget reference saved.");
+    } catch (error) { setFeeError(error.message || "Unable to save WFP budget reference."); }
+  };
+
+  const saveFeeRecord = async (event) => {
+    event.preventDefault(); setFeeError("");
+    const payload = { ...feeForm, fiscal_year: Number(feeForm.fiscal_year), billing_amount: Number(feeForm.billing_amount || 0), collected_amount: Number(feeForm.collected_amount || 0), obligated_amount: Number(feeForm.obligated_amount || 0), disbursed_amount: Number(feeForm.disbursed_amount || 0) };
+    try {
+      await query(feeEditingId ? `/rbud/fees/${feeEditingId}` : "/rbud/fees", { method: feeEditingId ? "PUT" : "POST", body: JSON.stringify(payload) });
+      setFeeForm({ ...payload, particulars: "", billing_amount: "0", collected_amount: "0", obligated_amount: "0", disbursed_amount: "0", billing_period: "", reference_no: "", remarks: "" }); setFeeEditingId(null); await loadFeeRows(); showToast("Fee record saved successfully.");
+    } catch (error) { setFeeError(error.message || "Unable to save fee record."); }
+  };
+
+  const editFeeRecord = (row) => { setFeeEditingId(row.id); setFeeForm({ ...row, billing_amount: String(row.billing_amount ?? 0), collected_amount: String(row.collected_amount ?? 0), obligated_amount: String(row.obligated_amount ?? 0), disbursed_amount: String(row.disbursed_amount ?? 0) }); window.scrollTo({ top: 0, behavior: "smooth" }); };
 
   const filterParams = useCallback(() => {
     const params = new URLSearchParams();
@@ -677,9 +777,14 @@ export default function RbudFundRegistry({
   );
 
   const openView = (nextView, initialTab = "") => {
+    if (nextView === "feeMonitoring" && !canViewFeeMonitoring) {
+      setError("Fee Monitoring is restricted to Administrator and Budget roles.");
+      return;
+    }
     setError("");
     setView(nextView);
     setReportPreview(false);
+    if (nextView === "feeMonitoring" || nextView === "reports") { loadFeeRows(); loadFeePlanningData(); }
 
     if (nextView === "allocation" && initialTab) setAllocationTab(initialTab);
     if (nextView === "transactions" && initialTab) {
@@ -1128,7 +1233,7 @@ export default function RbudFundRegistry({
 
         {view === "module" ? (
           <ModuleHome
-            modules={MODULES}
+            modules={MODULES.filter((item) => item.id !== "feeMonitoring" || canViewFeeMonitoring)}
             overview={overview}
             entries={entries}
             approved={approved}
@@ -1260,6 +1365,9 @@ export default function RbudFundRegistry({
             {view === "reports" && (
               <ReportsExportView
                 entries={entries}
+                feeRows={feeRows}
+                enrollmentRows={feeEnrollmentRows}
+                budgetReferences={feeBudgetReferences}
                 group={selectedGroup}
                 year={selectedFiscalYear}
                 fund={selectedFund}
@@ -1272,6 +1380,31 @@ export default function RbudFundRegistry({
                 onPreview={() => setReportPreview(true)}
                 preview={reportPreview}
                 closePreview={() => setReportPreview(false)}
+              />
+            )}
+
+            {view === "feeMonitoring" && canViewFeeMonitoring && (
+              <FeeMonitoringView
+                year={selectedFiscalYear}
+                rows={feeRows}
+                loading={feeLoading}
+                error={feeError}
+                form={feeForm}
+                setForm={setFeeForm}
+                campusOptions={feeCampusOptions}
+                editingId={feeEditingId}
+                onSubmit={saveFeeRecord}
+                onEdit={editFeeRecord}
+                onCancelEdit={() => { setFeeEditingId(null); setFeeForm({ ...feeForm, particulars: "", reference_no: "", remarks: "" }); }}
+                onRefresh={() => { loadFeeRows(); loadFeePlanningData(); }}
+                enrollmentRows={feeEnrollmentRows}
+                budgetReferences={feeBudgetReferences}
+                enrollmentForm={enrollmentForm}
+                setEnrollmentForm={setEnrollmentForm}
+                budgetReferenceForm={budgetReferenceForm}
+                setBudgetReferenceForm={setBudgetReferenceForm}
+                onSaveEnrollment={saveFeeEnrollment}
+                onSaveBudgetReference={saveFeeBudgetReference}
               />
             )}
           </div>
@@ -1304,6 +1437,60 @@ export default function RbudFundRegistry({
       </div>
     </Layout>
   );
+}
+
+/* ============================================================
+   FEE MONITORING
+============================================================ */
+const FEE_PARTICULARS = {
+  "Fiduciary Fees": ["Registration Fees", "Laboratory Fee", "Library Fee", "Medical & Dental Fee", "Computer Fee", "Internet Fee", "Student Development Fund", "Athletic Fee", "Cultural Fee", "NSTP", "ID", "Guidance Fee", "School Publication", "Handbook", "Testing Fee", "SCUAA Fee", "Entrance Fee"],
+  "Non-Fiduciary Fees": ["Registration Fees", "Laboratory Fee", "Library Fee", "Medical & Dental Fee", "Computer Fee", "Internet Fee", "Student Development Fund", "Athletic Fee", "Cultural Fee", "NSTP", "ID", "Guidance Fee", "School Publication", "Handbook", "Testing Fee", "SCUAA Fee", "Entrance Fee"],
+};
+const feeMoney = (value) => new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP" }).format(Number(value || 0));
+function FeeMonitoringView({ year, rows, loading, error, form, setForm, campusOptions = [], editingId, onSubmit, onEdit, onCancelEdit, onRefresh, enrollmentRows = [], budgetReferences = [], enrollmentForm, setEnrollmentForm, budgetReferenceForm, setBudgetReferenceForm, onSaveEnrollment, onSaveBudgetReference }) {
+  const totals = (rows || []).reduce((a, r) => ({ billing: a.billing + Number(r.billing_amount || 0), collected: a.collected + Number(r.collected_amount || 0), obligated: a.obligated + Number(r.obligated_amount || 0), disbursed: a.disbursed + Number(r.disbursed_amount || 0) }), { billing: 0, collected: 0, obligated: 0, disbursed: 0 });
+  const set = (key, value) => setForm((old) => ({ ...old, [key]: value }));
+  const inputClass = "w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100";
+  const labelClass = "mb-1 block text-xs font-bold text-slate-600";
+  return <div className="space-y-5">
+    <div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-wide text-blue-700">RBUD Registry / Submodule 8</p><h2 className="text-xl font-extrabold text-slate-900">Fee Monitoring — FY {year}</h2><p className="mt-1 text-sm text-slate-500">Billing and collection are tracked separately from obligations and disbursements.</p></div><button type="button" onClick={onRefresh} className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50">Refresh</button></div>
+    {error && <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}<p className="mt-1 text-xs">If a new enrollment/reference table is missing, run the Fee Monitoring planning migration SQL first.</p></div>}
+    <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="mb-3"><h3 className="font-extrabold text-slate-900">Enrollment Inputs</h3><p className="text-xs text-slate-500 mt-1">Encode the official enrollee count from the Registrar's enrollment report. BMAS does not guess or calculate enrollee counts from fee amounts.</p></div>
+      <form onSubmit={onSaveEnrollment} className="grid grid-cols-1 gap-3 sm:grid-cols-3 items-end">
+        <label><span className={labelClass}>Campus *</span><select required className={inputClass} value={enrollmentForm?.campus || ""} onChange={e=>setEnrollmentForm(old=>({...old,campus:e.target.value}))}><option value="">Select campus</option>{campusOptions.map(c=><option key={c}>{c}</option>)}</select></label>
+        <label><span className={labelClass}>Semester / Billing Period *</span><input required className={inputClass} value={enrollmentForm?.billing_period || ""} onChange={e=>setEnrollmentForm(old=>({...old,billing_period:e.target.value}))} placeholder="2nd Sem AY 2025–2026" /></label>
+        <div className="flex gap-2"><label className="flex-1"><span className={labelClass}>No. of Enrollees *</span><input required min="0" step="1" type="number" className={inputClass} value={enrollmentForm?.enrollee_count ?? "0"} onChange={e=>setEnrollmentForm(old=>({...old,enrollee_count:e.target.value}))}/></label><button type="submit" className="self-end rounded-lg bg-blue-700 px-4 py-2.5 text-xs font-bold text-white">Save Count</button></div>
+      </form>
+      <div className="mt-3 overflow-x-auto"><table className="w-full text-xs"><thead className="bg-slate-50"><tr>{["Campus","Semester / Period","No. of Enrollees"].map(h=><th key={h} className="px-3 py-2 text-left">{h}</th>)}</tr></thead><tbody>{enrollmentRows.length ? enrollmentRows.map(r=><tr key={r.id} className="border-t"><td className="px-3 py-2">{r.campus}</td><td className="px-3 py-2">{r.billing_period}</td><td className="px-3 py-2 font-bold">{Number(r.enrollee_count||0).toLocaleString()}</td></tr>) : <tr><td colSpan="3" className="px-3 py-4 text-center text-slate-500">No enrollment counts entered for FY {year}.</td></tr>}</tbody></table></div>
+    </section>
+    <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="mb-3"><h3 className="font-extrabold text-slate-900">WFP Budget Reference</h3><p className="text-xs text-slate-500 mt-1">Encode the approved/projected amount from the WFP PRE sheet. These amounts are references only, not actual billing or collections.</p></div>
+      <form onSubmit={onSaveBudgetReference} className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5 items-end">
+        <label><span className={labelClass}>Campus *</span><select required className={inputClass} value={budgetReferenceForm?.campus || ""} onChange={e=>setBudgetReferenceForm(old=>({...old,campus:e.target.value}))}><option value="">Select campus</option>{campusOptions.map(c=><option key={c}>{c}</option>)}</select></label>
+        <label><span className={labelClass}>Category *</span><select className={inputClass} value={budgetReferenceForm?.fee_category || "Non-Fiduciary Fees"} onChange={e=>setBudgetReferenceForm(old=>({...old,fee_category:e.target.value,particulars:""}))}><option>Fiduciary Fees</option><option>Non-Fiduciary Fees</option></select></label>
+        <label><span className={labelClass}>Particular *</span><select required className={inputClass} value={budgetReferenceForm?.particulars || ""} onChange={e=>setBudgetReferenceForm(old=>({...old,particulars:e.target.value}))}><option value="">Select particular</option>{(FEE_PARTICULARS[budgetReferenceForm?.fee_category]||[]).map(x=><option key={x}>{x}</option>)}</select></label>
+        <label><span className={labelClass}>WFP Amount (₱) *</span><input required min="0" step="0.01" type="number" className={inputClass} value={budgetReferenceForm?.budget_amount ?? "0"} onChange={e=>setBudgetReferenceForm(old=>({...old,budget_amount:e.target.value}))}/></label>
+        <div><span className={labelClass}>Source</span><button type="submit" className="w-full rounded-lg bg-blue-700 px-4 py-2.5 text-xs font-bold text-white">Save Reference</button></div>
+        <label className="sm:col-span-2 xl:col-span-5"><span className={labelClass}>Source sheet / note</span><input className={inputClass} value={budgetReferenceForm?.source_reference || "WFP PRE sheet"} onChange={e=>setBudgetReferenceForm(old=>({...old,source_reference:e.target.value}))}/></label>
+      </form>
+      <div className="mt-3 overflow-x-auto"><table className="w-full text-xs"><thead className="bg-slate-50"><tr>{["Campus","Category","Particular","WFP Amount","Source"].map(h=><th key={h} className="px-3 py-2 text-left">{h}</th>)}</tr></thead><tbody>{budgetReferences.length ? budgetReferences.map(r=><tr key={r.id} className="border-t"><td className="px-3 py-2">{r.campus}</td><td className="px-3 py-2">{r.fee_category}</td><td className="px-3 py-2">{r.particulars}</td><td className="px-3 py-2 font-bold">{feeMoney(r.budget_amount)}</td><td className="px-3 py-2">{r.source_reference || "WFP PRE sheet"}</td></tr>) : <tr><td colSpan="5" className="px-3 py-4 text-center text-slate-500">No WFP reference amounts entered for FY {year}.</td></tr>}</tbody></table></div>
+    </section>
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">{[["Actual Billing",totals.billing],["Collected",totals.collected],["Uncollected Billing",totals.billing-totals.collected],["Unpaid Obligations",totals.obligated-totals.disbursed]].map(([label,value])=><div key={label} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">{label}</p><p className="mt-2 text-lg font-extrabold text-slate-900">{feeMoney(value)}</p></div>)}</div>
+    <form onSubmit={onSubmit} className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm"><div className="mb-4 flex items-center justify-between"><h3 className="font-extrabold text-slate-900">{editingId ? "Edit Fee Record" : "Add Fee Record"}</h3>{editingId && <button type="button" onClick={onCancelEdit} className="text-xs font-bold text-slate-500">Cancel edit</button>}</div>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <label><span className={labelClass}>Fiscal Year *</span><select required className={inputClass} value={form.fiscal_year} onChange={e=>set("fiscal_year",e.target.value)}>{Array.from({length:7},(_,i)=>new Date().getFullYear()-i).map(y=><option key={y}>{y}</option>)}</select></label>
+        <label><span className={labelClass}>Fee Category *</span><select required className={inputClass} value={form.fee_category} onChange={e=>setForm(old=>({...old,fee_category:e.target.value,particulars:""}))}><option>Fiduciary Fees</option><option>Non-Fiduciary Fees</option></select></label>
+        <label><span className={labelClass}>Particulars *</span><select required className={inputClass} value={form.particulars} onChange={e=>set("particulars",e.target.value)}><option value="">Select particulars</option>{(FEE_PARTICULARS[form.fee_category]||[]).map(x=><option key={x}>{x}</option>)}</select></label>
+        <label><span className={labelClass}>Campus *</span><select required className={inputClass} value={form.campus} onChange={e=>set("campus",e.target.value)}><option value="">Select campus</option>{campusOptions.map(x=><option key={x} value={x}>{x}</option>)}</select></label>
+        <label><span className={labelClass}>Billing Period</span><input className={inputClass} value={form.billing_period||""} placeholder="e.g. 2nd Sem AY 2025–2026" onChange={e=>set("billing_period",e.target.value)} /></label>
+        <label><span className={labelClass}>Reference No.</span><input className={inputClass} value={form.reference_no||""} onChange={e=>set("reference_no",e.target.value)} /></label>
+        {[["billing_amount","Actual Billing"],["collected_amount","Collections"],["obligated_amount","Obligations"],["disbursed_amount","Disbursements"]].map(([key,label])=><label key={key}><span className={labelClass}>{label} (₱) *</span><input required min="0" step="0.01" type="number" className={inputClass} value={form[key]??"0"} onChange={e=>set(key,e.target.value)} /></label>)}
+        <label className="sm:col-span-2 xl:col-span-4"><span className={labelClass}>Remarks</span><textarea className={inputClass} rows="2" value={form.remarks||""} onChange={e=>set("remarks",e.target.value)} /></label>
+      </div><div className="mt-4 flex justify-end"><button className="rounded-lg bg-blue-700 px-5 py-2.5 text-sm font-bold text-white hover:bg-blue-800" type="submit">{editingId ? "Save Changes" : "Save Fee Record"}</button></div>
+    </form>
+    <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm"><div className="flex items-center justify-between border-b border-slate-100 px-4 py-3"><h3 className="font-extrabold text-slate-900">Fee Transactions</h3><span className="text-xs text-slate-500">{rows.length} record(s)</span></div><div className="overflow-x-auto"><table className="min-w-[1150px] w-full text-left text-xs"><thead className="bg-slate-50 text-[11px] uppercase tracking-wide text-slate-500"><tr>{["Year / Period","Category / Particulars","Campus","Billing","Collected","Uncollected","Obligated","Disbursed","Unpaid Obligation","Actions"].map(h=><th key={h} className="px-3 py-3 font-extrabold">{h}</th>)}</tr></thead><tbody className="divide-y divide-slate-100">{loading?<tr><td colSpan="10" className="px-4 py-8 text-center text-slate-500">Loading fee records…</td></tr>:rows.length===0?<tr><td colSpan="10" className="px-4 py-8 text-center text-slate-500">No fee records for this fiscal year yet.</td></tr>:rows.map(r=><tr key={r.id} className="hover:bg-slate-50"><td className="px-3 py-3"><b>{r.fiscal_year}</b><p className="mt-1 text-slate-500">{r.billing_period||"—"}</p></td><td className="px-3 py-3"><b>{r.fee_category}</b><p className="mt-1 text-slate-500">{r.particulars}</p></td><td className="px-3 py-3">{r.campus}</td><td className="px-3 py-3">{feeMoney(r.billing_amount)}</td><td className="px-3 py-3">{feeMoney(r.collected_amount)}</td><td className="px-3 py-3 font-bold text-amber-700">{feeMoney(Number(r.billing_amount||0)-Number(r.collected_amount||0))}</td><td className="px-3 py-3">{feeMoney(r.obligated_amount)}</td><td className="px-3 py-3">{feeMoney(r.disbursed_amount)}</td><td className="px-3 py-3 font-bold text-rose-700">{feeMoney(Number(r.obligated_amount||0)-Number(r.disbursed_amount||0))}</td><td className="px-3 py-3"><button type="button" onClick={()=>onEdit(r)} className="rounded-md border border-blue-200 px-3 py-1.5 font-bold text-blue-700 hover:bg-blue-50">Edit</button></td></tr>)}</tbody></table></div></div>
+  </div>;
 }
 
 /* ============================================================
@@ -1450,11 +1637,7 @@ function ModuleHome({
         {modules.map((item, index) => (
           <div
             key={item.id}
-            className={
-              index < 4
-                ? "xl:col-span-3"
-                : "xl:col-span-4"
-            }
+            className="xl:col-span-3"
           >
             <ModuleCard
               item={item}
@@ -1631,7 +1814,11 @@ function ModuleCard({ item, Icon, onClick }) {
             ? "Open Utilization & Balance"
             : item.id === "breakdown"
               ? "Open Fund / Project Breakdown"
-              : "Open Reports & Export";
+              : item.id === "reports"
+                ? "Open Reports & Export"
+                : item.id === "feeMonitoring"
+                  ? "Open Fee Monitoring"
+                  : "Open Reports & Export";
 
   return (
     <section className="h-full rounded-xl border border-slate-200 bg-white p-4 shadow-sm hover:shadow-md transition min-h-[150px] flex flex-col">
@@ -3085,12 +3272,15 @@ const fullRbudReportValues = (row) =>
 
 
 function ReportDocumentHeader({ title, year, group, fund }) {
+  // Keep every RBUD report's document heading consistent with Fee Monitoring.
+  // This heading is part of the report itself, not the surrounding dashboard panel.
   return (
-    <div className="text-center border-b border-gray-200 pb-4 mb-4">
-      <p className="text-[9px] text-gray-400 font-semibold">UNIVERSITY OF ABRA</p>
-      <p className="text-[9px] text-gray-500">BUDGET MONITORING AND ALLOCATION SYSTEM</p>
-      <h3 className="text-base font-bold text-[#17135f] mt-1">{title}</h3>
-      <p className="text-[10px] text-gray-500 mt-1">
+    <div className="rbud-report-document-header text-center border-b border-gray-400 pb-2 mb-3 text-black">
+      <p className="text-[9px]">Republic of the Philippines</p>
+      <p className="text-[9px]">UNIVERSITY OF ABRA</p>
+      <p className="text-[9px]">BUDGET MONITORING AND ALLOCATION SYSTEM</p>
+      <h3 className="text-sm font-bold mt-1">{title}</h3>
+      <p className="text-[9px] mt-1">
         Fiscal Year {year} • Fund Group: {group} • Fund: {fund || "All Funds"}
       </p>
     </div>
@@ -3524,8 +3714,144 @@ function SelectedRbudReport({ reportChoice, entries, year, group, fund }) {
   );
 }
 
+function FeeMonitoringReport({ feeRows = [], enrollmentRows = [], budgetReferences = [], year, compact = false }) {
+  const campuses = ["La Paz", "Lagangilang/Main Campus", "Bangued"];
+  const currency = (value) => money(value);
+  const enrollmentFor = (campus) => enrollmentRows.filter((r) => normalizedCampus(r.campus) === campus).reduce((sum, r) => sum + Number(r.enrollee_count || 0), 0);
+  const budgetFor = (particular, category, campus) => budgetReferences.filter((r) => String(r.particulars || "").trim() === particular && String(r.fee_category || "").trim() === category && normalizedCampus(r.campus) === campus).reduce((sum, r) => sum + Number(r.budget_amount || 0), 0);
+  const normalizedCampus = (value) => {
+    const v = String(value || "").trim().toLowerCase();
+    if (v.includes("paz")) return "La Paz";
+    if (v.includes("bangued")) return "Bangued";
+    if (v.includes("lagangilang") || v.includes("laengalangan")) return "Lagangilang/Main Campus";
+    return String(value || "").trim();
+  };
+  const categories = ["Non-Fiduciary Fees", "Fiduciary Fees"];
+  const particulars = [...new Set(feeRows.map((r) => String(r.particulars || "Other / Unspecified").trim()))]
+    .sort((a, b) => a.localeCompare(b));
+  const valueFor = (particular, category, campus, key) => feeRows
+    .filter((r) => String(r.particulars || "Other / Unspecified").trim() === particular
+      && String(r.fee_category || "").trim() === category
+      && normalizedCampus(r.campus) === campus)
+    .reduce((sum, r) => {
+      const billing = Number(r.billing_amount || 0);
+      const collected = Number(r.collected_amount || 0);
+      const obligated = Number(r.obligated_amount || 0);
+      const disbursed = Number(r.disbursed_amount || 0);
+      if (key === "collected") return sum + collected;
+      if (key === "uncollected") return sum + billing - collected;
+      if (key === "billing") return sum + billing;
+      if (key === "obligated") return sum + obligated;
+      if (key === "disbursed") return sum + disbursed;
+      if (key === "unpaid") return sum + obligated - disbursed;
+      return sum;
+    }, 0);
+  const grand = (campus, key) => feeRows.filter((r) => normalizedCampus(r.campus) === campus).reduce((sum, r) => {
+    const billing = Number(r.billing_amount || 0), collected = Number(r.collected_amount || 0);
+    const obligated = Number(r.obligated_amount || 0), disbursed = Number(r.disbursed_amount || 0);
+    return sum + (key === "collected" ? collected : key === "uncollected" ? billing - collected : key === "billing" ? billing : key === "obligated" ? obligated : key === "disbursed" ? disbursed : obligated - disbursed);
+  }, 0);
+  const signatureBlock = (
+    <div className="fee-report-signatures grid grid-cols-2 gap-12 mt-6 text-[10px] text-black">
+      <div className="text-center"><div className="border-b border-black h-7"/><p className="font-bold mt-1">Prepared by</p><p>Signature over printed name / Date</p></div>
+      <div className="text-center"><div className="border-b border-black h-7"/><p className="font-bold mt-1">Certified Correct / Approved by</p><p>Signature over printed name / Date</p></div>
+    </div>
+  );
+  return (
+    <div className={`fee-monitoring-report bg-white text-gray-900 ${compact ? "fee-report-preview" : "fee-report-print"}`}>
+      <div className="rbud-report-document-header text-center border-b border-gray-400 pb-2 mb-3 text-black">
+        <p className="text-[9px]">Republic of the Philippines</p>
+        <p className="text-[9px]">UNIVERSITY OF ABRA</p>
+        <p className="text-[9px]">BUDGET MONITORING AND ALLOCATION SYSTEM</p>
+        <h3 className="text-sm font-bold mt-1">FEE MONITORING REPORT</h3>
+        <p className="text-[9px] mt-1">Fiscal Year {year} • Billing, Collections, Obligations and Disbursements</p>
+      </div>
+      {compact && (() => {
+        const totals = feeRows.reduce((a, r) => {
+          const billing = Number(r.billing_amount || 0), collected = Number(r.collected_amount || 0);
+          const obligated = Number(r.obligated_amount || 0), disbursed = Number(r.disbursed_amount || 0);
+          return { billing: a.billing + billing, collected: a.collected + collected, uncollected: a.uncollected + billing - collected, obligated: a.obligated + obligated, disbursed: a.disbursed + disbursed, unpaid: a.unpaid + obligated - disbursed };
+        }, { billing: 0, collected: 0, uncollected: 0, obligated: 0, disbursed: 0, unpaid: 0 });
+        return <div className="fee-stat-cards grid grid-cols-2 md:grid-cols-3 gap-2 mb-4">{[["Actual Billing", totals.billing], ["Collected", totals.collected], ["Uncollected", totals.uncollected], ["Obligated", totals.obligated], ["Disbursed", totals.disbursed], ["Unpaid Obligations", totals.unpaid]].map(([label, amount]) => <div key={label} className="border border-gray-200 rounded-lg p-2"><p className="text-[9px] uppercase font-semibold text-gray-500">{label}</p><p className="text-xs font-bold mt-1">{currency(amount)}</p></div>)}</div>;
+      })()}
+      <div className="fee-report-table-wrap">
+        <table className="fee-report-table w-full text-[8px] border-collapse">
+          <thead>
+            <tr>
+              <th rowSpan={2} className="border border-black px-1 py-1">Particulars</th>
+              <th colSpan={4} className="border border-black px-1 py-1">GAA 2026 / WFP Reference</th>
+              <th colSpan={4} className="border border-black px-1 py-1">Actual Billing (Collected)</th>
+              <th colSpan={4} className="border border-black px-1 py-1">Actual Billing (Uncollected)</th>
+            </tr>
+            <tr>
+              {[...campuses, "Total", ...campuses, "Total", ...campuses, "Total"].map((name, i) => <th key={`${name}-${i}`} className="border border-black px-1 py-1">{name}</th>)}
+            </tr>
+            <tr className="font-bold bg-yellow-100"><td className="border border-black px-1 py-1">No. of Enrollees</td>{campuses.map(c=><td key={`enr-${c}`} className="border border-black px-1 py-1 text-right">{enrollmentFor(c).toLocaleString()}</td>)}<td className="border border-black px-1 py-1 text-right">{campuses.reduce((sum,c)=>sum+enrollmentFor(c),0).toLocaleString()}</td>{Array.from({length:8},(_,i)=><td key={`blank-enr-${i}`} className="border border-black px-1 py-1">—</td>)}</tr>
+          </thead>
+          <tbody>
+            {categories.map((category) => {
+              const categoryParticulars = particulars.filter((particular) => feeRows.some((r) => String(r.particulars || "Other / Unspecified").trim() === particular && String(r.fee_category || "").trim() === category));
+              if (!categoryParticulars.length) return null;
+              return <React.Fragment key={category}>
+                <tr className="bg-gray-200"><td colSpan={13} className="border border-black px-1 py-1 font-bold">{category}</td></tr>
+                {categoryParticulars.map((particular) => {
+                  const collected = campuses.map((campus) => valueFor(particular, category, campus, "collected"));
+                  const uncollected = campuses.map((campus) => valueFor(particular, category, campus, "uncollected"));
+                  return <tr key={`${category}-${particular}`}>
+                    <td className="border border-black px-1 py-1">{particular}</td>
+                    {campuses.map((campus, i) => <td key={`b-${i}`} className="border border-black px-1 py-1 text-right">{budgetFor(particular, category, campus) ? currency(budgetFor(particular, category, campus)) : "—"}</td>)}
+                    <td className="border border-black px-1 py-1 text-right font-semibold">{currency(campuses.reduce((sum, campus) => sum + budgetFor(particular, category, campus), 0))}</td>
+                    {collected.map((v, i) => <td key={`c-${i}`} className="border border-black px-1 py-1 text-right">{v ? currency(v) : "—"}</td>)}
+                    <td className="border border-black px-1 py-1 text-right font-semibold">{currency(collected.reduce((a, b) => a + b, 0))}</td>
+                    {uncollected.map((v, i) => <td key={`u-${i}`} className="border border-black px-1 py-1 text-right">{v ? currency(v) : "—"}</td>)}
+                    <td className="border border-black px-1 py-1 text-right font-semibold">{currency(uncollected.reduce((a, b) => a + b, 0))}</td>
+                  </tr>;
+                })}
+              </React.Fragment>;
+            })}
+            <tr className="font-bold bg-gray-100">
+              <td className="border border-black px-1 py-1">TOTAL</td>
+              {campuses.map((campus) => <td key={`gb-${campus}`} className="border border-black px-1 py-1 text-right">{currency(budgetReferences.filter(r => normalizedCampus(r.campus)===campus).reduce((sum,r)=>sum+Number(r.budget_amount||0),0))}</td>)}
+              <td className="border border-black px-1 py-1 text-right">{currency(budgetReferences.reduce((sum,r)=>sum+Number(r.budget_amount||0),0))}</td>
+              {campuses.map((campus) => <td key={`gc-${campus}`} className="border border-black px-1 py-1 text-right">{currency(grand(campus, "collected"))}</td>)}
+              <td className="border border-black px-1 py-1 text-right">{currency(campuses.reduce((sum, c) => sum + grand(c, "collected"), 0))}</td>
+              {campuses.map((campus) => <td key={`gu-${campus}`} className="border border-black px-1 py-1 text-right">{currency(grand(campus, "uncollected"))}</td>)}
+              <td className="border border-black px-1 py-1 text-right">{currency(campuses.reduce((sum, c) => sum + grand(c, "uncollected"), 0))}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <h4 className="text-[10px] font-bold mt-4 mb-1">Obligations and Disbursements Summary</h4>
+      <table className="fee-report-table w-full text-[8px] border-collapse">
+        <thead><tr>{["Particulars", "Campus", "Actual Billing", "Collected", "Uncollected", "Obligated", "Disbursed", "Unpaid Obligations"].map((h) => <th key={h} className="border border-black px-1 py-1">{h}</th>)}</tr></thead>
+        <tbody>
+          {feeRows.length ? feeRows.map((r, i) => {
+            const billing = Number(r.billing_amount || 0), collected = Number(r.collected_amount || 0), obligated = Number(r.obligated_amount || 0), disbursed = Number(r.disbursed_amount || 0);
+            return <tr key={r.id || `${r.particulars}-${r.campus}-${i}`}>
+              <td className="border border-black px-1 py-1">{r.particulars || "—"}</td><td className="border border-black px-1 py-1">{r.campus || "—"}</td>
+              {[billing, collected, billing-collected, obligated, disbursed, obligated-disbursed].map((v, j) => <td key={j} className="border border-black px-1 py-1 text-right">{currency(v)}</td>)}
+            </tr>;
+          }) : <tr><td colSpan={8} className="border border-black px-2 py-4 text-center">No Fee Monitoring entries saved for FY {year}.</td></tr>}
+        </tbody>
+      </table>
+      <p className="text-[8px] mt-2">Note: Enrollee counts are encoded from official enrollment information. GAA/WFP amounts are references entered from the WFP PRE sheet and are not actual collections. Uncollected = Actual Billing − Collected; Unpaid Obligations = Obligated − Disbursed.</p>
+      {signatureBlock}
+    </div>
+  );
+}
+
+function ReportSignatureBlock() {
+  return <div className="rbud-report-signatures grid grid-cols-2 gap-12 mt-6 text-[10px] text-black">
+    <div className="text-center"><div className="border-b border-black h-7"/><p className="font-bold mt-1">Prepared by</p><p>Signature over printed name / Date</p></div>
+    <div className="text-center"><div className="border-b border-black h-7"/><p className="font-bold mt-1">Certified Correct / Approved by</p><p>Signature over printed name / Date</p></div>
+  </div>;
+}
+
 function ReportsExportView({
   entries,
+  feeRows = [],
+  enrollmentRows = [],
+  budgetReferences = [],
   group,
   year,
   fund,
@@ -3544,6 +3870,26 @@ function ReportsExportView({
     onPreview();
   };
 
+  const exportFeeMonitoring = () => {
+    const columns = ["fiscal_year", "billing_period", "fee_category", "particulars", "reference_no", "campus", "enrollee_count", "wfp_budget_amount", "wfp_source", "billing_amount", "collected_amount", "uncollected_amount", "obligated_amount", "disbursed_amount", "unpaid_obligations", "remarks"];
+    const quote = (value) => `"${String(value ?? "").replace(/"/g, '""')}"`;
+    const csv = [columns.join(","), ...feeRows.map((row) => columns.map((key) => {
+      if (key === "uncollected_amount") return quote(Number(row.billing_amount || 0) - Number(row.collected_amount || 0));
+      if (key === "unpaid_obligations") return quote(Number(row.obligated_amount || 0) - Number(row.disbursed_amount || 0));
+      if (key === "enrollee_count") return quote(enrollmentRows.filter((x) => String(x.campus || "").trim().toLowerCase() === String(row.campus || "").trim().toLowerCase() && String(x.billing_period || "") === String(row.billing_period || "")).reduce((sum, x) => sum + Number(x.enrollee_count || 0), 0));
+      if (key === "wfp_budget_amount") return quote(budgetReferences.filter((x) => String(x.campus || "").trim().toLowerCase() === String(row.campus || "").trim().toLowerCase() && String(x.particulars || "").trim() === String(row.particulars || "").trim() && String(x.fee_category || "") === String(row.fee_category || "")).reduce((sum, x) => sum + Number(x.budget_amount || 0), 0));
+      if (key === "wfp_source") return quote(budgetReferences.find((x) => String(x.campus || "").trim().toLowerCase() === String(row.campus || "").trim().toLowerCase() && String(x.particulars || "").trim() === String(row.particulars || "").trim() && String(x.fee_category || "") === String(row.fee_category || ""))?.source_reference || "WFP PRE sheet");
+      return quote(row[key] ?? (key === "fiscal_year" ? year : ""));
+    }).join(","))].join("\r\n");
+    const blob = new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `BMAS_Fee_Monitoring_FY${year}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div>
       <div className="bg-white border border-gray-100 rounded-xl shadow-sm p-4 mb-4">
@@ -3560,6 +3906,7 @@ function ReportsExportView({
               "WFP Monitoring Report",
               "Financial Summary",
               "Fund / Project Breakdown",
+              "Fee Monitoring Report",
             ]}
           />
           <Select
@@ -3578,13 +3925,23 @@ function ReportsExportView({
         <ReportAction icon={FileText} title="FAR 2" description="Utilization and disbursement summary" onClick={() => openReportPreview("FAR 2")} />
         <ReportAction icon={FileText} title="FAR 2A" description="Utilization by object of expenditure" onClick={() => openReportPreview("FAR 2A")} />
         <ReportAction icon={FileText} title="FAR 2A 2A" description="Detailed utilization schedule" onClick={() => openReportPreview("FAR 2A 2A")} />
-        <ReportAction icon={FileSpreadsheet} title="Export to Excel" description="Export the selected report dataset" onClick={onExport} />
+        <ReportAction icon={FileSpreadsheet} title="Export to Excel" description="Export the selected report dataset" onClick={() => reportChoice === "Fee Monitoring Report" ? exportFeeMonitoring() : onExport()} />
         <ReportAction icon={FileText} title="Export to PDF" description="Print the selected report and save as PDF" onClick={onPrint} />
         <ReportAction icon={Printer} title="Print" description="Print the selected RBUD report" onClick={onPrint} />
         <ReportAction icon={List} title="All Reports" description="Preview the selected report" onClick={onPreview} />
+        <ReportAction icon={BarChart3} title="Fee Monitoring Stats" description="View statistics from saved Fee Monitoring entries" onClick={() => openReportPreview("Fee Monitoring Report")} />
       </div>
 
-      <Panel
+      {reportChoice === "Fee Monitoring Report" && <div className="rbud-print-report rbud-fee-monitoring-panel"><Panel
+        title="Fee Monitoring Statistics"
+        subtitle={`FY ${year} • ${feeRows.length} fee record(s)`}
+        className="mt-4"
+        action={<div className="flex items-center gap-2 screen-only"><button type="button" onClick={() => window.print()} className="h-9 px-3 border border-gray-200 rounded-lg text-[10px] font-semibold inline-flex items-center gap-1.5"><Printer className="w-3.5 h-3.5"/>Print</button><button type="button" onClick={exportFeeMonitoring} className="h-9 px-3 bg-[#211b79] text-white rounded-lg text-[10px] font-semibold inline-flex items-center gap-1.5"><Download className="w-3.5 h-3.5"/>Export</button></div>}
+      >
+        <FeeMonitoringReport feeRows={feeRows} enrollmentRows={enrollmentRows} budgetReferences={budgetReferences} year={year} />
+      </Panel></div>}
+
+      {reportChoice !== "Fee Monitoring Report" && <Panel
         title={reportChoice}
         subtitle={`${entries.length} current RBUD registry record(s) • FY ${year}`}
         className="mt-4"
@@ -3612,15 +3969,19 @@ function ReportsExportView({
             />
           </div>
         </div>
-      </Panel>
+      </Panel>}
 
       <style>{`
         @media print {
-          @page { size: landscape; margin: 8mm; }
+          @page { size: legal landscape; margin: 8mm; }
+          /* Print only the dedicated print document. The on-screen preview panel
+             also contains a report and signature block, so it must never print. */
           body * { visibility: hidden !important; }
-          .rbud-print-report,
-          .rbud-print-report * { visibility: visible !important; }
-          .rbud-print-report {
+          .rbud-fee-monitoring-panel,
+          .rbud-fee-monitoring-panel * { display: none !important; }
+          .rbud-print-report:not(.rbud-fee-monitoring-panel),
+          .rbud-print-report:not(.rbud-fee-monitoring-panel) * { visibility: visible !important; }
+          .rbud-print-report:not(.rbud-fee-monitoring-panel) {
             display: block !important;
             position: absolute !important;
             left: 0 !important;
@@ -3632,9 +3993,22 @@ function ReportsExportView({
           }
           .rbud-print-report table {
             width: 100% !important;
+            max-width: 100% !important;
             border-collapse: collapse !important;
             table-layout: fixed !important;
           }
+          .rbud-print-report .overflow-x-auto,
+          .rbud-print-report .overflow-hidden,
+          .rbud-print-report .overflow-auto { overflow: visible !important; }
+          .rbud-print-report .min-w-\[3000px\] { min-width: 0 !important; }
+          .rbud-print-report .fee-report-signatures,
+          .rbud-print-report .rbud-report-signatures { break-inside: avoid !important; margin-top: 6mm !important; }
+          .fee-report-preview .fee-stat-cards { display: grid; }
+          .rbud-print-report .fee-stat-cards,
+          .rbud-print-report .screen-only,
+          .rbud-print-report .report-stat-cards { display: none !important; }
+          .rbud-print-report .fee-report-table th,
+          .rbud-print-report .fee-report-table td { font-size: 6.5px !important; padding: 2px !important; }
           .rbud-print-report th,
           .rbud-print-report td {
             border: 1px solid #555 !important;
@@ -3654,11 +4028,11 @@ function ReportsExportView({
           .rbud-internal-audit-column { min-width: 88px; }\n          .rbud-print-report .rbud-internal-audit-column { display: none !important; }
         }
         @media screen {
-          .rbud-print-report { display: none; }
+          .rbud-print-report:not(.rbud-fee-monitoring-panel) { display: none; }
         }
       `}</style>
 
-      <div className="rbud-print-report">
+      {reportChoice !== "Fee Monitoring Report" && <div className="rbud-print-report">
         <SelectedRbudReport
           reportChoice={reportChoice}
           entries={entries}
@@ -3666,7 +4040,12 @@ function ReportsExportView({
           group={group}
           fund={fund}
         />
-      </div>
+        <ReportSignatureBlock />
+      </div>}
+
+      {reportChoice === "Fee Monitoring Report" && <div className="rbud-print-report">
+        <FeeMonitoringReport feeRows={feeRows} enrollmentRows={enrollmentRows} budgetReferences={budgetReferences} year={year} />
+      </div>}
 
       {preview && (
         <div className="fixed inset-0 z-[100] bg-black/40 flex items-center justify-center p-5">
@@ -3678,14 +4057,18 @@ function ReportsExportView({
               </button>
             </div>
             <div className="p-5">
-              <div className="border border-gray-200 rounded-xl p-5">
-                <SelectedRbudReport
-                  reportChoice={reportChoice}
-                  entries={entries}
-                  year={year}
-                  group={group}
-                  fund={fund}
-                />
+              <div className="border border-gray-200 rounded-xl p-5 overflow-x-auto">
+                {reportChoice === "Fee Monitoring Report" ? (
+                  <FeeMonitoringReport feeRows={feeRows} enrollmentRows={enrollmentRows} budgetReferences={budgetReferences} year={year} compact />
+                ) : (
+                  <SelectedRbudReport
+                    reportChoice={reportChoice}
+                    entries={entries}
+                    year={year}
+                    group={group}
+                    fund={fund}
+                  />
+                )}
               </div>
             </div>
           </div>

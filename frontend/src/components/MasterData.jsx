@@ -32,6 +32,7 @@ import {
   AlertTriangle,
   FileText,
   Users,
+  Wallet,
 } from 'lucide-react';
 
 
@@ -231,6 +232,14 @@ export default function MasterData({
         referenceType: 'wfp',
         description:
           'Manage Work and Financial Plan/activity reference sources.',
+        canEdit: true,
+      },
+      {
+        id: 'fees',
+        label: 'Fee Management',
+        icon: Wallet,
+        endpoint: 'fees',
+        description: 'Manage fee categories and approved fee particulars used by RBUD Fee Monitoring.',
         canEdit: true,
       },
     ],
@@ -747,6 +756,11 @@ export default function MasterData({
           'error'
         );
 
+        return;
+      }
+
+      if (activeTab === 'fees' && !formData.category) {
+        showToast('Please select a Fee Category.', 'error');
         return;
       }
 
@@ -1477,6 +1491,10 @@ export default function MasterData({
                     </th>
                   )}
 
+                  {activeTab === 'fees' && (
+                    <th className="px-4 py-3.5">Fee Category</th>
+                  )}
+
                   <th className="px-4 py-3.5">
                     Description
                   </th>
@@ -1497,7 +1515,7 @@ export default function MasterData({
                 {loading ? (
                   <tr>
                     <td
-                      colSpan={(activeTab === 'departments' || activeTab === 'fundClusters' || activeTab === 'responsibilityCenters') ? 7 : 6}
+                      colSpan={(activeTab === 'departments' || activeTab === 'fundClusters' || activeTab === 'responsibilityCenters' || activeTab === 'fees') ? 7 : 6}
                       className="px-4 py-10 text-center text-gray-400"
                     >
                       <div className="flex flex-col items-center gap-2">
@@ -1515,7 +1533,7 @@ export default function MasterData({
                   0 ? (
                   <tr>
                     <td
-                      colSpan={(activeTab === 'departments' || activeTab === 'fundClusters' || activeTab === 'responsibilityCenters') ? 7 : 6}
+                      colSpan={(activeTab === 'departments' || activeTab === 'fundClusters' || activeTab === 'responsibilityCenters' || activeTab === 'fees') ? 7 : 6}
                       className="px-4 py-10 text-center"
                     >
 
@@ -1605,6 +1623,10 @@ export default function MasterData({
                             <td className="px-4 py-3.5 text-gray-700 font-medium">
                               {item.category || '-'}
                             </td>
+                          )}
+
+                          {activeTab === 'fees' && (
+                            <td className="px-4 py-3.5 text-gray-700 font-medium">{item.category || '-'}</td>
                           )}
 
                           <td className="px-4 py-3.5 text-gray-500 max-w-[280px]">
@@ -1942,6 +1964,18 @@ export default function MasterData({
                   />
 
                 </div>
+
+                {/* FEE CATEGORY DROPDOWN */}
+                {activeTab === 'fees' && (
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-700 mb-1">Fee Category *</label>
+                    <select name="category" value={formData.category} onChange={handleFormChange} required className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-xs bg-white focus:outline-none focus:ring-1 focus:ring-blue-600 focus:border-blue-600">
+                      <option value="">Select Fee Category</option>
+                      <option value="Fiduciary Fees">Fiduciary Fees</option>
+                      <option value="Non-Fiduciary Fees">Non-Fiduciary Fees</option>
+                    </select>
+                  </div>
+                )}
 
                 {/* DEPARTMENT CAMPUS */}
 

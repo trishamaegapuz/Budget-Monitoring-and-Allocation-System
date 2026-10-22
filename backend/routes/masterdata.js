@@ -3591,10 +3591,92 @@ router.get(
         '/others?type=campuses',
         '/others?type=pap',
         '/others?type=wfp',
+        '/fees',
       ],
     });
   }
 );
+
+
+
+// ============================================================
+// FEE MANAGEMENT — master data for Fee Monitoring
+// ============================================================
+const FEE_CATEGORIES = ['Fiduciary Fees', 'Non-Fiduciary Fees'];
+
+router.get('/fees', async (req, res) => {
+  try {
+    const { page, limit, offset } = getPagination(req);
+    const search = getSearch(req);
+    const result = await pool.query(
+      `SELECT id, code, name, category, description, status, created_at, updated_at
+         FROM fee_master_particulars
+        WHERE ($1 = '' OR code ILIKE '%' || $1 || '%' OR name ILIKE '%' || $1 || '%' OR category ILIKE '%' || $1 || '%')
+        ORDER BY category, name
+        LIMIT $2 OFFSET $3`, [search, limit, offset]);
+    const count = await pool.query(
+      `SELECT COUNT(*)::int AS total FROM fee_master_particulars
+        WHERE ($1 = '' OR code ILIKE '%' || $1 || '%' OR name ILIKE '%' || $1 || '%' OR category ILIKE '%' || $1 || '%')`, [search]);
+    const totalItems = Number(count.rows[0]?.total) || 0;
+    return res.json({ items: result.rows, currentPage: page, totalItems, totalPages: Math.max(1, Math.ceil(totalItems / limit)) });
+  } catch (error) { return sendDatabaseError(res, error, 'Fee master data fetch error:'); }
+});
+
+router.post('/fees', async (req, res) => {
+  try {
+    const code = String(req.body.code || '').trim();
+    const name = String(req.body.name || '').trim();
+    const category = String(req.body.category || '').trim();
+    const description = String(req.body.description || '').trim();
+    const status = normalizeStatus(req.body.status);
+    if (!code || !name || !FEE_CATEGORIES.includes(category)) {
+      return res.status(400).json({ error: 'Code, Particulars, and a valid Fee Category are required.' });
+    }
+    const result = await pool.query(
+      `INSERT INTO fee_master_particulars (code, name, category, description, status)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING id, code, name, category, description, status`,
+      [code, name, category, description, status]);
+    return res.status(201).json({ item: result.rows[0], message: 'Fee particular added.' });
+  } catch (error) {
+    if (error.code === '23505') return res.status(409).json({ error: 'A fee with this code or particular already exists in this category.' });
+    return sendDatabaseError(res, error, 'Fee master data create error:');
+  }
+});
+
+router.put('/fees/:id', async (req, res) => {
+  try {
+    const id = parseId(req.params.id);
+    const code = String(req.body.code || '').trim();
+    const name = String(req.body.name || '').trim();
+    const category = String(req.body.category || '').trim();
+    const description = String(req.body.description || '').trim();
+    const status = normalizeStatus(req.body.status);
+    if (!id) return res.status(400).json({ error: 'Invalid fee ID.' });
+    if (!code || !name || !FEE_CATEGORIES.includes(category)) return res.status(400).json({ error: 'Code, Particulars, and a valid Fee Category are required.' });
+    const result = await pool.query(
+      `UPDATE fee_master_particulars SET code=$1, name=$2, category=$3, description=$4, status=$5, updated_at=NOW()
+        WHERE id=$6 RETURNING id, code, name, category, description, status`,
+      [code, name, category, description, status, id]);
+    if (!result.rowCount) return res.status(404).json({ error: 'Fee particular not found.' });
+    return res.json({ item: result.rows[0], message: 'Fee particular updated.' });
+  } catch (error) {
+    if (error.code === '23505') return res.status(409).json({ error: 'A fee with this code or particular already exists in this category.' });
+    return sendDatabaseError(res, error, 'Fee master data update error:');
+  }
+});
+
+router.delete('/fees/:id', async (req, res) => {
+  try {
+    const id = parseId(req.params.id);
+    if (!id) return res.status(400).json({ error: 'Invalid fee ID.' });
+    // Soft delete so existing monitoring records can retain their reference.
+    const result = await pool.query(
+      `UPDATE fee_master_particulars SET status='Inactive', updated_at=NOW() WHERE id=$1 RETURNING id`, [id]);
+    if (!result.rowCount) return res.status(404).json({ error: 'Fee particular not found.' });
+    return res.json({ message: 'Fee particular deactivated.' });
+  } catch (error) { return sendDatabaseError(res, error, 'Fee master data deactivate error:'); }
+});
 
 
 // ============================================================
