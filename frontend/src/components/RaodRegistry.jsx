@@ -31,6 +31,7 @@ import {
   RefreshCw,
   Search,
   Settings2,
+  ShieldAlert,
   Table2,
   Trash2,
   WalletCards,
@@ -113,6 +114,19 @@ const emptyForm = {
   remarks: "",
   unpaid_obligation: "",
   po_no: "",
+  po_date: "",
+  supplier_payee: "",
+  po_amount: "",
+  air_far_reference: "",
+  procurement_remarks: "",
+  db_no: "",
+  disbursement_date: "",
+  notice_of_adjustment: "",
+  adjustment_reason: "",
+  accounting_status: "Pending",
+  reviewed_by: "",
+  review_datetime: "",
+  accounting_remarks: "",
   iar_no: "",
   par_no: "",
   ics_no: "",
@@ -131,6 +145,17 @@ const normalizeRaodRole = (value) => {
   return "";
 };
 
+const RAOD_ROLE_REPORTS = {
+  Procurement: ["PROCUREMENT TRANSACTIONS", "PO STATUS", "PROCUREMENT ACCOUNTABILITY"],
+  Accountant: ["ACCOUNTING TRANSACTIONS", "OBLIGATION & DISBURSEMENT", "UNPAID OBLIGATIONS"],
+};
+const raodRestrictedRole = (role) => ["Procurement", "Accountant"].includes(normalizeRaodRole(role));
+const canAccessRaodView = (role, view) => {
+  const r = normalizeRaodRole(role);
+  if (["Administration", "Budget"].includes(r)) return true;
+  if (["Procurement", "Accountant"].includes(r)) return ["transactions", "financial-reports", "reports-export"].includes(view);
+  return false;
+};
 const RAOD_BUDGET_FIELDS = new Set([
   "entry_date","campus_id","serial_no_transferred","payee","particulars",
   "responsibility_center_id","pap_id","uacs_code_id","ref_no","allotment_class_id",
@@ -138,24 +163,28 @@ const RAOD_BUDGET_FIELDS = new Set([
   "mfo_id","old_uacs_code_id","account_title","obligation_amount","ps_obligation",
   "mooe_obligation","co_obligation","wfp_source","wfp_source_code","remarks"
 ]);
+const RAOD_PROCUREMENT_FIELDS = new Set(["po_no", "po_date", "supplier_payee", "po_amount", "air_far_reference", "iar_no", "par_no", "ics_no", "ris_no", "po_status", "procurement_remarks"]);
+const RAOD_ACCOUNTING_FIELDS = new Set(["dv_payroll_no", "db_no", "disbursement_date", "disbursement_amount", "notice_of_adjustment", "adjustment_reason", "accounting_status", "reviewed_by", "review_datetime", "accounting_remarks"]);
 const canEditRaodField = (role, field) => {
   const r = normalizeRaodRole(role);
+  // Procurement and Accounting fields remain visible to every authorized role,
+  // but only their assigned roles may enter or update them.
+  if (RAOD_PROCUREMENT_FIELDS.has(field)) return r === "Procurement";
+  if (RAOD_ACCOUNTING_FIELDS.has(field)) return r === "Accountant";
   if (r === "Administration") return field !== "registry_no" && field !== "ors_serial_no";
   if (r === "Budget") return RAOD_BUDGET_FIELDS.has(field);
-  if (r === "Accountant") return ["dv_payroll_no","disbursement_amount"].includes(field);
-  if (r === "Procurement") return ["po_no","iar_no","par_no","ics_no","ris_no","po_status"].includes(field);
   return false;
 };
 
 const cardData = [
-  { id: "dashboard", title: "1. Overview", desc: "View summary of allotments, obligations, disbursements, and balances.", color: "bg-blue-600", icon: WalletCards, action: "Go to Overview", buttonClass: "border-blue-500 text-[#174fd1] hover:bg-blue-50" },
-  { id: "allotment-budget", title: "2. Allotment & Obligation", desc: "Manage allotments received, obligations, and remaining balances.", color: "bg-emerald-500", icon: BarChart3, action: "Open Allotment & Obligation", buttonClass: "border-emerald-500 text-emerald-600 hover:bg-emerald-50" },
-  { id: "fund-registry", title: "3. Fund Registries", desc: "View and manage RAOD records by fund and funding source.", color: "bg-violet-600", icon: FolderOpen, action: "View Fund Registries", buttonClass: "border-violet-500 text-violet-600 hover:bg-violet-50" },
-  { id: "transactions", title: "4. RAOD Transactions", desc: "Record, edit, and manage allotment, obligation, and disbursement entries.", color: "bg-orange-500", icon: FileText, action: "Open RAOD Transactions", buttonClass: "border-orange-500 text-orange-600 hover:bg-orange-50" },
-  { id: "monitoring", title: "5. Disbursement & Balance", desc: "Monitor disbursements and compare allotment, obligation, and available balances.", color: "bg-teal-500", icon: BarChart3, action: "Open Monitoring", buttonClass: "border-teal-500 text-teal-600 hover:bg-teal-50" },
-  { id: "fund-rc-breakdown", title: "6. Fund / RC Breakdown", desc: "View detailed RAOD breakdown by fund, responsibility center, and WFP.", color: "bg-amber-500", icon: Table2, action: "View Breakdown", buttonClass: "border-amber-500 text-amber-600 hover:bg-amber-50" },
-  { id: "financial-reports", title: "7. Financial Accountability Reports", desc: "Generate and view official RAOD accountability reports.", color: "bg-red-500", icon: FileBarChart, action: "View Financial Reports", buttonClass: "border-red-500 text-red-600 hover:bg-red-50" },
-  { id: "reports-export", title: "8. Reports & Export", desc: "Export official RAOD reports to Excel, PDF, or print.", color: "bg-green-600", icon: Download, action: "Open Reports & Export", buttonClass: "border-green-500 text-green-600 hover:bg-green-50" },
+  { id: "dashboard", title: "Overview", desc: "View summary of allotments, obligations, disbursements, and balances.", color: "bg-blue-600", icon: WalletCards, action: "Go to Overview", buttonClass: "border-blue-500 text-[#174fd1] hover:bg-blue-50" },
+  { id: "allotment-budget", title: "Allotment & Obligation", desc: "Manage allotments received, obligations, and remaining balances.", color: "bg-emerald-500", icon: BarChart3, action: "Open Allotment & Obligation", buttonClass: "border-emerald-500 text-emerald-600 hover:bg-emerald-50" },
+  { id: "fund-registry", title: "Fund Registries", desc: "View and manage RAOD records by fund and funding source.", color: "bg-violet-600", icon: FolderOpen, action: "View Fund Registries", buttonClass: "border-violet-500 text-violet-600 hover:bg-violet-50" },
+  { id: "transactions", title: "RAOD Transactions", desc: "Record, edit, and manage allotment, obligation, and disbursement entries.", color: "bg-orange-500", icon: FileText, action: "Open RAOD Transactions", buttonClass: "border-orange-500 text-orange-600 hover:bg-orange-50" },
+  { id: "monitoring", title: "Disbursement & Balance", desc: "Monitor disbursements and compare allotment, obligation, and available balances.", color: "bg-teal-500", icon: BarChart3, action: "Open Monitoring", buttonClass: "border-teal-500 text-teal-600 hover:bg-teal-50" },
+  { id: "fund-rc-breakdown", title: "Fund / RC Breakdown", desc: "View detailed RAOD breakdown by fund, responsibility center, and WFP.", color: "bg-amber-500", icon: Table2, action: "View Breakdown", buttonClass: "border-amber-500 text-amber-600 hover:bg-amber-50" },
+  { id: "financial-reports", title: "Financial Accountability Reports", desc: "Generate and view official RAOD accountability reports.", color: "bg-red-500", icon: FileBarChart, action: "View Financial Reports", buttonClass: "border-red-500 text-red-600 hover:bg-red-50" },
+  { id: "reports-export", title: "Reports & Export", desc: "Export official RAOD reports to Excel, PDF, or print.", color: "bg-green-600", icon: Download, action: "Open Reports & Export", buttonClass: "border-green-500 text-green-600 hover:bg-green-50" },
 ];
 
 function SectionTitle({ title, text, action }) {
@@ -171,15 +200,33 @@ function SectionTitle({ title, text, action }) {
 }
 
 function Metric({ label, value, icon: Icon, className = "bg-blue-50 text-blue-700" }) {
+  // Use a solid, high-contrast icon badge on every metric card so summary
+  // cards keep the same colorful visual language throughout the RAOD module.
+  const iconColor = className.includes("amber")
+    ? "bg-emerald-600 text-white"
+    : className.includes("emerald")
+      ? "bg-red-500 text-white"
+      : className.includes("violet")
+        ? "bg-violet-600 text-white"
+        : className.includes("red")
+          ? "bg-red-500 text-white"
+          : className.includes("teal")
+            ? "bg-teal-600 text-white"
+            : className.includes("orange")
+              ? "bg-orange-500 text-white"
+              : className.includes("slate")
+                ? "bg-slate-600 text-white"
+                : "bg-blue-600 text-white";
+
   return (
     <div className="rounded-xl border border-slate-100 bg-white p-4 shadow-sm">
-      <div className="flex items-start justify-between">
-        <div>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
           <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">{label}</p>
           <p className="mt-2 text-[20px] font-extrabold text-slate-800">{value}</p>
         </div>
-        <span className={`flex h-9 w-9 items-center justify-center rounded-lg ${className}`}>
-          <Icon className="h-4 w-4" />
+        <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full shadow-sm ${iconColor}`}>
+          <Icon className="h-[18px] w-[18px]" strokeWidth={2.25} />
         </span>
       </div>
     </div>
@@ -210,16 +257,9 @@ function CardButton({ item, onClick }) {
   );
 }
 
-function BackBar({ title, onBack }) {
+function BackBar({ title }) {
   return (
-    <div className="mb-4 flex items-center gap-3">
-      <button
-        type="button"
-        onClick={onBack}
-        className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-[10px] font-bold text-slate-600 hover:bg-slate-50"
-      >
-        <ArrowLeft className="h-3.5 w-3.5" /> Back to RAOD Module
-      </button>
+    <div className="mb-4 flex items-center justify-between gap-3">
       <h2 className="text-base font-extrabold text-[#10245b]">{title}</h2>
     </div>
   );
@@ -228,13 +268,13 @@ function BackBar({ title, onBack }) {
 function Table({ columns, rows, empty = "No records found." }) {
   return (
     <div className="overflow-x-auto rounded-xl border border-slate-100 bg-white shadow-sm">
-      <table className="min-w-full text-left">
+      <table className="min-w-max text-left">
         <thead>
-          <tr className="bg-[#102b67] text-[9px] font-bold uppercase tracking-wide text-white">
-            {columns.map((c) => <th key={c.key} className="whitespace-nowrap px-3 py-3">{c.label}</th>)}
+          <tr className="bg-[#102b67] !text-white text-[9px] font-bold uppercase tracking-wide">
+            {columns.map((c) => <th key={c.key} className="whitespace-nowrap px-3 py-3 !text-white">{c.label}</th>)}
           </tr>
         </thead>
-        <tbody className="divide-y divide-slate-100">
+        <tbody className="divide-y divide-slate-100 [&_td]:!text-slate-700">
           {rows.length ? rows.map((r, i) => (
             <tr key={r.id ?? i} className="text-[10px] text-slate-700 hover:bg-slate-50">
               {columns.map((c) => <td key={c.key} className="whitespace-nowrap px-3 py-3">{c.render ? c.render(r) : (r[c.key] ?? "—")}</td>)}
@@ -344,10 +384,12 @@ function Status({ value }) {
   return <span className={`rounded-md border px-2 py-1 text-[9px] font-bold ${cls}`}>{s}</span>;
 }
 
-function Modal({ title, children, onClose, wide = false }) {
+function Modal({ title, children, onClose, wide = false, formWide = false }) {
+  // Keep RAOD view, audit trail, and add/edit forms aligned to one consistent width.
+  const modalWidth = (wide || formWide) ? "max-w-[1400px] w-[95vw]" : "max-w-[1400px] w-[95vw]";
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4">
-      <div className={`max-h-[92vh] w-full overflow-y-auto rounded-2xl bg-white shadow-2xl ${wide ? "max-w-5xl" : "max-w-2xl"}`}>
+      <div className={`max-h-[92vh] w-full overflow-y-auto rounded-2xl bg-white shadow-2xl ${modalWidth}`}>
         <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-100 bg-white px-5 py-4">
           <h3 className="text-sm font-extrabold text-[#10245b]">{title}</h3>
           <button type="button" onClick={onClose} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100"><X className="h-4 w-4" /></button>
@@ -368,17 +410,115 @@ function Field({ label, children, className = "" }) {
 }
 
 function Input({ ...props }) {
-  return <input {...props} className={`h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-[10px] text-slate-700 outline-none focus:border-blue-400 ${props.className || ""}`} />;
+  return <input {...props} className={`h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-[10px] text-slate-700 outline-none focus:border-blue-400 ${(props.disabled || props.readOnly) ? "!border-red-500 !bg-red-50 !text-red-900 cursor-not-allowed shadow-inner focus:!border-red-500 focus:ring-0" : ""} ${props.className || ""}`} />;
 }
 
 function Select({ children, ...props }) {
-  return <select {...props} className={`h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-[10px] text-slate-700 outline-none focus:border-blue-400 ${props.className || ""}`}>{children}</select>;
+  return <select {...props} className={`h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-[10px] text-slate-700 outline-none focus:border-blue-400 ${(props.disabled || props.readOnly) ? "!border-red-500 !bg-red-50 !text-red-900 cursor-not-allowed shadow-inner focus:!border-red-500 focus:ring-0" : ""} ${props.className || ""}`}>{children}</select>;
 }
 
-function TransactionForm({ refs, form, setForm, budgetInfo, editing, role, onSubmit, saving, onClose }) {
+function TransactionForm({ refs, form, setForm, budgetInfo, editing, role, onSubmit, saving, onClose, error = "" }) {
+  const [formValidationError, setFormValidationError] = useState("");
+  const handleValidatedSubmit = (event) => {
+    const formElement = event.currentTarget;
+    const fields = Array.from(formElement.querySelectorAll("input, select, textarea"))
+      .filter((field) => !field.disabled && !field.readOnly && !field.type?.includes("button"));
+    // These RAOD reference/serial fields are optional and must not block submission.
+    const optionalLabels = new Set([
+      "Serial No. Transferred From/To",
+      "Ref. No.",
+      "Series",
+      "Series2",
+      // PS/MOOE/CO breakdowns are optional; the main Obligation is required.
+      "PS Obligation",
+      "MOOE Obligation",
+      "CO Obligation",
+    ]);
+    const isOptionalField = (field) => {
+      const wrapper = field.closest("label");
+      const labelText = (wrapper?.querySelector("span")?.textContent || "").replace(/\\s+/g, " ").trim();
+      return optionalLabels.has(labelText);
+    };
+    const requiredFields = fields.filter((field) => !isOptionalField(field));
+    const isEmpty = (field) => {
+      if (field.type === "checkbox" || field.type === "radio") return !field.checked;
+      return String(field.value ?? "").trim() === "";
+    };
+    const invalidFields = requiredFields.filter((field) => isEmpty(field) || !field.checkValidity());
+    fields.forEach((field) => {
+      if (invalidFields.includes(field)) {
+        field.classList.add("!border-2", "!border-red-500", "!bg-red-50", "ring-1", "ring-red-200", "focus:!border-red-500");
+        field.setAttribute("aria-invalid", "true");
+      } else {
+        field.classList.remove("!border-2", "!border-red-500", "!bg-red-50", "ring-1", "ring-red-200", "focus:!border-red-500");
+        field.removeAttribute("aria-invalid");
+      }
+    });
+    if (invalidFields.length) {
+      event.preventDefault();
+      const getFieldName = (field) => {
+        const label = field.closest("label") || (field.id ? formElement.querySelector(`label[for="${field.id}"]`) : null) || field.parentElement;
+        const text = (label?.innerText || label?.textContent || field.getAttribute("aria-label") || field.getAttribute("placeholder") || field.name || field.id || "Required field").replace(/\*/g, "").replace(/\s+/g, " ").trim();
+        return text.split("\n")[0].replace(/\s+/g, " ").trim() || "Required field";
+      };
+      const names = [...new Set(invalidFields.map(getFieldName))];
+      setFormValidationError(`Please fill in the following required field${names.length === 1 ? "" : "s"}: ${names.join(", ")}.`);
+      const firstInvalid = invalidFields[0];
+      // Keep the red validation state visible and move the user's view to the first missing field.
+      firstInvalid.setAttribute("aria-invalid", "true");
+      firstInvalid.classList.add("!border-2", "!border-red-500", "!bg-red-50", "ring-1", "ring-red-200", "focus:!border-red-500");
+      window.requestAnimationFrame(() => {
+        const scrollContainer = firstInvalid.closest(".overflow-y-auto, .overflow-auto, [data-form-scroll-container]");
+        if (scrollContainer) {
+          const containerRect = scrollContainer.getBoundingClientRect();
+          const fieldRect = firstInvalid.getBoundingClientRect();
+          if (fieldRect.top < containerRect.top || fieldRect.bottom > containerRect.bottom) {
+            scrollContainer.scrollTo({
+              top: scrollContainer.scrollTop + fieldRect.top - containerRect.top - (containerRect.height / 2) + (fieldRect.height / 2),
+              behavior: "smooth",
+            });
+          }
+        }
+        firstInvalid.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
+        window.setTimeout(() => {
+          try { firstInvalid.focus({ preventScroll: true }); }
+          catch { firstInvalid.focus(); }
+        }, 250);
+      });
+      return;
+    }
+    setFormValidationError("");
+    onSubmit(event);
+  };
+  const clearFieldValidation = (event) => {
+    const field = event.target;
+    if (!field || !field.matches?.("input, select, textarea")) return;
+    if (field.checkValidity()) {
+      field.classList.remove("!border-2", "!border-red-500", "!bg-red-50", "ring-1", "ring-red-200", "focus:!border-red-500");
+      field.removeAttribute("aria-invalid");
+    }
+    const formElement = event.currentTarget;
+    const optionalLabels = new Set([
+      "Serial No. Transferred From/To",
+      "Ref. No.",
+      "Series",
+      "Series2",
+      "PS Obligation",
+      "MOOE Obligation",
+      "CO Obligation",
+    ]);
+    const remainingInvalid = Array.from(formElement.querySelectorAll("input, select, textarea"))
+      .filter((item) => !item.disabled && !item.readOnly)
+      .filter((item) => {
+        const labelText = (item.closest("label")?.querySelector("span")?.textContent || "").replace(/\\s+/g, " ").trim();
+        return !optionalLabels.has(labelText);
+      })
+      .some((item) => !item.checkValidity() || String(item.value ?? "").trim() === "");
+    if (!remainingInvalid) setFormValidationError("");
+  };
   const set = (k, v) => setForm((x) => ({ ...x, [k]: v }));
   const options = (list) => (Array.isArray(list) ? list : []);
-  const fieldDisabled = (field) => Boolean(editing) && !canEditRaodField(role, field);
+  const fieldDisabled = (field) => !canEditRaodField(role, field);
 
   const oldUacsOptions = useMemo(
     () => options(refs.uacs_codes).filter((x) => x.old_code),
@@ -386,7 +526,10 @@ function TransactionForm({ refs, form, setForm, budgetInfo, editing, role, onSub
   );
 
   return (
-    <form onSubmit={onSubmit} className="space-y-5">
+    <form noValidate onSubmit={handleValidatedSubmit} onChange={clearFieldValidation} onInput={clearFieldValidation} className="space-y-5">
+      {formValidationError && <div role="alert" className="sticky top-0 z-20 rounded-lg border-2 border-red-400 bg-red-50 px-4 py-3 text-xs font-bold text-red-800 shadow-sm"><div className="flex items-start gap-2"><span aria-hidden="true">⚠</span><span>{formValidationError}</span></div></div>}
+      {error && <div role="alert" className="rounded-lg border-2 border-red-400 bg-red-50 px-4 py-3 text-xs font-bold text-red-800"><span aria-hidden="true">⚠ </span>{error}</div>}
+      {(["Administration", "Budget", "Procurement", "Accountant"].includes(normalizeRaodRole(role))) && <div className="rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-[10px] text-red-900"><b>Field access guide:</b> Red-outlined fields are fixed, auto-generated, or unavailable for editing under your role. Budget manages budget and obligation fields; Procurement manages procurement references; Accountant manages DV/Payroll and disbursement fields. Administrator and Budget can view Procurement/Accounting entries but cannot enter or edit those fields.</div>}
       {/* 1–5: Registry / fund identification */}
       <div className="rounded-xl border border-blue-100 bg-blue-50/50 p-4">
         <p className="mb-3 text-[10px] font-extrabold uppercase tracking-wide text-blue-700">
@@ -398,10 +541,10 @@ function TransactionForm({ refs, form, setForm, budgetInfo, editing, role, onSub
               value={form.registry_no || ""}
               readOnly
               placeholder={editing ? "Registry No." : "Generated automatically after save"}
-              className="bg-slate-50 font-bold text-[#10245b]"
+              className="cursor-not-allowed !border-red-500 !bg-red-50 font-bold !text-red-900 shadow-inner focus:!border-red-500 focus:ring-0"
             />
-            <p className="mt-1 text-[9px] font-medium text-slate-400">
-              System-generated • permanent • not editable
+            <p className="mt-1 text-[9px] font-semibold text-amber-700">
+              🔒 System-generated • permanent • not editable
             </p>
           </Field>
           <Field label="Date">
@@ -424,28 +567,34 @@ function TransactionForm({ refs, form, setForm, budgetInfo, editing, role, onSub
             />
           </Field>
           <Field label="Fund Cluster">
-            <Select value={form.fund_cluster_id} disabled>
-              {options(refs.fund_clusters)
-                .filter(x => String(x.code) === "101")
-                .map(x => (
-                  <option key={x.id} value={x.name || x.code}>{x.code} — {x.name}</option>
-                ))}
-            </Select>
+            <Input
+              value={(() => {
+                const cluster = options(refs.fund_clusters).find(x => String(x.code).trim().startsWith("101"));
+                return cluster ? `${cluster.code}` : "101";
+              })()}
+              readOnly
+              aria-label="Fund Cluster 101 — General Fund (fixed for RAOD)"
+              className="cursor-not-allowed !border-red-500 !bg-red-50 font-bold !text-red-900 shadow-inner focus:!border-red-500 focus:ring-0"
+            />
+            <p className="mt-1 flex items-center gap-1 text-[9px] font-semibold text-amber-700"><span aria-hidden="true">🔒</span> Fixed field • RAOD uses Fund 101 only</p>
           </Field>
           <Field label="Fund Source">
-            <Select value={form.fund_source_id} disabled>
-              {options(refs.fund_sources)
-                .filter(x => String(x.code).toUpperCase() === "MAIN" || /main fund/i.test(String(x.name || "")))
-                .map(x => (
-                  <option key={x.id} value={x.id}>{x.code} — {x.name}</option>
-                ))}
-            </Select>
+            <Input
+              value={(() => {
+                const source = options(refs.fund_sources).find(x => String(x.code).trim().toUpperCase() === "MAIN" || /main fund/i.test(String(x.name || "")));
+                return source ? `${source.code}` : "MAIN";
+              })()}
+              readOnly
+              aria-label="Fund Source MAIN — Main Funds (fixed for RAOD)"
+              className="cursor-not-allowed !border-red-500 !bg-red-50 font-bold !text-red-900 shadow-inner focus:!border-red-500 focus:ring-0"
+            />
+            <p className="mt-1 flex items-center gap-1 text-[9px] font-semibold text-amber-700"><span aria-hidden="true">🔒</span> Fixed field • Main Funds only</p>
           </Field>
           <Field label="Campus">
             <Select value={form.campus_id} disabled={fieldDisabled("campus_id")} onChange={e => set("campus_id", e.target.value)}>
               <option value="">Select</option>
               {options(refs.campuses).map(x => (
-                <option key={x.id} value={x.id}>{x.code} — {x.name}</option>
+                <option key={x.id} value={x.id}>{x.code}</option>
               ))}
             </Select>
           </Field>
@@ -475,7 +624,7 @@ function TransactionForm({ refs, form, setForm, budgetInfo, editing, role, onSub
             <Select value={form.responsibility_center_id} disabled={fieldDisabled("responsibility_center_id")} onChange={e => set("responsibility_center_id", e.target.value)}>
               <option value="">Select</option>
               {options(refs.responsibility_centers).map(x => (
-                <option key={x.id} value={x.id}>{x.code} — {x.name}</option>
+                <option key={x.id} value={x.id}>{x.code}</option>
               ))}
             </Select>
           </Field>
@@ -483,7 +632,7 @@ function TransactionForm({ refs, form, setForm, budgetInfo, editing, role, onSub
             <Select value={form.pap_id} disabled={fieldDisabled("pap_id")} onChange={e => set("pap_id", e.target.value)}>
               <option value="">Select</option>
               {options(refs.pap).map(x => (
-                <option key={x.id} value={x.id}>{x.code} — {x.name}</option>
+                <option key={x.id} value={x.id}>{x.code}</option>
               ))}
             </Select>
           </Field>
@@ -491,7 +640,7 @@ function TransactionForm({ refs, form, setForm, budgetInfo, editing, role, onSub
             <Select value={form.uacs_code_id} disabled={fieldDisabled("uacs_code_id")} onChange={e => set("uacs_code_id", e.target.value)}>
               <option value="">Select</option>
               {options(refs.uacs_codes).map(x => (
-                <option key={x.id} value={x.id}>{x.code} — {x.account_title || x.revised_description || ""}</option>
+                <option key={x.id} value={x.id}>{x.account_title || x.revised_description || "Unnamed UACS"}</option>
               ))}
             </Select>
           </Field>
@@ -502,7 +651,7 @@ function TransactionForm({ refs, form, setForm, budgetInfo, editing, role, onSub
             <Select value={form.allotment_class_id} disabled={fieldDisabled("allotment_class_id")} onChange={e => set("allotment_class_id", e.target.value)}>
               <option value="">Select</option>
               {options(refs.allotment_classes).map(x => (
-                <option key={x.id} value={x.id}>{x.code} — {x.name}</option>
+                <option key={x.id} value={x.id}>{x.name}</option>
               ))}
             </Select>
           </Field>
@@ -512,7 +661,7 @@ function TransactionForm({ refs, form, setForm, budgetInfo, editing, role, onSub
               <Select value={form.object_expenditure_id} disabled={fieldDisabled("object_expenditure_id")} onChange={e => set("object_expenditure_id", e.target.value)}>
                 <option value="">Select</option>
                 {options(refs.object_expenditures).map(x => (
-                  <option key={x.id} value={x.id}>{x.code} — {x.name}</option>
+                  <option key={x.id} value={x.id}>{x.code}</option>
                 ))}
               </Select>
             </Field>
@@ -521,7 +670,7 @@ function TransactionForm({ refs, form, setForm, budgetInfo, editing, role, onSub
             <Select value={form.mfo_id} disabled={fieldDisabled("mfo_id")} onChange={e => set("mfo_id", e.target.value)}>
               <option value="">Select</option>
               {options(refs.mfo).map(x => (
-                <option key={x.id} value={x.id}>{x.code} — {x.name}</option>
+                <option key={x.id} value={x.id}>{x.code}</option>
               ))}
             </Select>
           </Field>
@@ -530,7 +679,7 @@ function TransactionForm({ refs, form, setForm, budgetInfo, editing, role, onSub
               <Select value={form.old_uacs_code_id} disabled={fieldDisabled("old_uacs_code_id")} onChange={e => set("old_uacs_code_id", e.target.value)}>
                 <option value="">Select</option>
                 {oldUacsOptions.map(x => (
-                  <option key={x.id} value={x.id}>{x.old_code} — {x.account_title || x.code}</option>
+                  <option key={x.id} value={x.id}>{x.old_code}</option>
                 ))}
               </Select>
             </Field>
@@ -702,7 +851,7 @@ function TransactionForm({ refs, form, setForm, budgetInfo, editing, role, onSub
             >
               <option value="">Select</option>
               {options(refs.wfp_sources).map(x => (
-                <option key={x.id} value={x.id}>{x.code} — {x.name}</option>
+                <option key={x.id} value={x.id}>{x.name}</option>
               ))}
             </Select>
             <p className="mt-1 text-[9px] font-medium text-slate-400">
@@ -713,7 +862,7 @@ function TransactionForm({ refs, form, setForm, budgetInfo, editing, role, onSub
             <Input
               value={form.wfp_source_code || ""}
               readOnly
-              className="bg-slate-50 font-semibold text-[#10245b]"
+              className="cursor-not-allowed !border-red-500 !bg-red-50 font-semibold !text-red-900 shadow-inner focus:!border-red-500 focus:ring-0"
               placeholder="Auto-filled from WFP Source"
             />
           </Field>
@@ -726,6 +875,10 @@ function TransactionForm({ refs, form, setForm, budgetInfo, editing, role, onSub
           <Field label="PO No.">
             <Input value={form.po_no} disabled={fieldDisabled("po_no")} onChange={e => set("po_no", e.target.value)} />
           </Field>
+          <Field label="PO Date"><Input type="date" value={form.po_date || ""} disabled={fieldDisabled("po_date")} onChange={e=>set("po_date",e.target.value)}/></Field>
+          <Field label="Supplier / Payee"><Input value={form.supplier_payee || ""} disabled={fieldDisabled("supplier_payee")} onChange={e=>set("supplier_payee",e.target.value)}/></Field>
+          <Field label="PO Amount"><Input type="number" min="0" step="0.01" value={form.po_amount || ""} disabled={fieldDisabled("po_amount")} onChange={e=>set("po_amount",e.target.value)}/></Field>
+          <Field label="AIR / FAR Reference"><Input value={form.air_far_reference || ""} disabled={fieldDisabled("air_far_reference")} onChange={e=>set("air_far_reference",e.target.value)}/></Field>
           <Field label="IAR No.">
             <Input value={form.iar_no} disabled={fieldDisabled("iar_no")} onChange={e => set("iar_no", e.target.value)} />
           </Field>
@@ -738,6 +891,15 @@ function TransactionForm({ refs, form, setForm, budgetInfo, editing, role, onSub
           <Field label="RIS No.">
             <Input value={form.ris_no} disabled={fieldDisabled("ris_no")} onChange={e => set("ris_no", e.target.value)} />
           </Field>
+          <Field label="Procurement Remarks"><Input value={form.procurement_remarks || ""} disabled={fieldDisabled("procurement_remarks")} onChange={e=>set("procurement_remarks",e.target.value)}/></Field>
+          <Field label="DB No."><Input value={form.db_no || ""} disabled={fieldDisabled("db_no")} onChange={e=>set("db_no",e.target.value)}/></Field>
+          <Field label="Disbursement Date"><Input type="date" value={form.disbursement_date || ""} disabled={fieldDisabled("disbursement_date")} onChange={e=>set("disbursement_date",e.target.value)}/></Field>
+          <Field label="Notice of Adjustment"><Input value={form.notice_of_adjustment || ""} disabled={fieldDisabled("notice_of_adjustment")} onChange={e=>set("notice_of_adjustment",e.target.value)}/></Field>
+          <Field label="Adjustment Reason"><Input value={form.adjustment_reason || ""} disabled={fieldDisabled("adjustment_reason")} onChange={e=>set("adjustment_reason",e.target.value)}/></Field>
+          <Field label="Accounting Status"><Select value={form.accounting_status || "Pending"} disabled={fieldDisabled("accounting_status")} onChange={e=>set("accounting_status",e.target.value)}><option value="Pending">Pending</option><option value="Reviewed">Reviewed</option><option value="Adjusted">Adjusted</option><option value="Finalized">Finalized</option></Select></Field>
+          <Field label="Reviewed By"><Input value={form.reviewed_by || ""} disabled={fieldDisabled("reviewed_by")} onChange={e=>set("reviewed_by",e.target.value)}/></Field>
+          <Field label="Review Date and Time"><Input type="datetime-local" value={form.review_datetime || ""} disabled={fieldDisabled("review_datetime")} onChange={e=>set("review_datetime",e.target.value)}/></Field>
+          <Field label="Accounting Remarks"><Input value={form.accounting_remarks || ""} disabled={fieldDisabled("accounting_remarks")} onChange={e=>set("accounting_remarks",e.target.value)}/></Field>
           <Field label="Status of PO">
             <Select value={form.po_status} disabled={fieldDisabled("po_status")} onChange={e => set("po_status", e.target.value)}>
               <option value="">Select</option>
@@ -753,7 +915,7 @@ function TransactionForm({ refs, form, setForm, budgetInfo, editing, role, onSub
             <textarea
               value={form.remarks} disabled={fieldDisabled("remarks")}
               onChange={e => set("remarks", e.target.value)}
-              className="min-h-16 w-full rounded-lg border border-slate-200 px-3 py-2 text-[10px] outline-none focus:border-blue-400"
+              className={`min-h-16 w-full rounded-lg border border-slate-200 px-3 py-2 text-[10px] outline-none focus:border-blue-400 ${fieldDisabled("remarks") ? "!border-red-500 !bg-red-50 !text-red-900 cursor-not-allowed shadow-inner focus:!border-red-500 focus:ring-0" : "bg-white"}`}
             />
           </Field>
         </div>
@@ -815,7 +977,8 @@ function RaodRegistry({ user, onLogout, onNavigate, activePath }) {
   const canEditExisting = ["Administration", "Budget", "Procurement", "Accountant"].includes(role);
   const canCreate = ["Administration", "Budget"].includes(role);
   const canDelete = role === "Administration";
-  const [view, setView] = useState("home");
+  const [view, setView] = useState(() => raodRestrictedRole(role) ? "transactions" : "home");
+  const [restrictedModal, setRestrictedModal] = useState(null);
   const [selectedFiscalYear, setSelectedFiscalYear] = useState(FY);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -830,8 +993,7 @@ function RaodRegistry({ user, onLogout, onNavigate, activePath }) {
   const [entries, setEntries] = useState([]);
   const [pagination, setPagination] = useState({ totalItems: 0, totalPages: 1, currentPage: 1 });
   const [search, setSearch] = useState("");
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
+  const [dateFilter, setDateFilter] = useState("");
   const [activeTab, setActiveTab] = useState("all");
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState(null);
@@ -842,7 +1004,7 @@ function RaodRegistry({ user, onLogout, onNavigate, activePath }) {
   const [form, setForm] = useState(emptyForm);
   const [budgetInfo, setBudgetInfo] = useState(null);
   const [moduleData, setModuleData] = useState({});
-  const [reportType, setReportType] = useState("FAR 1");
+  const [reportType, setReportType] = useState(() => role === "Procurement" ? "PROCUREMENT TRANSACTIONS" : role === "Accountant" ? "ACCOUNTING TRANSACTIONS" : "FAR 1");
   const [reportEntries, setReportEntries] = useState([]);
   const [reportPage, setReportPage] = useState(1);
   const [masterTab, setMasterTab] = useState("fund_clusters");
@@ -855,7 +1017,49 @@ function RaodRegistry({ user, onLogout, onNavigate, activePath }) {
   const [departmentEntries, setDepartmentEntries] = useState([]);
   const [departmentPagination, setDepartmentPagination] = useState({ totalItems: 0, totalPages: 1, currentPage: 1 });
 
+  // Sidebar submodules use the same internal view state as the dashboard cards.
+  useEffect(() => {
+    const handleRaodViewChange = (event) => {
+      const nextView = event?.detail?.view;
+      // Parent module click opens the permitted transaction workspace for operational roles.
+      if (raodRestrictedRole(role) && event?.detail?.source === "parent") {
+        setView("transactions");
+        return;
+      }
+      // Overview remains restricted for Procurement and Accountant when selected as a submenu.
+      const normalizedView = ["overview", "dashboard"].includes(nextView) ? "home" : nextView;
+      const allowedViews = ["home", "dashboard", "allotment-budget", "fund-registry", "transactions", "monitoring", "fund-rc-breakdown", "financial-reports", "reports-export"];
+      if (!allowedViews.includes(normalizedView)) return;
+      if (!canAccessRaodView(role, normalizedView)) {
+        setRestrictedModal(normalizedView);
+        return;
+      }
+      setRestrictedModal(null);
+      setView(normalizedView);
+    };
+    window.addEventListener("bmas-raod-open-view", handleRaodViewChange);
+    return () => window.removeEventListener("bmas-raod-open-view", handleRaodViewChange);
+  }, [role]);
+
+  useEffect(() => {
+    // Entering the RAOD Registry route always starts on the original Overview design.
+    if (activePath === "/raod-registry" || activePath === "/raod/overview") {
+      setView(raodRestrictedRole(role) ? "transactions" : "home");
+    }
+  }, [activePath, role]);
+
   const headers = useMemo(() => ({ Authorization: `Bearer ${token}` }), [token]);
+
+  const reportRaodError = useCallback((err) => {
+    const message = String(err?.message || err || "");
+    // Procurement and Accountant intentionally cannot open general RAOD modules.
+    // A permission response from an unrelated module must not be shown as a page error
+    // while they are working in the permitted Transactions/report workspace.
+    if (raodRestrictedRole(role) && /access restricted:.*may access RAOD Transactions and role-specific reports only/i.test(message)) {
+      return;
+    }
+    setError(message || "An unexpected RAOD error occurred.");
+  }, [role]);
 
   const fetchJson = useCallback(async (url, options = {}) => {
     const r = await fetch(url, { ...options, headers: { ...headers, ...(options.headers || {}) } });
@@ -872,15 +1076,13 @@ function RaodRegistry({ user, onLogout, onNavigate, activePath }) {
   const loadOverview = useCallback(async () => {
     const d = await fetchJson(`${API_URL}/raod/overview?fiscal_year=${selectedFiscalYear}`);
     setOverview(d);
-  }, [fetchJson, selectedFiscalYear]);
+  }, [fetchJson, selectedFiscalYear, reportRaodError]);
 
   const loadEntries = useCallback(async (p = 1) => {
     setLoading(true);
     try {
       const q = new URLSearchParams({ page: String(p), limit: String(LIMIT), fiscal_year: String(selectedFiscalYear) });
       if (search.trim()) q.set("search", search.trim());
-      if (dateFrom) q.set("date_from", dateFrom);
-      if (dateTo) q.set("date_to", dateTo);
       if (activeTab === "obligations") q.set("transaction_type", "obligations");
       if (activeTab === "disbursements") q.set("transaction_type", "disbursements");
       if (activeTab === "balance") q.set("transaction_type", "balance");
@@ -889,18 +1091,18 @@ function RaodRegistry({ user, onLogout, onNavigate, activePath }) {
       setPagination({ totalItems: d.totalItems || 0, totalPages: d.totalPages || 1, currentPage: d.currentPage || p });
       setPage(d.currentPage || p);
     } catch (e) {
-      setError(e.message);
+      reportRaodError(e);
     } finally {
       setLoading(false);
     }
-  }, [fetchJson, search, dateFrom, dateTo, activeTab, selectedFiscalYear]);
+  }, [fetchJson, search, activeTab, selectedFiscalYear, reportRaodError]);
 
   const loadDepartmentSummary = useCallback(async () => {
     const d = await fetchJson(`${API_URL}/raod/department-summary?fiscal_year=${selectedFiscalYear}`);
     setDepartmentRows(d.rows || []);
     setDepartmentPage(1);
     setMonitoringPage(1);
-  }, [fetchJson, selectedFiscalYear]);
+  }, [fetchJson, selectedFiscalYear, reportRaodError]);
 
   const loadDepartmentBudget = useCallback(async (rcId, fiscalYear = FY) => {
     if (!rcId) {
@@ -927,10 +1129,15 @@ function RaodRegistry({ user, onLogout, onNavigate, activePath }) {
       const d = await fetchJson(`${API_URL}/raod?${q}`);
       setDepartmentEntries(d.entries || []);
       setDepartmentPagination({ totalItems: d.totalItems || 0, totalPages: d.totalPages || 1, currentPage: d.currentPage || p });
-    } catch (e) { setError(e.message); }
-  }, [fetchJson, selectedFiscalYear]);
+    } catch (e) { reportRaodError(e); }
+  }, [fetchJson, selectedFiscalYear, reportRaodError]);
 
   const loadModule = useCallback(async (name) => {
+    if (raodRestrictedRole(role) && !canAccessRaodView(role, name)) {
+      setModuleData({});
+      setReportEntries([]);
+      return;
+    }
     if (name === "transactions") {
       await loadEntries(1);
       return;
@@ -944,9 +1151,9 @@ function RaodRegistry({ user, onLogout, onNavigate, activePath }) {
         setReportPage(1);
       }
     } catch (e) {
-      setError(e.message);
+      reportRaodError(e);
     }
-  }, [fetchJson, loadEntries, selectedFiscalYear]);
+  }, [fetchJson, loadEntries, selectedFiscalYear, role, reportRaodError]);
 
   const loadAudit = useCallback(async (id) => {
     const d = await fetchJson(`${API_URL}/raod/audit/${id}`);
@@ -954,8 +1161,11 @@ function RaodRegistry({ user, onLogout, onNavigate, activePath }) {
   }, [fetchJson]);
 
   useEffect(() => {
-    Promise.all([loadRefs(), loadOverview(), loadDepartmentSummary()]).catch(e => setError(e.message));
-  }, [loadRefs, loadOverview, loadDepartmentSummary]);
+    const initialLoads = raodRestrictedRole(role)
+      ? [loadRefs()]
+      : [loadRefs(), loadOverview(), loadDepartmentSummary()];
+    Promise.all(initialLoads).catch(e => reportRaodError(e));
+  }, [loadRefs, loadOverview, loadDepartmentSummary, role, reportRaodError]);
 
   useEffect(() => {
     if (view === "transactions" || view === "home") {
@@ -978,16 +1188,27 @@ function RaodRegistry({ user, onLogout, onNavigate, activePath }) {
       ? new Date(`${form.entry_date}T00:00:00`).getFullYear()
       : FY;
     loadDepartmentBudget(form.responsibility_center_id, entryFiscalYear)
-      .catch(e => setError(e.message));
-  }, [modal, form.responsibility_center_id, form.entry_date, loadDepartmentBudget]);
+      .catch(e => reportRaodError(e));
+  }, [modal, form.responsibility_center_id, form.entry_date, loadDepartmentBudget, reportRaodError]);
 
   const openView = (name) => {
     setError("");
+    if (!canAccessRaodView(role, name)) {
+      setRestrictedModal(name);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      return;
+    }
+    setRestrictedModal(null);
     setView(name);
+    window.dispatchEvent(new CustomEvent("bmas-raod-open-view", { detail: { view: name } }));
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  const backHome = () => setView("home");
+  const backHome = () => {
+    const next = raodRestrictedRole(role) ? "transactions" : "dashboard";
+    setView(next);
+    window.dispatchEvent(new CustomEvent("bmas-raod-open-view", { detail: { view: next } }));
+  };
 
   const generalCluster = useMemo(
     () => refs.fund_clusters.find(x => String(x.code) === "101"),
@@ -1036,6 +1257,9 @@ function RaodRegistry({ user, onLogout, onNavigate, activePath }) {
     f.mooe_obligation = row.mooe_obligation ?? "";
     f.co_obligation = row.co_obligation ?? "";
     f.po_no = row.po_no ?? "";
+    f.po_date = row.po_date ? String(row.po_date).slice(0,10) : "";
+    f.supplier_payee = row.supplier_payee ?? ""; f.po_amount = row.po_amount ?? ""; f.air_far_reference = row.air_far_reference ?? ""; f.procurement_remarks = row.procurement_remarks ?? "";
+    f.db_no = row.db_no ?? ""; f.disbursement_date = row.disbursement_date ? String(row.disbursement_date).slice(0,10) : ""; f.notice_of_adjustment = row.notice_of_adjustment ?? ""; f.adjustment_reason = row.adjustment_reason ?? ""; f.accounting_status = row.accounting_status ?? "Pending"; f.reviewed_by = row.reviewed_by ?? ""; f.review_datetime = row.review_datetime ? String(row.review_datetime).slice(0,16) : ""; f.accounting_remarks = row.accounting_remarks ?? "";
     f.iar_no = row.iar_no ?? "";
     f.par_no = row.par_no ?? "";
     f.ics_no = row.ics_no ?? "";
@@ -1147,7 +1371,7 @@ function RaodRegistry({ user, onLogout, onNavigate, activePath }) {
       setToast({ type: "success", message: editing ? "RAOD record updated successfully." : "RAOD record added successfully." });
       await Promise.all([loadOverview(), loadEntries(1), loadDepartmentSummary()]);
     } catch (e) {
-      setError(e.message);
+      reportRaodError(e);
     } finally {
       setSaving(false);
     }
@@ -1161,7 +1385,7 @@ function RaodRegistry({ user, onLogout, onNavigate, activePath }) {
       setSelected(null);
       await Promise.all([loadOverview(), loadEntries(page), loadDepartmentSummary()]);
     } catch (e) {
-      setError(e.message);
+      reportRaodError(e);
     }
   };
 
@@ -1172,20 +1396,75 @@ function RaodRegistry({ user, onLogout, onNavigate, activePath }) {
   const unobligated = Number(overview.unobligated_balance || Math.max(0, allotment - obligation));
   const undisbursed = Number(overview.undisbursed_balance || Math.max(0, obligation - disbursement));
 
+  // Show all RAOD form fields in the main transaction table. The table is horizontally scrollable.
+  const displayField = (r, ...keys) => {
+    for (const key of keys) {
+      const value = r?.[key];
+      if (value !== undefined && value !== null && String(value).trim() !== "") return value;
+    }
+    return "—";
+  };
   const entryColumns = [
-    { key: "registry_no", label: "REGISTRY NO." },
+    { key: "registry_no", label: "REGISTRY NO.", render: r => displayField(r, "registry_no") },
     { key: "entry_date", label: "DATE", render: r => dateText(r.entry_date) },
-    { key: "particulars", label: "PARTICULARS", render: r => <span className="max-w-[260px] truncate block">{r.particulars || "—"}</span> },
-    { key: "responsibility_center_name", label: "DEPARTMENT / RC" },
+    { key: "fund_cluster", label: "FUND CLUSTER", render: r => displayField(r, "fund_cluster_name", "fund_cluster_code", "fund_cluster_id") },
+    { key: "fund_source", label: "FUND SOURCE", render: r => displayField(r, "fund_source_name", "fund_source_code", "fund_source_id") },
+    { key: "campus", label: "CAMPUS", render: r => displayField(r, "campus_name", "campus_code", "campus_id") },
+    { key: "ors_serial_no", label: "ORS SERIAL NO.", render: r => displayField(r, "ors_serial_no") },
+    { key: "serial_no_transferred", label: "SERIAL NO. TRANSFERRED FROM/TO", render: r => displayField(r, "serial_no_transferred") },
+    { key: "payee", label: "PAYEE / NAME", render: r => displayField(r, "payee", "supplier_payee") },
+    { key: "particulars", label: "PARTICULARS / DESCRIPTION", render: r => displayField(r, "particulars") },
+    { key: "responsibility_center", label: "RESPONSIBILITY CENTER", render: r => displayField(r, "responsibility_center_name", "responsibility_center_code", "responsibility_center_id") },
+    { key: "pap", label: "PAP / DEPARTMENT", render: r => displayField(r, "pap_name", "pap_code", "pap_id") },
+    { key: "uacs_code", label: "UACS CODE", render: r => displayField(r, "uacs_code", "uacs_code_value", "uacs_code_name", "uacs_code_id") },
+    { key: "ref_no", label: "REF. NO.", render: r => displayField(r, "ref_no") },
+    { key: "allotment_class", label: "ALLOTMENT CLASS", render: r => displayField(r, "allotment_class_name", "allotment_class_code", "allotment_class_id") },
+    { key: "uacs_funding_source_code", label: "UACS FUNDING SOURCE CODE", render: r => displayField(r, "uacs_funding_source_code") },
+    { key: "fiscal_year", label: "FISCAL YEAR", render: r => displayField(r, "fiscal_year") },
+    { key: "month", label: "MONTH", render: r => displayField(r, "month") },
+    { key: "series", label: "SERIES", render: r => displayField(r, "series") },
+    { key: "series2", label: "SERIES 2", render: r => displayField(r, "series2") },
+    { key: "quarter", label: "QUARTER", render: r => displayField(r, "quarter") },
+    { key: "object_expenditure", label: "OBJECT OF EXPENDITURE", render: r => displayField(r, "object_expenditure_name", "object_expenditure_code", "object_expenditure_id") },
+    { key: "mfo", label: "MFO", render: r => displayField(r, "mfo_name", "mfo_code", "mfo_id") },
+    { key: "old_uacs_code", label: "OLD UACS CODE", render: r => displayField(r, "old_uacs_code", "old_uacs_code_id") },
+    { key: "account_title", label: "ACCOUNTS TITLE", render: r => displayField(r, "account_title") },
     { key: "obligation_amount", label: "OBLIGATION", render: r => money(r.obligation_amount) },
+    { key: "ps_obligation", label: "PS OBLIGATION", render: r => money(r.ps_obligation) },
+    { key: "mooe_obligation", label: "MOOE OBLIGATION", render: r => money(r.mooe_obligation) },
+    { key: "co_obligation", label: "CO OBLIGATION", render: r => money(r.co_obligation) },
+    { key: "wfp_source", label: "WFP SOURCE", render: r => displayField(r, "wfp_source", "wfp_source_name", "wfp_source_code") },
+    { key: "wfp_source_code", label: "WFP SOURCE CODE", render: r => displayField(r, "wfp_source_code") },
+    { key: "dv_payroll_no", label: "DV / PAYROLL NO.", render: r => displayField(r, "dv_payroll_no") },
     { key: "disbursement_amount", label: "DISBURSEMENT", render: r => money(r.disbursement_amount) },
-    { key: "entry_status", label: "STATUS", render: r => <Status value={r.entry_status} /> },
+    { key: "unpaid_obligation", label: "UNPAID OBLIGATION", render: r => money(r.unpaid_obligation) },
+    { key: "remarks", label: "REMARKS", render: r => displayField(r, "remarks") },
+    { key: "po_no", label: "PURCHASE ORDER NO.", render: r => displayField(r, "po_no") },
+    { key: "po_date", label: "PO DATE", render: r => r.po_date ? dateText(r.po_date) : "—" },
+    { key: "supplier_payee", label: "SUPPLIER / PAYEE", render: r => displayField(r, "supplier_payee", "payee") },
+    { key: "po_amount", label: "PO AMOUNT", render: r => r.po_amount == null || r.po_amount === "" ? "—" : money(r.po_amount) },
+    { key: "air_far_reference", label: "AIR / FAR REFERENCE", render: r => displayField(r, "air_far_reference") },
+    { key: "iar_no", label: "IAR NO.", render: r => displayField(r, "iar_no") },
+    { key: "par_no", label: "PAR NO.", render: r => displayField(r, "par_no") },
+    { key: "ics_no", label: "ICS NO.", render: r => displayField(r, "ics_no") },
+    { key: "ris_no", label: "RIS NO.", render: r => displayField(r, "ris_no") },
+    { key: "po_status", label: "PO STATUS", render: r => displayField(r, "po_status") },
+    { key: "procurement_remarks", label: "PROCUREMENT REMARKS", render: r => displayField(r, "procurement_remarks") },
+    { key: "db_no", label: "DB NO.", render: r => displayField(r, "db_no") },
+    { key: "disbursement_date", label: "DISBURSEMENT DATE", render: r => r.disbursement_date ? dateText(r.disbursement_date) : "—" },
+    { key: "notice_of_adjustment", label: "NOTICE OF ADJUSTMENT", render: r => displayField(r, "notice_of_adjustment") },
+    { key: "adjustment_reason", label: "ADJUSTMENT REASON", render: r => displayField(r, "adjustment_reason") },
+    { key: "accounting_status", label: "ACCOUNTING STATUS", render: r => displayField(r, "accounting_status") },
+    { key: "reviewed_by", label: "REVIEWED BY", render: r => displayField(r, "reviewed_by_name", "reviewed_by") },
+    { key: "review_datetime", label: "REVIEW DATE / TIME", render: r => displayField(r, "review_datetime") },
+    { key: "accounting_remarks", label: "ACCOUNTING REMARKS", render: r => displayField(r, "accounting_remarks") },
+    { key: "entry_status", label: "STATUS", render: r => <Status value={r.entry_status || r.status} /> },
     { key: "actions", label: "ACTIONS", render: r => (
-      <div className="flex gap-1">
-        <button type="button" title="View" onClick={() => { setSelected(r); setModal("view"); }} className="rounded-md border border-slate-200 p-1.5 text-slate-500 hover:text-blue-600"><Eye className="h-3.5 w-3.5" /></button>
-        <button type="button" title="Audit Trail" onClick={async () => { setSelected(r); await loadAudit(r.id); setModal("audit"); }} className="rounded-md border border-slate-200 p-1.5 text-slate-500 hover:text-violet-600"><RefreshCw className="h-3.5 w-3.5" /></button>
-        {canEditExisting && <button type="button" title="Edit" onPointerDown={(e) => handleEditClick(e, r)} onClick={(e) => handleEditClick(e, r)} className="relative z-30 pointer-events-auto rounded-md border border-slate-200 p-1.5 text-slate-500 hover:text-blue-600"><Pencil className="h-3.5 w-3.5" /></button>}
-        {canDelete && <button type="button" title="Delete" onClick={() => setDeleteTarget(r)} className="rounded-md border border-red-100 p-1.5 text-red-500 hover:bg-red-50"><Trash2 className="h-3.5 w-3.5" /></button>}
+      <div className="registry-action-buttons flex items-center gap-1">
+        <button type="button" title="View" onClick={() => { setSelected(r); setModal("view"); }} className="inline-flex h-8 w-8 min-w-[2rem] shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white p-1.5 text-slate-700 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700"><Eye className="h-4 w-4 shrink-0" /></button>
+        <button type="button" title="Audit Trail" onClick={async () => { setSelected(r); await loadAudit(r.id); setModal("audit"); }} className="inline-flex h-8 w-8 min-w-[2rem] shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white p-1.5 text-violet-700 hover:border-violet-300 hover:bg-violet-50 hover:text-violet-800"><RefreshCw className="h-4 w-4 shrink-0" /></button>
+        {canEditExisting && <button type="button" title="Edit" onPointerDown={(e) => handleEditClick(e, r)} onClick={(e) => handleEditClick(e, r)} className="inline-flex h-8 w-8 min-w-[2rem] shrink-0 items-center justify-center rounded-md border border-blue-200 bg-white p-1.5 text-blue-600 hover:border-blue-400 hover:bg-blue-50 hover:text-blue-800"><Pencil className="h-4 w-4 min-h-4 min-w-4 shrink-0" aria-hidden="true" /></button>}
+        {canDelete && <button type="button" title="Delete" onClick={() => setDeleteTarget(r)} className="inline-flex h-8 w-8 min-w-[2rem] shrink-0 items-center justify-center rounded-md border border-red-200 bg-white p-1.5 text-red-600 hover:bg-red-50"><Trash2 className="h-4 w-4 shrink-0" /></button>}
       </div>
     )},
   ];
@@ -1194,33 +1473,15 @@ function RaodRegistry({ user, onLogout, onNavigate, activePath }) {
     const utilization = pct(obligation, allotment);
     const disbursementVsAllotment = pct(disbursement, allotment);
     const disbursementVsObligation = pct(disbursement, obligation);
-    const recentRows = (overview.recent_entries || entries || []).slice(0, 5);
+    const recentRows = (entries?.length ? entries : (overview.recent_entries || [])).slice(0, 5);
 
+    // Overview uses the same complete set of fields as the RAOD Transactions table,
+    // so values entered in the form can be reviewed without opening another submodule.
+    // Keep the table horizontally scrollable because the form contains many fields.
     const recentColumns = [
-      { key: "registry_no", label: "REGISTRY NO.", render: r => <span className="font-semibold text-[#10245b]">{r.registry_no || "—"}</span> },
-      { key: "entry_date", label: "DATE", render: r => dateText(r.entry_date) },
-      { key: "fund", label: "FUND", render: r => r.fund_source_name || r.fund_source_code || "Main Fund" },
-      { key: "responsibility_center_name", label: "DEPARTMENT / RC", render: r => r.responsibility_center_name || "—" },
-      { key: "payee", label: "PAYEE", render: r => r.payee || "—" },
-      { key: "particulars", label: "PARTICULARS", render: r => <span className="block max-w-[260px] truncate">{r.particulars || "—"}</span> },
-      { key: "obligation_amount", label: "OBLIGATION", render: r => money(r.obligation_amount) },
-      { key: "disbursement_amount", label: "DISBURSEMENT", render: r => money(r.disbursement_amount) },
-      { key: "entry_status", label: "STATUS", render: r => <Status value={r.entry_status || r.status} /> },
-      { key: "actions", label: "ACTIONS", render: r => (
-        <div className="flex items-center gap-1">
-          <button type="button" title="View" onClick={() => { setSelected(r); setModal("view"); }} className="rounded-md border border-slate-200 bg-white p-1.5 text-slate-500 hover:border-blue-200 hover:text-blue-600">
-            <Eye className="h-3.5 w-3.5" />
-          </button>
-          <button type="button" title="Audit Trail" onClick={async () => { setSelected(r); await loadAudit(r.id); setModal("audit"); }} className="rounded-md border border-slate-200 bg-white p-1.5 text-slate-500 hover:border-blue-200 hover:text-violet-600">
-            <RefreshCw className="h-3.5 w-3.5" />
-          </button>
-          {canEditExisting && <button type="button" title="Edit" onPointerDown={(e) => handleEditClick(e, r)} onClick={(e) => handleEditClick(e, r)} className="relative z-30 pointer-events-auto rounded-md border border-slate-200 bg-white p-1.5 text-slate-500 hover:border-blue-200 hover:text-blue-600"><Pencil className="h-3.5 w-3.5" /></button>}
-          <button type="button" title="Delete" onClick={() => setDeleteTarget(r)} className="rounded-md border border-red-100 bg-white p-1.5 text-red-500 hover:bg-red-50">
-            <Trash2 className="h-3.5 w-3.5" />
-          </button>
-        </div>
-      ) },
-    ];
+      ...entryColumns.filter(column => column.key !== "actions"),
+      entryColumns.find(column => column.key === "actions"),
+    ].filter(Boolean);
 
     return (
       <>
@@ -1397,17 +1658,6 @@ function RaodRegistry({ user, onLogout, onNavigate, activePath }) {
           </div>
         </div>
 
-        {/* MAIN MODULES */}
-        <div className="mb-5">
-          <div className="mb-3">
-            <h2 className="text-[18px] font-extrabold text-[#10245b]">MODULES</h2>
-            <p className="mt-0.5 text-[12px] text-slate-500">Quick access to RAOD functions.</p>
-          </div>
-          <div className="grid grid-cols-1 items-stretch gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            {cardData.map(item => <CardButton key={item.id} item={item} onClick={openView} />)}
-          </div>
-        </div>
-
         {/* RECENT TRANSACTIONS */}
         <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
           <div className="flex flex-col gap-3 border-b border-slate-100 px-4 py-4 lg:flex-row lg:items-center lg:justify-between">
@@ -1441,16 +1691,17 @@ function RaodRegistry({ user, onLogout, onNavigate, activePath }) {
   };
   const renderTransactions = () => (
     <>
-      <BackBar title="4. RAOD Transactions" onBack={backHome} />
+      <BackBar title="RAOD Transactions" onBack={backHome} />
       <div className="mb-3 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-[9px] text-blue-700">Role: <b>{role || "Unknown"}</b> &nbsp;→&nbsp; {role === "Budget" ? "WFP / Budget" : role === "Procurement" ? "Procurement References" : role === "Accountant" ? "Accounting Entries" : "RAOD Administration"} &nbsp;→&nbsp; RAOD Transactions • Fund 101 &nbsp;→&nbsp; Database / Audit Log &nbsp;→&nbsp; Monitoring / Reports • 30 rows per page</div>
       <div className="mb-4 grid grid-cols-1 gap-2 md:grid-cols-12">
-        <div className="relative md:col-span-5">
+        <div className="relative min-w-0 md:col-span-7">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-          <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search registry, ORS serial no., payee, particulars..." className="pl-9" />
+          <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search registry no., ORS serial no., payee, particulars..." className="w-full pl-9" />
         </div>
-        <div className="md:col-span-2"><Input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} /></div>
-        <div className="md:col-span-2"><Input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} /></div>
-        <button type="button" onClick={() => loadEntries(1)} className="flex h-9 items-center justify-center gap-1 rounded-lg border border-slate-200 bg-white text-[10px] font-bold text-slate-600"><RefreshCw className="h-3.5 w-3.5" /> Refresh</button>
+        <div className="min-w-0 md:col-span-2">
+          <Input type="date" value={dateFilter} onChange={e => { setDateFilter(e.target.value); setPage(1); }} aria-label="Filter transactions by date" className="h-9 w-full text-[10px]" />
+        </div>
+        <button type="button" onClick={() => loadEntries(1)} className="flex h-9 items-center justify-center gap-1 rounded-lg border border-slate-200 bg-white text-[10px] font-bold text-slate-600 md:col-span-1"><RefreshCw className="h-4 w-4 shrink-0" /> Refresh</button>
         {canCreate && <button type="button" onClick={openAdd} className="flex h-9 items-center justify-center gap-1 rounded-lg bg-[#174fd1] text-[10px] font-bold text-white md:col-span-2"><Plus className="h-3.5 w-3.5" /> Add RAOD Transaction</button>}
       </div>
 
@@ -1470,7 +1721,7 @@ function RaodRegistry({ user, onLogout, onNavigate, activePath }) {
         ))}
       </div>
 
-      <Table columns={entryColumns} rows={entries} empty={loading ? "Loading RAOD records..." : "No RAOD records found."} />
+      <Table columns={entryColumns} rows={dateFilter ? entries.filter(r => String(r.entry_date || "").slice(0, 10) === dateFilter) : entries} empty={loading ? "Loading RAOD records..." : "No RAOD records found."} />
       <Pagination
         currentPage={page}
         totalPages={pagination.totalPages}
@@ -1489,100 +1740,109 @@ function RaodRegistry({ user, onLogout, onNavigate, activePath }) {
     ];
     return (
       <>
-        <BackBar title="2. Allotment & Obligation" onBack={backHome} />
-        <div className="mb-4 flex gap-1 rounded-lg border border-slate-100 bg-white p-1 shadow-sm">
-          {[["summary","Summary"],["classes","PS / MOOE / CO"],["details","Allotment Details"],["departments","Per Department / RC"]].map(([id,label]) => <button key={id} onClick={() => { setAllotTab(id); if (id === "departments") { setDepartmentPage(1); loadDepartmentSummary(); } }} type="button" className={`whitespace-nowrap rounded-md px-4 py-2 text-[9px] font-bold ${allotTab === id ? "bg-[#174fd1] text-white" : "text-slate-500"}`}>{label}</button>)}
+        <BackBar title="Allotment & Obligation" onBack={backHome} />
+
+        <SectionTitle title="Summary" text="Allotment, obligation, and remaining balances for the selected fiscal year." />
+        <div className="mb-5 grid grid-cols-2 gap-3 md:grid-cols-4">
+          <Metric label="Allotment" value={money(allotment)} icon={WalletCards} />
+          <Metric label="Obligation" value={money(obligation)} icon={BarChart3} className="bg-amber-50 text-amber-700" />
+          <Metric label="Remaining / Unobligated" value={money(unobligated)} icon={CheckCircle2} className="bg-emerald-50 text-emerald-700" />
+          <Metric label="Undisbursed Obligation" value={money(undisbursed)} icon={ArrowDownToLine} className="bg-violet-50 text-violet-700" />
         </div>
-        {allotTab === "summary" && (
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-            <Metric label="Allotment" value={money(allotment)} icon={WalletCards} />
-            <Metric label="Obligation" value={money(obligation)} icon={BarChart3} className="bg-amber-50 text-amber-700" />
-            <Metric label="Remaining / Unobligated" value={money(unobligated)} icon={CheckCircle2} className="bg-emerald-50 text-emerald-700" />
-            <Metric label="Undisbursed Obligation" value={money(undisbursed)} icon={ArrowDownToLine} className="bg-violet-50 text-violet-700" />
-          </div>
-        )}
-        {allotTab === "classes" && (
+
+        <section className="mb-5 rounded-xl border border-slate-100 bg-white p-4 shadow-sm">
+          <SectionTitle title="PS / MOOE / CO" text="Obligations grouped by allotment class." />
           <Table columns={[
             { key: "label", label: "ALLOTMENT CLASS" },
             { key: "value", label: "AMOUNT", render: r => money(r.value) },
             { key: "pct", label: "% OF ALLOTMENT", render: r => `${pct(r.value, allotment).toFixed(2)}%` },
           ]} rows={rows} />
-        )}
-        {allotTab === "details" && (
-          <>
-            <Table columns={entryColumns.slice(0, 8)} rows={entries} empty="No allotment details found." />
-            <Pagination
-              currentPage={page}
-              totalPages={pagination.totalPages}
-              totalItems={pagination.totalItems}
-              pageSize={LIMIT}
-              onPageChange={loadEntries}
-            />
-          </>
-        )}
-        {allotTab === "departments" && (
-          <div className="space-y-4">
-            <SectionTitle title="Allotment & Obligation by Department / Responsibility Center" text="Select a department / responsibility center to view its actual RAOD transactions." />
-            <Table columns={[
-              { key: "code", label: "RC CODE" },
-              { key: "name", label: "DEPARTMENT / RESPONSIBILITY CENTER" },
-              { key: "allotment", label: "ALLOTMENT", render: r => money(r.allotment) },
-              { key: "obligation", label: "OBLIGATION", render: r => money(r.obligation) },
-              { key: "disbursement", label: "DISBURSEMENT", render: r => money(r.disbursement) },
-              { key: "unobligated", label: "UNOBLIGATED", render: r => money(r.unobligated) },
-              { key: "unpaid_obligation", label: "UNPAID OBLIGATION", render: r => money(r.unpaid_obligation) },
-            ]} rows={departmentRows.slice((departmentPage - 1) * DEPARTMENT_PAGE_SIZE, departmentPage * DEPARTMENT_PAGE_SIZE)} empty="No Department / Responsibility Center records found." />
-            <Pagination
-              currentPage={departmentPage}
-              totalPages={Math.max(1, Math.ceil(departmentRows.length / DEPARTMENT_PAGE_SIZE))}
-              totalItems={departmentRows.length}
-              pageSize={DEPARTMENT_PAGE_SIZE}
-              onPageChange={setDepartmentPage}
-            />
-            {selectedDepartment && (
-              <div className="rounded-xl border border-blue-100 bg-blue-50/50 p-4">
-                <div className="mb-3 flex items-center justify-between gap-3">
-                  <div><p className="text-[9px] font-bold uppercase tracking-wide text-blue-600">Selected Department / RC</p><h3 className="mt-1 text-sm font-extrabold text-[#10245b]">{selectedDepartment.code ? `${selectedDepartment.code} — ` : ""}{selectedDepartment.name}</h3></div>
-                  <button type="button" onClick={() => setSelectedDepartment(null)} className="rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-[9px] font-bold text-slate-600">Close</button>
-                </div>
-                <Table columns={entryColumns} rows={departmentEntries} empty="No RAOD transactions for this responsibility center." />
-                <Pagination
-                  currentPage={departmentPagination.currentPage}
-                  totalPages={departmentPagination.totalPages}
-                  totalItems={departmentPagination.totalItems}
-                  pageSize={LIMIT}
-                  onPageChange={(nextPage) => loadDepartmentEntries(selectedDepartment.id, nextPage)}
-                />
+        </section>
+
+        <section className="mb-5 rounded-xl border border-slate-100 bg-white p-4 shadow-sm">
+          <SectionTitle title="Allotment Details" text="RAOD records and obligation details for the selected fiscal year." />
+          <Table columns={entryColumns.slice(0, 8)} rows={entries} empty="No allotment details found." />
+          <Pagination
+            currentPage={page}
+            totalPages={pagination.totalPages}
+            totalItems={pagination.totalItems}
+            pageSize={LIMIT}
+            onPageChange={loadEntries}
+          />
+        </section>
+
+        <section className="mb-5 rounded-xl border border-slate-100 bg-white p-4 shadow-sm">
+          <SectionTitle title="Per Department / RC" text="Allotment, obligation, disbursement, and balances by department or responsibility center." />
+          <Table columns={[
+            { key: "code", label: "RC CODE" },
+            { key: "name", label: "DEPARTMENT / RESPONSIBILITY CENTER" },
+            { key: "allotment", label: "ALLOTMENT", render: r => money(r.allotment) },
+            { key: "obligation", label: "OBLIGATION", render: r => money(r.obligation) },
+            { key: "disbursement", label: "DISBURSEMENT", render: r => money(r.disbursement) },
+            { key: "unobligated", label: "UNOBLIGATED", render: r => money(r.unobligated) },
+            { key: "unpaid_obligation", label: "UNPAID OBLIGATION", render: r => money(r.unpaid_obligation) },
+          ]} rows={departmentRows.slice((departmentPage - 1) * DEPARTMENT_PAGE_SIZE, departmentPage * DEPARTMENT_PAGE_SIZE)} empty="No Department / Responsibility Center records found." />
+          <Pagination
+            currentPage={departmentPage}
+            totalPages={Math.max(1, Math.ceil(departmentRows.length / DEPARTMENT_PAGE_SIZE))}
+            totalItems={departmentRows.length}
+            pageSize={DEPARTMENT_PAGE_SIZE}
+            onPageChange={setDepartmentPage}
+          />
+          {selectedDepartment && (
+            <div className="mt-4 rounded-xl border border-blue-100 bg-blue-50/50 p-4">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div><p className="text-[9px] font-bold uppercase tracking-wide text-blue-600">Selected Department / RC</p><h3 className="mt-1 text-sm font-extrabold text-[#10245b]">{selectedDepartment.code ? `${selectedDepartment.code} — ` : ""}{selectedDepartment.name}</h3></div>
+                <button type="button" onClick={() => setSelectedDepartment(null)} className="rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-[9px] font-bold text-slate-600">Close</button>
               </div>
-            )}
-          </div>
-        )}
+              <Table columns={entryColumns} rows={departmentEntries} empty="No RAOD transactions for this responsibility center." />
+              <Pagination
+                currentPage={departmentPagination.currentPage}
+                totalPages={departmentPagination.totalPages}
+                totalItems={departmentPagination.totalItems}
+                pageSize={LIMIT}
+                onPageChange={(nextPage) => loadDepartmentEntries(selectedDepartment.id, nextPage)}
+              />
+            </div>
+          )}
+        </section>
       </>
     );
   };
 
   const renderFundRegistry = () => (
     <>
-      <BackBar title="3. Fund Registries — 101 General Fund" onBack={backHome} />
-      <div className="mb-4 rounded-xl border border-blue-100 bg-blue-50 p-4">
+      <BackBar title="Fund Registries — 101 General Fund" onBack={backHome} />
+      <div className="mb-5 rounded-xl border border-blue-100 bg-blue-50 p-4">
         <p className="text-[9px] font-bold uppercase tracking-wide text-blue-600">Fund Registry</p>
         <p className="mt-1 text-lg font-extrabold text-[#10245b]">101 — GENERAL FUND</p>
         <p className="text-[10px] text-slate-500">Centralized RAOD registry for the General Fund.</p>
       </div>
-      <div className="mb-4 flex gap-1 rounded-lg border border-slate-100 bg-white p-1 shadow-sm">
-        {[["overview","Overview"],["transactions","Transactions"],["gaa","GAA Balance"],["wfp","WFP Balance"],["reports","Reports"]].map(([id,label]) => <button key={id} type="button" onClick={() => setFundTab(id)} className={`rounded-md px-4 py-2 text-[9px] font-bold ${fundTab === id ? "bg-[#174fd1] text-white" : "text-slate-500"}`}>{label}</button>)}
+
+      <SectionTitle title="Fund Overview" text="Fund amount and utilization for the selected fiscal year." />
+      <div className="mb-5 grid grid-cols-2 gap-3 md:grid-cols-4">
+        <Metric label="Fund Amount" value={money(allotment)} icon={WalletCards}/>
+        <Metric label="Obligations" value={money(obligation)} icon={BarChart3} className="bg-amber-50 text-amber-700"/>
+        <Metric label="Disbursements" value={money(disbursement)} icon={ArrowDownToLine} className="bg-violet-50 text-violet-700"/>
+        <Metric label="Unobligated" value={money(unobligated)} icon={CheckCircle2} className="bg-emerald-50 text-emerald-700"/>
       </div>
-      {fundTab === "overview" && <div className="grid grid-cols-2 gap-3 md:grid-cols-4"><Metric label="Fund Amount" value={money(allotment)} icon={WalletCards}/><Metric label="Obligations" value={money(obligation)} icon={BarChart3} className="bg-amber-50 text-amber-700"/><Metric label="Disbursements" value={money(disbursement)} icon={ArrowDownToLine} className="bg-violet-50 text-violet-700"/><Metric label="Unobligated" value={money(unobligated)} icon={CheckCircle2} className="bg-emerald-50 text-emerald-700"/></div>}
-      {fundTab === "transactions" && <Table columns={entryColumns} rows={moduleData.entries || entries} />}
-      {fundTab === "gaa" && <BalancePanel title="GAA Balance" allotment={allotment} obligation={obligation} disbursement={disbursement} remaining={unobligated} />}
-      {fundTab === "wfp" && <BalancePanel title="WFP Balance" allotment={allotment} obligation={obligation} disbursement={disbursement} remaining={unobligated} />}
-      {fundTab === "reports" && <ReportList onGenerate={x => { setReportType(x); setModal("report"); }} />}
+
+      <section className="mb-5 rounded-xl border border-slate-100 bg-white p-4 shadow-sm">
+        <SectionTitle title="Transactions" text="RAOD entries recorded under General Fund 101." />
+        <Table columns={entryColumns} rows={moduleData.entries || entries} empty="No fund transactions found." />
+      </section>
+
+      <div className="mb-5 grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <BalancePanel title="GAA Balance" allotment={allotment} obligation={obligation} disbursement={disbursement} remaining={unobligated} />
+        <BalancePanel title="WFP Balance" allotment={allotment} obligation={obligation} disbursement={disbursement} remaining={unobligated} />
+      </div>
+
     </>
   );
 
   const renderMonitoring = () => (
     <>
-      <BackBar title="5. Disbursement & Balance" onBack={backHome} />
+      <BackBar title="Disbursement & Balance" onBack={backHome} />
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <Metric label="Total Allotment" value={money(allotment)} icon={WalletCards} />
         <Metric label="Total Obligations" value={money(obligation)} icon={BarChart3} className="bg-amber-50 text-amber-700" />
@@ -1619,7 +1879,7 @@ function RaodRegistry({ user, onLogout, onNavigate, activePath }) {
     const rows = moduleData.rows || [];
     return (
       <>
-        <BackBar title="6. Fund / RC Breakdown" onBack={backHome} />
+        <BackBar title="Fund / RC Breakdown" onBack={backHome} />
         <SectionTitle title="General Fund / Responsibility Center Breakdown" text="RAOD totals by responsibility center for the selected fiscal year." />
         <Table columns={[
           { key: "code", label: "RC CODE" },
@@ -1658,56 +1918,69 @@ function RaodRegistry({ user, onLogout, onNavigate, activePath }) {
     reportDefinitions.find(r => r.code === "ACCOUNTING TRANSACTIONS"),
   ].filter(Boolean);
 
-  const selectedReportDefinition = reportDefinitions.find(r => r.code === reportType) || reportDefinitions[0];
+  // Administration and Budget can access every RAOD report, including
+  // Financial Accountability, Procurement, and Accounting reports.
+  // Procurement and Accountant remain limited to their role-specific reports.
+  const normalizedReportRole = normalizeRaodRole(role);
+  const visibleReportDefinitions = ["Administration", "Budget"].includes(normalizedReportRole)
+    ? reportDefinitions
+    : raodRestrictedRole(normalizedReportRole)
+      ? reportDefinitions.filter(r => (RAOD_ROLE_REPORTS[normalizedReportRole] || []).includes(r.code))
+      : reportDefinitions;
+  const visibleTopReportDefinitions = (raodRestrictedRole(normalizedReportRole))
+    ? visibleReportDefinitions
+    : topReportDefinitions;
+  const selectedReportDefinition = visibleReportDefinitions.find(r => r.code === reportType) || visibleReportDefinitions[0] || reportDefinitions[0];
   const reportRows = useMemo(() => {
     const safe = Array.isArray(reportEntries) ? reportEntries : [];
     if (reportType === "PROCUREMENT TRANSACTIONS" || reportType === "PROCUREMENT ACCOUNTABILITY") {
-      return safe.filter(r => [r.po_no,r.iar_no,r.par_no,r.ics_no,r.ris_no,r.po_status].some(v => String(v || "").trim() !== ""));
+      return safe.filter(r => [r.po_no,r.po_date,r.supplier_payee,r.po_amount,r.air_far_reference,r.iar_no,r.par_no,r.ics_no,r.ris_no,r.po_status,r.status_of_po,r.procurement_remarks].some(v => String(v ?? "").trim() !== ""));
     }
-    if (reportType === "PO STATUS") return safe.filter(r => String(r.po_no || "").trim() !== "" || String(r.po_status || "").trim() !== "");
+    if (reportType === "PO STATUS") return safe.filter(r => [r.po_no,r.po_date,r.supplier_payee,r.po_status,r.status_of_po,r.iar_no,r.par_no,r.ics_no,r.ris_no,r.air_far_reference].some(v => String(v ?? "").trim() !== ""));
     if (reportType === "ACCOUNTING TRANSACTIONS") return safe.filter(r => Number(r.obligation_amount || 0) > 0 || Number(r.disbursement_amount || 0) > 0 || String(r.dv_payroll_no || "").trim() !== "");
     if (reportType === "OBLIGATION & DISBURSEMENT") return safe.filter(r => Number(r.obligation_amount || 0) > 0 || Number(r.disbursement_amount || 0) > 0);
     if (reportType === "UNPAID OBLIGATIONS") return safe.filter(r => Number(r.unpaid_obligation || 0) > 0);
     return safe;
   }, [reportEntries, reportType]);
+  useEffect(() => {
+    const normalized = normalizeRaodRole(role);
+    if (!raodRestrictedRole(normalized)) return;
+    const allowedReports = RAOD_ROLE_REPORTS[normalized] || [];
+    if (!allowedReports.includes(reportType)) {
+      setReportType(allowedReports[0] || "");
+      setReportPage(1);
+    }
+  }, [role, reportType]);
   const reportPageCount = Math.max(1, Math.ceil(reportRows.length / LIMIT));
   const reportPageRows = reportRows.slice((reportPage - 1) * LIMIT, reportPage * LIMIT);
 
   const renderFinancialReports = () => (
     <>
-      <BackBar title="7. Financial Accountability Reports" onBack={backHome} />
+      <BackBar title="Financial Accountability Reports" onBack={backHome} />
       <div className="space-y-4">
         <div className="rounded-xl border border-red-100 bg-white p-4 shadow-sm">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div className="min-w-0">
-              <p className="text-[9px] font-bold uppercase tracking-widest text-red-500">Official Financial & Accountability Reports</p>
-              <h2 className="mt-1 text-base font-extrabold text-[#10245b]">General Fund / Fund Cluster 101 • FY {selectedFiscalYear}</h2>
+              <h2 className="mt-1 text-base font-extrabold text-[#10245b]">General Fund / Fund Cluster 101</h2>
               <p className="mt-1 max-w-3xl text-[10px] leading-4 text-slate-500">Select a report below. Financial, Procurement, and Accounting reports are available in one official report section. Screen copies retain accountability details where applicable; official print/PDF copies are clean office reports without Entered By / Updated By.</p>
             </div>
-            <div className="flex shrink-0 gap-2">
+            {(!raodRestrictedRole(role) || reportRows.length > 0) && <div className="flex shrink-0 gap-2">
               <button type="button" onClick={() => printReport(reportType, reportRows, selectedFiscalYear)} className="rounded-lg border border-slate-200 px-3 py-2 text-[10px] font-bold text-slate-600"><Printer className="mr-1 inline h-3.5 w-3.5"/>Print / Save PDF</button>
               <button type="button" onClick={() => downloadReportCsv(reportType, reportRows, selectedFiscalYear)} className="rounded-lg bg-[#174fd1] px-3 py-2 text-[10px] font-bold text-white"><FileSpreadsheet className="mr-1 inline h-3.5 w-3.5"/>Export Excel</button>
-            </div>
+            </div>}
           </div>
+          {raodRestrictedRole(role) && reportRows.length === 0 && <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[10px] text-amber-800"><b>Restricted / no report data:</b> Walang available na {role === "Procurement" ? "procurement reference" : "accounting transaction"} records para sa napiling report at fiscal year. Hindi muna available ang Print / Export hanggang may kaukulang records.</div>}
         </div>
 
-        {/* All primary reports are intentionally displayed together at the top. */}
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
-          {topReportDefinitions.map(item => (
-            <button
-              key={item.code}
-              type="button"
-              onClick={() => { setReportType(item.code); setReportPage(1); }}
-              className={`min-h-[132px] rounded-xl border p-4 text-left shadow-sm transition ${reportType === item.code ? "border-[#174fd1] bg-blue-50" : "border-slate-100 bg-white hover:border-blue-200 hover:shadow-md"}`}
-            >
-              <div className="flex items-start justify-between gap-2">
-                <span className="text-[11px] font-extrabold leading-4 text-[#10245b]">{item.title}</span>
-                <item.icon className={`h-5 w-5 shrink-0 ${reportType === item.code ? "text-[#174fd1]" : "text-slate-400"}`} />
-              </div>
-              <p className="mt-2 text-[9px] leading-4 text-slate-500">{item.desc}</p>
-              <p className="mt-4 text-[9px] font-bold text-[#174fd1]">VIEW REPORT →</p>
-            </button>
-          ))}
+        <div className="rounded-xl border border-slate-100 bg-white p-4 shadow-sm">
+          <div className="mb-3 border-b border-slate-100 pb-3">
+            <h3 className="text-[12px] font-extrabold text-[#10245b]">Report Filters</h3>
+            <p className="mt-0.5 text-[9px] text-slate-400">Choose the report and fiscal year for the preview below.</p>
+          </div>
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            <Field label="Report Type"><Select value={reportType} onChange={e => { setReportType(e.target.value); setReportPage(1); }}>{visibleReportDefinitions.map(item => <option key={item.code} value={item.code}>{item.title}</option>)}</Select></Field>
+            <Field label="Fiscal Year"><Select value={selectedFiscalYear} onChange={e => { setSelectedFiscalYear(Number(e.target.value)); setReportPage(1); }}><option value={2026}>FY 2026</option></Select></Field>
+          </div>
         </div>
 
         <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
@@ -1718,8 +1991,10 @@ function RaodRegistry({ user, onLogout, onNavigate, activePath }) {
           <Metric label="Records" value={reportRows.length} icon={FileText} className="bg-slate-100 text-slate-700"/>
         </div>
 
-        <ReportPreview title={reportType} entries={reportPageRows} allEntries={reportRows} fiscalYear={selectedFiscalYear} />
-        <Pagination currentPage={reportPage} totalPages={reportPageCount} totalItems={reportRows.length} pageSize={LIMIT} onPageChange={setReportPage} />
+        {(!raodRestrictedRole(role) || reportRows.length > 0) && <>
+          <ReportPreview title={reportType} entries={reportPageRows} allEntries={reportRows} fiscalYear={selectedFiscalYear} />
+          <Pagination currentPage={reportPage} totalPages={reportPageCount} totalItems={reportRows.length} pageSize={LIMIT} onPageChange={setReportPage} />
+        </>}
       </div>
     </>
   );
@@ -1742,7 +2017,7 @@ function RaodRegistry({ user, onLogout, onNavigate, activePath }) {
 
   const renderMaster = () => (
     <>
-      <BackBar title="8. Reference / Master Data" onBack={backHome} />
+      <BackBar title="Reference / Master Data" onBack={backHome} />
       <div className="mb-4 flex gap-1 overflow-x-auto rounded-lg border border-slate-100 bg-white p-1 shadow-sm">
         {Object.keys(masterLists).map(id => <button key={id} type="button" onClick={() => setMasterTab(id)} className={`whitespace-nowrap rounded-md px-3 py-2 text-[9px] font-bold ${masterTab === id ? "bg-[#174fd1] text-white" : "text-slate-500"}`}>{id.replaceAll("_"," ").toUpperCase()}</button>)}
       </div>
@@ -1752,7 +2027,7 @@ function RaodRegistry({ user, onLogout, onNavigate, activePath }) {
 
   const renderOverview = () => (
     <>
-      <BackBar title="1. Overview" onBack={backHome} />
+      <BackBar title="Overview" onBack={backHome} />
 
       <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
         <Metric label="Total Allotment" value={money(allotment)} icon={WalletCards} />
@@ -1802,39 +2077,20 @@ function RaodRegistry({ user, onLogout, onNavigate, activePath }) {
 
   const renderReportsExport = () => (
     <>
-      <BackBar title="8. Reports & Export" onBack={backHome} />
+      <BackBar title="Reports & Export" onBack={backHome} />
       <div className="space-y-4">
         <div className="rounded-xl border border-green-100 bg-white p-4 shadow-sm">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div className="min-w-0">
-              <p className="text-[9px] font-bold uppercase tracking-widest text-green-600">Reports & Export Center</p>
-              <h2 className="mt-1 text-base font-extrabold text-[#10245b]">General Fund / Fund Cluster 101 • FY {selectedFiscalYear}</h2>
+              <h2 className="mt-1 text-base font-extrabold text-[#10245b]">General Fund / Fund Cluster 101</h2>
               <p className="mt-1 max-w-3xl text-[10px] leading-4 text-slate-500">Official financial, procurement, and accounting reports are consolidated into one report area. This avoids duplicate report containers while keeping the President's Office view simple and organized.</p>
             </div>
-            <div className="flex shrink-0 gap-2">
+            {(!raodRestrictedRole(role) || reportRows.length > 0) && <div className="flex shrink-0 gap-2">
               <button type="button" onClick={() => printReport(reportType, reportRows, selectedFiscalYear)} className="rounded-lg border border-slate-200 px-3 py-2 text-[10px] font-bold text-slate-600"><Printer className="mr-1 inline h-3.5 w-3.5"/>Print / Save PDF</button>
               <button type="button" onClick={() => downloadReportCsv(reportType, reportRows, selectedFiscalYear)} className="rounded-lg bg-[#174fd1] px-3 py-2 text-[10px] font-bold text-white"><FileSpreadsheet className="mr-1 inline h-3.5 w-3.5"/>Export Excel</button>
-            </div>
+            </div>}
           </div>
-        </div>
-
-        {/* Five official report containers only — no duplicate Procurement/Accounting cards below. */}
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
-          {topReportDefinitions.map(item => (
-            <button
-              key={item.code}
-              type="button"
-              onClick={() => { setReportType(item.code); setReportPage(1); }}
-              className={`min-h-[132px] rounded-xl border p-4 text-left shadow-sm transition ${reportType === item.code ? "border-[#174fd1] bg-blue-50" : "border-slate-100 bg-white hover:border-blue-200 hover:shadow-md"}`}
-            >
-              <div className="flex items-start justify-between gap-2">
-                <span className="text-[11px] font-extrabold leading-4 text-[#10245b]">{item.title}</span>
-                <item.icon className={`h-5 w-5 shrink-0 ${reportType === item.code ? "text-[#174fd1]" : "text-slate-400"}`} />
-              </div>
-              <p className="mt-2 text-[9px] leading-4 text-slate-500">{item.desc}</p>
-              <p className="mt-4 text-[9px] font-bold text-[#174fd1]">VIEW REPORT →</p>
-            </button>
-          ))}
+          {raodRestrictedRole(role) && reportRows.length === 0 && <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[10px] text-amber-800"><b>Restricted / no report data:</b> Walang available na {role === "Procurement" ? "procurement reference" : "accounting transaction"} records para sa napiling report at fiscal year. Hindi muna available ang Print / Export hanggang may kaukulang records.</div>}
         </div>
 
         <div className="rounded-xl border border-slate-100 bg-white p-4 shadow-sm">
@@ -1843,19 +2099,26 @@ function RaodRegistry({ user, onLogout, onNavigate, activePath }) {
             <p className="mt-0.5 text-[9px] text-slate-400">Choose the report and fiscal year for the preview below.</p>
           </div>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-            <Field label="Report Type"><Select value={reportType} onChange={e => { setReportType(e.target.value); setReportPage(1); }}><option>FAR 1</option><option>FAR 1A</option><option>SARONCA</option><option>PROCUREMENT TRANSACTIONS</option><option>ACCOUNTING TRANSACTIONS</option></Select></Field>
+            <Field label="Report Type"><Select value={reportType} onChange={e => { setReportType(e.target.value); setReportPage(1); }}>{visibleReportDefinitions.map(item => <option key={item.code} value={item.code}>{item.title}</option>)}</Select></Field>
             <Field label="Fiscal Year"><Select value={selectedFiscalYear} onChange={e => { setSelectedFiscalYear(Number(e.target.value)); setReportPage(1); }}><option value={2026}>FY 2026</option></Select></Field>
           </div>
         </div>
 
-        <ReportPreview title={reportType} entries={reportPageRows} allEntries={reportRows} fiscalYear={selectedFiscalYear} />
-        <Pagination currentPage={reportPage} totalPages={reportPageCount} totalItems={reportRows.length} pageSize={LIMIT} onPageChange={setReportPage} />
+        {(!raodRestrictedRole(role) || reportRows.length > 0) && <>
+          <ReportPreview title={reportType} entries={reportPageRows} allEntries={reportRows} fiscalYear={selectedFiscalYear} />
+          <Pagination currentPage={reportPage} totalPages={reportPageCount} totalItems={reportRows.length} pageSize={LIMIT} onPageChange={setReportPage} />
+        </>}
       </div>
     </>
   );
 
   const renderView = () => {
-    if (view === "home") return renderHome();
+    if (String(view).startsWith("restricted:")) {
+      const blocked = String(view).split(":")[1] || "module";
+      const blockedTitle = (cardData.find(c => c.id === blocked)?.title || ({ dashboard: "Overview", home: "Overview", "allotment-budget": "Allotment & Obligation", "fund-registry": "Fund Registries", monitoring: "Disbursement & Balance", "fund-rc-breakdown": "Fund / RC Breakdown" }[blocked] || blocked.replaceAll("-", " "))).replace(/^\s*\d+\s*[.)-]?\s*/, "").trim();
+      return <div className="rounded-xl border border-amber-200 bg-white p-6 shadow-sm"><div className="flex items-start gap-3"><div className="rounded-lg bg-amber-100 p-2 text-amber-700"><ShieldAlert className="h-5 w-5" /></div><div><h2 className="text-base font-extrabold text-[#10245b]">Access Restricted</h2><p className="mt-1 text-sm font-semibold text-slate-700">{blockedTitle}</p><p className="mt-2 max-w-2xl text-xs leading-5 text-slate-600">The {role} role can access only RAOD Transactions and reports intended for {role === "Procurement" ? "Procurement" : "Accounting"}. This submodule is not available to your role.</p><button type="button" onClick={() => openView("transactions")} className="mt-4 rounded-lg bg-[#174fd1] px-4 py-2 text-xs font-bold text-white">Go to RAOD Transactions</button></div></div></div>;
+    }
+    if (view === "home") return raodRestrictedRole(role) ? renderTransactions() : renderHome();
     if (view === "dashboard") return renderOverview();
     if (view === "allotment-budget") return renderAllotment();
     if (view === "fund-registry") return renderFundRegistry();
@@ -1869,6 +2132,15 @@ function RaodRegistry({ user, onLogout, onNavigate, activePath }) {
 
   return (
     <Layout user={user} onLogout={onLogout} activePath={activePath} onNavigate={onNavigate}>
+      <style>{`
+        .registry-action-buttons { display:flex; flex-wrap:nowrap; align-items:center; gap:6px; width:max-content; min-width:max-content; }
+        .registry-action-buttons > button { display:inline-flex; flex:0 0 32px; width:32px; min-width:32px; height:32px; align-items:center; justify-content:center; visibility:visible; opacity:1; }
+        .registry-action-buttons > button svg { display:block; flex:0 0 16px; width:16px; height:16px; min-width:16px; min-height:16px; visibility:visible; opacity:1; }
+        @media (max-width: 768px) {
+          .registry-action-buttons { gap:5px; padding:2px 0; }
+          .registry-action-buttons > button { flex-basis:34px; width:34px; min-width:34px; height:34px; }
+        }
+      `}</style>
       <div className="min-h-full bg-[#f7faff] pb-8">
         {error && (
           <div className="mb-4 flex items-center justify-between rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-[10px] text-red-700">
@@ -1878,7 +2150,22 @@ function RaodRegistry({ user, onLogout, onNavigate, activePath }) {
         {renderView()}
       </div>
 
-      {modal === "form" && <Modal title={editing ? "Edit RAOD Transaction" : "Add RAOD Transaction"} onClose={() => setModal(null)} wide><TransactionForm refs={refs} form={form} setForm={setForm} budgetInfo={budgetInfo} editing={editing} role={role} onSubmit={saveEntry} saving={saving} onClose={() => setModal(null)} /></Modal>}
+      {restrictedModal && (() => {
+        const blockedTitle = (cardData.find(c => c.id === restrictedModal)?.title || ({ dashboard: "Overview", home: "Overview", "allotment-budget": "Allotment & Obligation", "fund-registry": "Fund Registries", monitoring: "Disbursement & Balance", "fund-rc-breakdown": "Fund / RC Breakdown", "financial-reports": "Financial Accountability Reports", "reports-export": "Reports & Export" }[restrictedModal] || String(restrictedModal).replaceAll("-", " "))).replace(/^\s*\d+\s*[.)-]?\s*/, "").trim();
+        return <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/35 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="raod-restricted-title">
+          <div className="w-full max-w-md rounded-2xl border border-amber-200 bg-white p-6 shadow-2xl">
+            <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-amber-100 text-amber-700"><ShieldAlert className="h-6 w-6" /></div>
+            <h2 id="raod-restricted-title" className="text-center text-base font-extrabold text-[#10245b]">Access Restricted</h2>
+            <p className="mt-2 text-center text-sm font-bold text-slate-700">{blockedTitle}</p>
+            <p className="mt-2 text-center text-xs leading-5 text-slate-600">The <b>{role || "current"}</b> role is not authorized to access this submodule. Its content is locked and cannot be viewed or modified with this account.</p>
+            <div className="mt-5 flex justify-center">
+              <button type="button" onClick={() => { setRestrictedModal(null); setError(""); setView("transactions"); window.dispatchEvent(new CustomEvent("bmas-raod-open-view", { detail: { view: "transactions", source: "restricted-redirect" } })); window.scrollTo({ top: 0, behavior: "smooth" }); }} className="rounded-lg bg-[#174fd1] px-5 py-2.5 text-xs font-bold text-white hover:bg-blue-700">Go to RAOD Transactions</button>
+            </div>
+          </div>
+        </div>;
+      })()}
+
+      {modal === "form" && <Modal title={editing ? "Edit RAOD Transaction" : "Add RAOD Transaction"} onClose={() => setModal(null)} wide formWide><TransactionForm refs={refs} form={form} setForm={setForm} budgetInfo={budgetInfo} editing={editing} role={role} onSubmit={saveEntry} saving={saving} onClose={() => setModal(null)} error={error} /></Modal>}
 
       {modal === "view" && selected && <Modal title={`RAOD Record — ${selected.registry_no || selected.id}`} onClose={() => setModal(null)} wide>
         <div className="grid grid-cols-1 gap-x-5 gap-y-3 md:grid-cols-3">
@@ -2045,8 +2332,49 @@ function reportLabel(type) {
   };
   return labels[type] || type;
 }
+function raodFullDetailColumns() {
+  return [
+    ["Registry No.", r => r.registry_no], ["Entry Date", r => dateText(r.entry_date)],
+    ["Fiscal Year", r => r.fiscal_year], ["Month", r => r.month], ["Quarter", r => r.quarter],
+    ["Fund Cluster", r => r.fund_cluster_code || r.fund_cluster_name], ["Fund Source", r => r.fund_source_code || r.fund_source_name],
+    ["Campus", r => r.campus_code || r.campus_name], ["ORS Serial No.", r => r.ors_serial_no],
+    ["Serial No. Transferred From/To", r => r.serial_no_transferred_from_to || r.transferred_from_to],
+    ["Payee / Supplier", r => r.payee], ["Responsibility Center", r => r.responsibility_center_name || r.responsibility_center_code],
+    ["PAP / Department", r => r.pap_name || r.pap_department], ["UACS Code", r => r.uacs_code],
+    ["Allotment Class", r => r.allotment_class_name || r.allotment_class_code], ["Object of Expenditure", r => r.object_expenditure_name || r.object_expenditure_code],
+    ["MFO", r => r.mfo_name || r.mfo_code], ["Account Title", r => r.account_title], ["Particulars / Description", r => r.particulars],
+    ["Obligation", r => r.obligation_amount], ["PS Obligation", r => r.ps_obligation], ["MOOE Obligation", r => r.mooe_obligation], ["CO Obligation", r => r.co_obligation],
+    ["Disbursement", r => r.disbursement_amount], ["Unpaid Obligation", r => r.unpaid_obligation], ["Running Balance", r => r.running_balance],
+    ["WFP Source", r => r.wfp_source_code || r.wfp_source_name], ["PO No.", r => r.po_no], ["PO Date", r => dateText(r.po_date)],
+    ["PO Amount", r => r.po_amount], ["Supplier / Payee", r => r.supplier_payee || r.supplier_name || r.payee], ["AIR / FAR Reference", r => r.air_far_reference || r.air_far_no],
+    ["IAR No.", r => r.iar_no], ["PAR No.", r => r.par_no], ["ICS No.", r => r.ics_no], ["IRS / RIS No.", r => r.irs_no || r.ris_no],
+    ["PO Status", r => r.po_status || r.status_of_po], ["DV / Payroll No.", r => r.dv_payroll_no], ["Disbursement Reference / DB No.", r => r.disbursement_reference || r.db_no],
+    ["BURS Serial No.", r => r.burs_serial_no], ["Disbursement Date", r => dateText(r.disbursement_date)], ["Notice of Adjustment", r => r.notice_of_adjustment],
+    ["Adjustment Reason", r => r.adjustment_reason], ["Accounting Status", r => r.accounting_status], ["Reviewed By", r => r.reviewed_by_name || r.reviewed_by],
+    ["Review Date / Time", r => dateText(r.reviewed_at || r.review_date)], ["Procurement Remarks", r => r.procurement_remarks], ["Accounting Remarks", r => r.accounting_remarks], ["Remarks", r => r.remarks]
+  ];
+}
+function isFullDetailReport(type) {
+  return ["PROCUREMENT TRANSACTIONS", "PROCUREMENT ACCOUNTABILITY", "PO STATUS", "ACCOUNTING TRANSACTIONS"].includes(type);
+}
+
 function downloadReportCsv(type, rows, fiscalYear = FY) {
   const data = reportRowsForExport(type, rows);
+  if (isFullDetailReport(type)) {
+    const columns = raodFullDetailColumns();
+    const headers = columns.map(([label]) => label);
+    const body = data.map(r => columns.map(([label, getter]) => {
+      const value = getter(r);
+      if (["Obligation", "PS Obligation", "MOOE Obligation", "CO Obligation", "Disbursement", "Unpaid Obligation", "Running Balance", "PO Amount"].includes(label) && value !== null && value !== undefined && value !== "") return value;
+      return value ?? "";
+    }));
+    const esc=v=>`"${String(v??"").replace(/"/g,'""')}"`;
+    const csv=[headers.map(esc).join(","),...body.map(row=>row.map(esc).join(","))].join("\r\n");
+    const blob=new Blob(["\ufeff"+csv],{type:"text/csv;charset=utf-8;"});
+    const url=URL.createObjectURL(blob); const a=document.createElement("a");
+    a.href=url; a.download=`${type.replace(/\s+/g,"_")}_Fund101_FY${fiscalYear}.csv`; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+    return;
+  }
   let headers;
   let body;
   if (type === "FAR 1A") {
@@ -2056,11 +2384,11 @@ function downloadReportCsv(type, rows, fiscalYear = FY) {
     headers = ["Registry No.","Date","PAP","UACS Code","Reference","Obligation","Disbursement / NCA Utilization","Unpaid Obligation","Fund Cluster"];
     body = data.map(r => [r.registry_no,dateText(r.entry_date),r.pap_name,r.uacs_code,r.ref_no,r.obligation_amount,r.disbursement_amount,r.unpaid_obligation,r.fund_cluster_code || "101"]);
   } else if (type === "PROCUREMENT TRANSACTIONS" || type === "PROCUREMENT ACCOUNTABILITY") {
-    headers = ["Registry No.","Date","Payee","PAP","UACS Code","PO No.","IAR No.","PAR No.","ICS No.","RIS No.","PO Status","Obligation","Disbursement","Unpaid Obligation","Entered By","Updated By"];
-    body = data.map(r => [r.registry_no,dateText(r.entry_date),r.payee,r.pap_name,r.uacs_code,r.po_no,r.iar_no,r.par_no,r.ics_no,r.ris_no,r.po_status,r.obligation_amount,r.disbursement_amount,r.unpaid_obligation,r.procurement_entered_by_name || r.report_entered_by_name || r.entered_by_name,r.procurement_updated_by_name || r.report_updated_by_name || r.updated_by_name]);
+    headers = ["Registry No.","Date","Supplier / Payee","PAP","UACS Code","PO No.","PO Date","PO Amount","AIR / FAR Reference","IAR No.","PAR No.","ICS No.","RIS No.","PO Status","Procurement Remarks","Obligation","Disbursement","Unpaid Obligation","Entered By","Updated By"];
+    body = data.map(r => [r.registry_no,dateText(r.entry_date),r.supplier_payee || r.payee,r.pap_name,r.uacs_code,r.po_no,dateText(r.po_date),r.po_amount,r.air_far_reference,r.iar_no,r.par_no,r.ics_no,r.ris_no,r.po_status || r.status_of_po,r.procurement_remarks,r.obligation_amount,r.disbursement_amount,r.unpaid_obligation,r.procurement_entered_by_name || r.report_entered_by_name || r.entered_by_name,r.procurement_updated_by_name || r.report_updated_by_name || r.updated_by_name]);
   } else if (type === "PO STATUS") {
-    headers = ["Registry No.","Date","Payee","PO No.","PO Status","IAR No.","PAR No.","ICS No.","RIS No.","Obligation","Disbursement","Procurement Entered By","Procurement Updated By"];
-    body = data.map(r => [r.registry_no,dateText(r.entry_date),r.payee,r.po_no,r.po_status,r.iar_no,r.par_no,r.ics_no,r.ris_no,r.obligation_amount,r.disbursement_amount,r.procurement_entered_by_name || r.report_entered_by_name || r.entered_by_name,r.procurement_updated_by_name || r.report_updated_by_name || r.updated_by_name]);
+    headers = ["Registry No.","Date","Supplier / Payee","PO No.","PO Date","PO Amount","AIR / FAR Reference","PO Status","IAR No.","PAR No.","ICS No.","RIS No.","Procurement Remarks","Obligation","Disbursement","Procurement Entered By","Procurement Updated By"];
+    body = data.map(r => [r.registry_no,dateText(r.entry_date),r.supplier_payee || r.payee,r.po_no,dateText(r.po_date),r.po_amount,r.air_far_reference,r.po_status || r.status_of_po,r.iar_no,r.par_no,r.ics_no,r.ris_no,r.procurement_remarks,r.obligation_amount,r.disbursement_amount,r.procurement_entered_by_name || r.report_entered_by_name || r.entered_by_name,r.procurement_updated_by_name || r.report_updated_by_name || r.updated_by_name]);
   } else if (type === "ACCOUNTING TRANSACTIONS") {
     headers = ["Registry No.","Date","Payee","PAP","UACS Code","DV/Payroll No.","Obligation","PS","MOOE","CO","Disbursement","Unpaid Obligation","Balance","Entered By","Updated By"];
     body = data.map(r => [r.registry_no,dateText(r.entry_date),r.payee,r.pap_name,r.uacs_code,r.dv_payroll_no,r.obligation_amount,r.ps_obligation,r.mooe_obligation,r.co_obligation,r.disbursement_amount,r.unpaid_obligation,Math.max(0,Number(r.obligation_amount||0)-Number(r.disbursement_amount||0)),r.accounting_entered_by_name || r.report_entered_by_name || r.entered_by_name,r.accounting_updated_by_name || r.report_updated_by_name || r.updated_by_name]);
@@ -2109,10 +2437,10 @@ function printReport(type, rows, fiscalYear = FY) {
     headers=["RAOD No.","Date","Responsibility Center","PAP","UACS Code","Particulars","Payee","Obligation","Disbursement","Balance"];
     body=data.map(r=>[r.registry_no,dateText(r.entry_date),r.responsibility_center_name,r.pap_name,r.uacs_code,r.particulars,r.payee,money(r.obligation_amount),money(r.disbursement_amount),money(r.unpaid_obligation)]);
   }
-  const html=`<!doctype html><html><head><meta charset="utf-8"><title>${esc(reportLabel(type))} FY ${fiscalYear}</title><style>@page{size:A4 landscape;margin:12mm}*{box-sizing:border-box}body{font-family:Arial,sans-serif;color:#111;font-size:9px;margin:0}.report-header{text-align:center;border-bottom:1px solid #9aa8ba;padding:0 0 9px;margin-bottom:10px}.republic{font-size:9px;margin:0 0 3px}.university{font-size:11px;font-weight:700;margin:0 0 3px}.system{font-size:9px;margin:0 0 5px}.report-title{font-size:13px;font-weight:700;margin:0 0 5px}.meta{font-size:8px;margin:0;color:#333}table{width:100%;border-collapse:collapse;table-layout:auto;margin:10px 0 0}thead{display:table-header-group}tr{break-inside:avoid;page-break-inside:avoid}th,td{border:1px solid #777;padding:4px 5px;vertical-align:top;overflow-wrap:anywhere}th{background:#eef1f5;font-size:8px;font-weight:700;text-align:center}td{font-size:8px}.num{text-align:right;white-space:nowrap}.sign{margin:28px 0 0;display:grid;grid-template-columns:1fr 1fr;gap:36px;break-inside:avoid;page-break-inside:avoid}.signature{text-align:center;font-size:8px;padding-top:22px}.signature-line{border-top:1px solid #222;padding-top:5px;font-weight:700}.signature-note{margin-top:2px;font-size:8px}</style></head><body><header class="report-header"><p class="republic">Republic of the Philippines</p><p class="university">UNIVERSITY OF ABRA</p><p class="system">BUDGET MONITORING AND ALLOCATION SYSTEM</p><h1 class="report-title">${esc(reportLabel(type))}</h1><p class="meta">Fiscal Year ${fiscalYear} • General Fund / Fund Cluster 101</p></header><table><thead><tr>${headers.map(h=>`<th>${esc(h)}</th>`).join("")}</tr></thead><tbody>${body.map(row=>`<tr>${row.map((v,i)=>`<td class="${typeof v === "string" && (v.startsWith("₱") || i>=7)?"num":""}">${esc(v)}</td>`).join("")}</tr>`).join("")}</tbody></table><div class="sign"><div class="signature"><div class="signature-line">Prepared by</div><div class="signature-note">Signature over printed name / Date</div></div><div class="signature"><div class="signature-line">Certified Correct / Approved by</div><div class="signature-note">Signature over printed name / Date</div></div></div></body></html>`;
+  const html=`<!doctype html><html><head><meta charset="utf-8"><title>${esc(reportLabel(type))} FY ${fiscalYear}</title><style>@page{size:A3 landscape;margin:10mm}*{box-sizing:border-box}html,body{width:100%;max-width:100%;margin:0;padding:0;overflow:visible}body{font-family:Arial,sans-serif;color:#111;font-size:8px;padding:0 5mm}.report-header{text-align:center;border-bottom:1px solid #9aa8ba;padding:0 0 9px;margin-bottom:10px}.report-logo{display:block;width:54px;height:54px;object-fit:contain;margin:0 auto 4px}.republic{font-size:9px;margin:0 0 3px}.university{font-size:11px;font-weight:700;margin:0 0 3px}.system{font-size:9px;margin:0 0 5px}.report-title{font-size:13px;font-weight:700;margin:0 0 5px}.meta{font-size:8px;margin:0;color:#333}table{width:100%;max-width:100%;border-collapse:collapse;table-layout:fixed;margin:8px 0 0}thead{display:table-header-group}tr{break-inside:avoid;page-break-inside:avoid}th,td{border:1px solid #777;padding:2px 2px;vertical-align:top;overflow-wrap:anywhere;word-break:break-word;white-space:normal;min-width:0}th{background:#eef1f5;font-size:8px;font-weight:700;text-align:center}td{font-size:8px}.num{text-align:right;white-space:normal;overflow-wrap:anywhere}.sign{margin:24px 0 0;display:grid;grid-template-columns:1fr 1fr;gap:24px;break-inside:avoid;page-break-inside:avoid}.signature{text-align:center;font-size:8px;padding-top:22px}.signature-line{border-top:1px solid #222;padding-top:5px;font-weight:700}.signature-note{margin-top:2px;font-size:7px}@media print{html,body{width:100%;max-width:100%;}body{padding:0 5mm!important;}table{display:table;width:100%!important;max-width:100%!important;table-layout:fixed!important;}th,td{padding:3px!important;font-size:8px!important;overflow-wrap:anywhere!important;word-break:break-word!important;} .report-header{margin-bottom:6px;padding-bottom:5px}.report-logo{width:42px;height:42px}.sign{break-inside:avoid;page-break-inside:avoid}}</style></head><body><header class="report-header"><img class="report-logo" src="${esc(window.location.origin)}/UA_logo.jpg" alt="University of Abra Logo"><p class="republic">Republic of the Philippines</p><p class="university">UNIVERSITY OF ABRA</p><p class="system">BUDGET MONITORING AND ALLOCATION SYSTEM</p><h1 class="report-title">${esc(reportLabel(type))}</h1><p class="meta">Fiscal Year ${fiscalYear} • General Fund / Fund Cluster 101</p></header><table><thead><tr>${headers.map(h=>`<th>${esc(h)}</th>`).join("")}</tr></thead><tbody>${body.map(row=>`<tr>${row.map((v,i)=>`<td class="${typeof v === "string" && (v.startsWith("₱") || i>=7)?"num":""}">${esc(v)}</td>`).join("")}</tr>`).join("")}</tbody></table><div class="sign"><div class="signature"><div class="signature-line">Prepared by</div><div class="signature-note">Signature over printed name / Date</div></div><div class="signature"><div class="signature-line">Certified Correct / Approved by</div><div class="signature-note">Signature over printed name / Date</div></div></div></body></html>`;
   const w=window.open("","_blank","width=1200,height=800");
   if(!w){alert("Please allow pop-ups to print the report.");return;}
-  w.document.write(html); w.document.close(); w.focus(); setTimeout(()=>{w.print();},300);
+  w.document.write(html); w.document.close(); w.focus(); setTimeout(()=>{w.print();},600);
 }
 function ReportList({ onGenerate }) {
   const reports = [
@@ -2138,13 +2466,26 @@ function reportDescription(x) {
 
 function ReportPreview({ title, entries, allEntries = [], fiscalYear = FY }) {
   const data = reportRowsForExport(title, entries);
+  if (isFullDetailReport(title)) {
+    const columns = raodFullDetailColumns();
+    const totalOb = allEntries.reduce((a,r)=>a+Number(r.obligation_amount||0),0);
+    const totalDis = allEntries.reduce((a,r)=>a+Number(r.disbursement_amount||0),0);
+    return <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm print:shadow-none">
+      <div className="border-b border-slate-400 pb-3 text-center text-slate-800"><img src="/UA_logo.jpg" alt="University of Abra Logo" className="mx-auto mb-1 h-12 w-12 object-contain"/><p className="mb-1 text-[10px]">Republic of the Philippines</p><p className="mb-1 text-[11px] font-bold">UNIVERSITY OF ABRA</p><p className="mb-2 text-[10px]">BUDGET MONITORING AND ALLOCATION SYSTEM</p><h2 className="mb-1 text-[13px] font-bold">{reportLabel(title)}</h2><p className="text-[10px] text-slate-600">Fiscal Year {fiscalYear} • General Fund / Fund Cluster 101</p></div>
+      <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4"><Metric label="Records" value={allEntries.length} icon={FileText}/><Metric label="Obligations" value={money(totalOb)} icon={BarChart3} className="bg-amber-50 text-amber-700"/><Metric label="Disbursements" value={money(totalDis)} icon={ArrowDownToLine} className="bg-violet-50 text-violet-700"/><Metric label="Unpaid" value={money(Math.max(0,totalOb-totalDis))} icon={ClipboardList} className="bg-red-50 text-red-700"/></div>
+      <p className="mt-3 text-[10px] text-slate-500">Full transaction details from the RAOD record are shown below. Values display only when returned by the API/database.</p>
+      <div className="mt-4 overflow-x-auto rounded-xl border border-slate-200"><table className="min-w-[3200px] w-full table-auto text-[10px] [&_td]:whitespace-nowrap [&_td]:px-2 [&_td]:py-2 [&_td]:align-top"><thead><tr className="bg-[#102b67] text-white">{columns.map(([label])=><th key={label} className="whitespace-nowrap border-r border-white/10 px-2 py-2 text-left text-[9px] font-bold uppercase" style={{color:"#fff",backgroundColor:"#102b67"}}>{label}</th>)}</tr></thead><tbody className="divide-y divide-slate-200">{data.map((r,i)=><tr key={r.id || i}>{columns.map(([label,getter])=><td key={label}>{["Obligation","PS Obligation","MOOE Obligation","CO Obligation","Disbursement","Unpaid Obligation","Running Balance","PO Amount"].includes(label) && getter(r)!==null && getter(r)!==undefined && getter(r)!=="" ? money(getter(r)) : (getter(r) ?? "—")}</td>)}</tr>)}</tbody></table></div>
+      {entries.length===0 && <div className="py-10 text-center text-[11px] text-slate-400">No report data for the selected fiscal year.</div>}
+      <div className="mt-4 border-t border-slate-100 pt-3 text-[10px] text-slate-500">Use horizontal scrolling to view all columns. Print / Export includes the same transaction detail fields.</div>
+    </div>;
+  }
   const totalOb = allEntries.reduce((a,r)=>a+Number(r.obligation_amount||0),0);
   const totalDis = allEntries.reduce((a,r)=>a+Number(r.disbursement_amount||0),0);
   const renderRows = () => {
     if (title === "FAR 1A") return data.map((r,i)=><tr key={i}><td>{r.object_code}</td><td>{r.object_name}</td><td>{r.uacs_code||"—"}</td><td className="text-right">{money(r.obligation)}</td><td className="text-right">{money(r.disbursement)}</td><td className="text-right">{money(r.unpaid)}</td><td className="text-right">{money(Math.max(0,Number(r.obligation||0)-Number(r.disbursement||0)))}</td><td>{r.report_entered_by_name || r.entered_by_name || "—"}</td><td>{r.report_updated_by_name || r.updated_by_name || "—"}</td></tr>);
     if (title === "SARONCA") return data.map(r=><tr key={r.id}><td>{r.registry_no}</td><td>{dateText(r.entry_date)}</td><td>{r.pap_name||"—"}</td><td>{r.uacs_code||"—"}</td><td>{r.ref_no||"—"}</td><td className="text-right">{money(r.obligation_amount)}</td><td className="text-right">{money(r.disbursement_amount)}</td><td className="text-right">{money(r.unpaid_obligation)}</td><td>{r.report_entered_by_name || r.entered_by_name || "—"}</td><td>{r.report_updated_by_name || r.updated_by_name || "—"}</td></tr>);
-    if (title === "PROCUREMENT TRANSACTIONS" || title === "PROCUREMENT ACCOUNTABILITY") return data.map(r=><tr key={r.id}><td>{r.registry_no}</td><td>{dateText(r.entry_date)}</td><td>{r.payee||"—"}</td><td>{r.pap_name||"—"}</td><td>{r.uacs_code||"—"}</td><td>{r.po_no||"—"}</td><td>{r.iar_no||"—"}</td><td>{r.par_no||"—"}</td><td>{r.ics_no||"—"}</td><td>{r.ris_no||"—"}</td><td>{r.po_status||"—"}</td><td className="text-right">{money(r.obligation_amount)}</td><td className="text-right">{money(r.disbursement_amount)}</td><td className="text-right">{money(r.unpaid_obligation)}</td><td className="sticky right-[160px] z-10 min-w-[160px] bg-white font-semibold text-slate-700">{r.procurement_entered_by_name || "—"}</td><td className="sticky right-0 z-10 min-w-[160px] bg-white font-semibold text-slate-700">{r.procurement_updated_by_name || "—"}</td></tr>);
-    if (title === "PO STATUS") return data.map(r=><tr key={r.id}><td>{r.registry_no}</td><td>{dateText(r.entry_date)}</td><td>{r.payee||"—"}</td><td>{r.po_no||"—"}</td><td>{r.po_status||"—"}</td><td>{r.iar_no||"—"}</td><td>{r.par_no||"—"}</td><td>{r.ics_no||"—"}</td><td>{r.ris_no||"—"}</td><td className="text-right">{money(r.obligation_amount)}</td><td className="text-right">{money(r.disbursement_amount)}</td><td className="sticky right-[160px] z-10 min-w-[160px] bg-white font-semibold text-slate-700">{r.procurement_entered_by_name || "—"}</td><td className="sticky right-0 z-10 min-w-[160px] bg-white font-semibold text-slate-700">{r.procurement_updated_by_name || "—"}</td></tr>);
+    if (title === "PROCUREMENT TRANSACTIONS" || title === "PROCUREMENT ACCOUNTABILITY") return data.map(r=><tr key={r.id}><td>{r.registry_no||"—"}</td><td>{dateText(r.entry_date)}</td><td>{r.supplier_payee||r.payee||"—"}</td><td>{r.pap_name||"—"}</td><td>{r.uacs_code||"—"}</td><td>{r.po_no||"—"}</td><td>{r.po_date?dateText(r.po_date):"—"}</td><td className="text-right">{r.po_amount==null||r.po_amount===""?"—":money(r.po_amount)}</td><td>{r.air_far_reference||"—"}</td><td>{r.iar_no||"—"}</td><td>{r.par_no||"—"}</td><td>{r.ics_no||"—"}</td><td>{r.ris_no||"—"}</td><td>{r.po_status||r.status_of_po||"—"}</td><td>{r.procurement_remarks||"—"}</td><td className="text-right">{money(r.obligation_amount)}</td><td className="text-right">{money(r.disbursement_amount)}</td><td className="text-right">{money(r.unpaid_obligation)}</td><td className="sticky right-[160px] z-10 min-w-[160px] bg-white font-semibold text-slate-700">{r.procurement_entered_by_name || "—"}</td><td className="sticky right-0 z-10 min-w-[160px] bg-white font-semibold text-slate-700">{r.procurement_updated_by_name || "—"}</td></tr>);
+    if (title === "PO STATUS") return data.map(r=><tr key={r.id}><td>{r.registry_no||"—"}</td><td>{dateText(r.entry_date)}</td><td>{r.supplier_payee||r.payee||"—"}</td><td>{r.po_no||"—"}</td><td>{r.po_date?dateText(r.po_date):"—"}</td><td>{r.po_amount==null||r.po_amount===""?"—":money(r.po_amount)}</td><td>{r.air_far_reference||"—"}</td><td>{r.po_status||r.status_of_po||"—"}</td><td>{r.iar_no||"—"}</td><td>{r.par_no||"—"}</td><td>{r.ics_no||"—"}</td><td>{r.ris_no||"—"}</td><td>{r.procurement_remarks||"—"}</td><td className="text-right">{money(r.obligation_amount)}</td><td className="text-right">{money(r.disbursement_amount)}</td><td className="sticky right-[160px] z-10 min-w-[160px] bg-white font-semibold text-slate-700">{r.procurement_entered_by_name || "—"}</td><td className="sticky right-0 z-10 min-w-[160px] bg-white font-semibold text-slate-700">{r.procurement_updated_by_name || "—"}</td></tr>);
     if (title === "ACCOUNTING TRANSACTIONS") return data.map(r=><tr key={r.id}><td>{r.registry_no}</td><td>{dateText(r.entry_date)}</td><td>{r.payee||"—"}</td><td>{r.pap_name||"—"}</td><td>{r.uacs_code||"—"}</td><td>{r.dv_payroll_no||"—"}</td><td className="text-right">{money(r.obligation_amount)}</td><td className="text-right">{money(r.ps_obligation)}</td><td className="text-right">{money(r.mooe_obligation)}</td><td className="text-right">{money(r.co_obligation)}</td><td className="text-right">{money(r.disbursement_amount)}</td><td className="text-right">{money(r.unpaid_obligation)}</td><td className="text-right">{money(Math.max(0,Number(r.obligation_amount||0)-Number(r.disbursement_amount||0)))}</td><td>{r.accounting_entered_by_name || r.report_entered_by_name || r.entered_by_name || "—"}</td><td>{r.accounting_updated_by_name || r.report_updated_by_name || r.updated_by_name || "—"}</td></tr>);
     if (title === "OBLIGATION & DISBURSEMENT") return data.map(r=><tr key={r.id}><td>{r.registry_no}</td><td>{dateText(r.entry_date)}</td><td>{r.payee||"—"}</td><td>{r.dv_payroll_no||"—"}</td><td className="text-right">{money(r.obligation_amount)}</td><td className="text-right">{money(r.disbursement_amount)}</td><td className="text-right">{money(r.unpaid_obligation)}</td><td className="text-right">{money(Math.max(0,Number(r.obligation_amount||0)-Number(r.disbursement_amount||0)))}</td></tr>);
     if (title === "UNPAID OBLIGATIONS") return data.map(r=><tr key={r.id}><td>{r.registry_no}</td><td>{dateText(r.entry_date)}</td><td>{r.payee||"—"}</td><td>{r.pap_name||"—"}</td><td>{r.uacs_code||"—"}</td><td className="text-right">{money(r.obligation_amount)}</td><td className="text-right">{money(r.disbursement_amount)}</td><td className="text-right">{money(r.unpaid_obligation)}</td><td>{r.dv_payroll_no||"—"}</td></tr>);
@@ -2154,9 +2495,9 @@ function ReportPreview({ title, entries, allEntries = [], fiscalYear = FY }) {
   const headers = {
     "FAR 1A":["Object Code","Object of Expenditures","UACS Code","Obligations","Disbursements","Unpaid Obligation","Balance","Entered By","Updated By"],
     "SARONCA":["Registry No.","Date","PAP","UACS Code","Reference","Obligation","Disbursement / NCA Utilization","Unpaid Obligation","Entered By","Updated By"],
-    "PROCUREMENT TRANSACTIONS":["Registry No.","Date","Payee","PAP","UACS","PO No.","IAR No.","PAR No.","ICS No.","RIS No.","PO Status","Obligation","Disbursement","Unpaid Obligation","Procurement Entered By","Procurement Updated By"],
-    "PROCUREMENT ACCOUNTABILITY":["Registry No.","Date","Payee","PAP","UACS","PO No.","IAR No.","PAR No.","ICS No.","RIS No.","PO Status","Obligation","Disbursement","Unpaid Obligation","Procurement Entered By","Procurement Updated By"],
-    "PO STATUS":["Registry No.","Date","Payee","PO No.","PO Status","IAR No.","PAR No.","ICS No.","RIS No.","Obligation","Disbursement","Procurement Entered By","Procurement Updated By"],
+    "PROCUREMENT TRANSACTIONS":["Registry No.","Date","Supplier / Payee","PAP","UACS","PO No.","PO Date","PO Amount","AIR / FAR Reference","IAR No.","PAR No.","ICS No.","RIS No.","PO Status","Procurement Remarks","Obligation","Disbursement","Unpaid Obligation","Procurement Entered By","Procurement Updated By"],
+    "PROCUREMENT ACCOUNTABILITY":["Registry No.","Date","Supplier / Payee","PAP","UACS","PO No.","PO Date","PO Amount","AIR / FAR Reference","IAR No.","PAR No.","ICS No.","RIS No.","PO Status","Procurement Remarks","Obligation","Disbursement","Unpaid Obligation","Procurement Entered By","Procurement Updated By"],
+    "PO STATUS":["Registry No.","Date","Supplier / Payee","PO No.","PO Date","PO Amount","AIR / FAR Reference","PO Status","IAR No.","PAR No.","ICS No.","RIS No.","Procurement Remarks","Obligation","Disbursement","Procurement Entered By","Procurement Updated By"],
     "ACCOUNTING TRANSACTIONS":["Registry No.","Date","Payee","PAP","UACS","DV/Payroll No.","Obligation","PS","MOOE","CO","Disbursement","Unpaid Obligation","Balance","Accounting Entered By","Accounting Updated By"],
     "OBLIGATION & DISBURSEMENT":["Registry No.","Date","Payee","DV/Payroll No.","Obligation","Disbursement","Unpaid Obligation","Balance"],
     "UNPAID OBLIGATIONS":["Registry No.","Date","Payee","PAP","UACS","Obligation","Disbursement","Unpaid Obligation","DV/Payroll No."],
@@ -2166,13 +2507,13 @@ function ReportPreview({ title, entries, allEntries = [], fiscalYear = FY }) {
   const procurementReport = title === "PROCUREMENT TRANSACTIONS" || title === "PROCUREMENT ACCOUNTABILITY" || title === "PO STATUS";
   const tableMinWidth = procurementReport ? "min-w-[1800px]" : (wideTable ? "min-w-[1500px]" : "min-w-[1100px]");
   return <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm print:shadow-none">
-    <div className="border-b border-slate-400 pb-3 text-center text-slate-800"><p className="mb-1 text-[10px] font-normal">Republic of the Philippines</p><p className="mb-1 text-[11px] font-bold">UNIVERSITY OF ABRA</p><p className="mb-2 text-[10px] font-normal">BUDGET MONITORING AND ALLOCATION SYSTEM</p><h2 className="mb-1 text-[13px] font-bold">{reportLabel(title)}</h2><p className="text-[10px] text-slate-600">Fiscal Year {fiscalYear} • General Fund / Fund Cluster 101</p></div>
+    <div className="border-b border-slate-400 pb-3 text-center text-slate-800"><img src="/UA_logo.jpg" alt="University of Abra Logo" className="mx-auto mb-1 h-12 w-12 object-contain print-color-adjust-exact" style={{ printColorAdjust: "exact", WebkitPrintColorAdjust: "exact" }} /><p className="mb-1 text-[10px] font-normal">Republic of the Philippines</p><p className="mb-1 text-[11px] font-bold">UNIVERSITY OF ABRA</p><p className="mb-2 text-[10px] font-normal">BUDGET MONITORING AND ALLOCATION SYSTEM</p><h2 className="mb-1 text-[13px] font-bold">{reportLabel(title)}</h2><p className="text-[10px] text-slate-600">Fiscal Year {fiscalYear} • General Fund / Fund Cluster 101</p></div>
     <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4"><Metric label="Records" value={allEntries.length} icon={FileText}/><Metric label="Obligations" value={money(totalOb)} icon={BarChart3} className="bg-amber-50 text-amber-700"/><Metric label="Disbursements" value={money(totalDis)} icon={ArrowDownToLine} className="bg-violet-50 text-violet-700"/><Metric label="Unpaid" value={money(Math.max(0,totalOb-totalDis))} icon={ClipboardList} className="bg-red-50 text-red-700"/></div>
     <div className="mt-5 overflow-x-auto rounded-xl border border-slate-200">
       <table className={`${tableMinWidth} w-full table-auto text-[11px] [&_td]:whitespace-nowrap [&_td]:px-3 [&_td]:py-3 [&_td]:align-middle [&_tbody_tr:hover]:bg-slate-50`}>
         <thead>
-          <tr className="bg-[#102b67] font-bold text-white">
-            {headers.map(h=><th key={h} className={`whitespace-nowrap border-r border-white/10 px-3 py-3 text-left text-[10px] font-extrabold uppercase tracking-wide ${procurementReport && h === "Procurement Entered By" ? "sticky right-[160px] z-20 bg-[#102b67]" : procurementReport && h === "Procurement Updated By" ? "sticky right-0 z-20 bg-[#102b67]" : ""}`}>{h}</th>)}
+          <tr className="bg-[#102b67] font-bold text-white" style={{ color: "#ffffff", backgroundColor: "#102b67" }}>
+            {headers.map(h=><th key={h} className={`whitespace-nowrap border-r border-white/10 px-3 py-3 text-left text-[10px] font-extrabold uppercase tracking-wide ${procurementReport && h === "Procurement Entered By" ? "sticky right-[160px] z-20 bg-[#102b67]" : procurementReport && h === "Procurement Updated By" ? "sticky right-0 z-20 bg-[#102b67]" : ""}`} style={{ color: "#ffffff", backgroundColor: "#102b67" }}>{h}</th>)}
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-200 bg-white">

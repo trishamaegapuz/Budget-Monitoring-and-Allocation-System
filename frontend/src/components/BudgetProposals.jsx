@@ -12,6 +12,7 @@ import {
   Search,
   Eye,
   Pencil,
+  Trash2,
   Paperclip,
   RotateCcw,
   History,
@@ -80,14 +81,13 @@ export default function BudgetProposals({
   const isAccountant = currentRole === 'Accountant';
   const isProcurement = currentRole === 'Procurement';
 
-  // Budget Proposal ownership: Administration has full oversight;
-  // Budget owns proposal creation, editing, submission, and workflow review.
-  // Accountant has relevant read-only access; Procurement has no access.
+  // Budget creates/edits/submits proposals. Administration alone processes statuses.
+  // Budget and Accountant can still view proposal records and their current status.
   const canViewProposal = isAdministration || isBudget || isAccountant;
-  const canCreateProposal = isAdministration || isBudget;
-  const canEditProposal = isAdministration || isBudget;
-  const canSubmitProposal = isAdministration || isBudget;
-  const canReviewProposal = isAdministration || isBudget;
+  const canCreateProposal = isBudget;
+  const canEditProposal = isBudget;
+  const canSubmitProposal = isBudget;
+  const canReviewProposal = isAdministration;
 
   // ==========================================================
   // STATE
@@ -97,6 +97,28 @@ export default function BudgetProposals({
 
   const [selectedSection, setSelectedSection] =
     useState('modules');
+  const [showRoleRestrictionModal, setShowRoleRestrictionModal] = useState(false);
+
+  // Sidebar submenu communicates the selected Budget Proposals section via a local event.
+  useEffect(() => {
+    const handleBudgetProposalSection = (event) => {
+      const nextSection = event?.detail;
+      const allowedSections = ['modules', 'create', 'records', 'review', 'workflow', 'history', 'auditTrail', 'reports'];
+      if (allowedSections.includes(nextSection)) {
+        setSelectedSection(nextSection);
+        if (nextSection === 'create') {
+          setFormSaved(false);
+          setProposalError('');
+          setWorkflowAction(null);
+          setEditingProposalId(null);
+          setSelectedSupportingFile(null);
+        }
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    };
+    window.addEventListener('bmas-budget-proposal-section', handleBudgetProposalSection);
+    return () => window.removeEventListener('bmas-budget-proposal-section', handleBudgetProposalSection);
+  }, []);
 
   const [searchTerm, setSearchTerm] =
     useState('');
@@ -109,6 +131,8 @@ export default function BudgetProposals({
 
   const [selectedProposal, setSelectedProposal] =
     useState(null);
+  const [actionModal, setActionModal] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
 
   const [reportType, setReportType] =
     useState('Proposal Summary');
@@ -122,11 +146,37 @@ export default function BudgetProposals({
   const [formSaved, setFormSaved] =
     useState(false);
 
+  // Clear, accessible confirmation shown after a successful save/submit/update.
+  const [successNotice, setSuccessNotice] = useState(null);
+
+  // Dismiss the success toast as soon as the user interacts with the page.
+  // Capture-phase listeners ensure it clears before click/input handlers run.
+  useEffect(() => {
+    const clearSuccessNotice = () => {
+      setSuccessNotice(current => (current ? null : current));
+    };
+
+    document.addEventListener('pointerdown', clearSuccessNotice, true);
+    document.addEventListener('keydown', clearSuccessNotice, true);
+    document.addEventListener('input', clearSuccessNotice, true);
+    document.addEventListener('change', clearSuccessNotice, true);
+
+    return () => {
+      document.removeEventListener('pointerdown', clearSuccessNotice, true);
+      document.removeEventListener('keydown', clearSuccessNotice, true);
+      document.removeEventListener('input', clearSuccessNotice, true);
+      document.removeEventListener('change', clearSuccessNotice, true);
+    };
+  }, []);
+
   const [reviewMessage, setReviewMessage] =
     useState('');
 
   const [workflowAction, setWorkflowAction] =
     useState(null);
+
+  // Status actions run directly; feedback is shown as a non-blocking prompt.
+  const [statusActionLoading, setStatusActionLoading] = useState(false);
 
   const [overviewMode, setOverviewMode] = useState('summary');
   const [editingProposalId, setEditingProposalId] = useState(null);
@@ -134,7 +184,7 @@ export default function BudgetProposals({
   const [selectedSupportingFile, setSelectedSupportingFile] = useState(null);
 
   // Pagination state for database tables
-  const PAGE_SIZE = 5;
+  const PAGE_SIZE = 10; // Show 10 rows per page across Budget Proposals tables
   const [overviewPage, setOverviewPage] = useState(1);
   const [recentPage, setRecentPage] = useState(1);
   const [recordsPage, setRecordsPage] = useState(1);
@@ -146,6 +196,16 @@ export default function BudgetProposals({
   const [proposals, setProposals] = useState([]);
   const [loadingProposals, setLoadingProposals] = useState(true);
   const [proposalError, setProposalError] = useState('');
+
+  // Display role restrictions in a modal when a non-Budget user opens Create Proposal.
+  useEffect(() => {
+    const isRoleRestriction = /only the budget role|access restricted|not authorized to (create|submit)/i.test(String(proposalError || ''));
+    if ((selectedSection === 'create' && !canCreateProposal) || isRoleRestriction) {
+      setShowRoleRestrictionModal(true);
+    }
+  }, [selectedSection, canCreateProposal, proposalError]);
+
+  const [validationErrors, setValidationErrors] = useState({});
   const [proposalHistory, setProposalHistory] = useState([]);
 
   // Existing RBUD/RAOD Master Data used by the Budget Proposal form.
@@ -304,6 +364,53 @@ export default function BudgetProposals({
     }
   };
 
+  // Load the database record and original form-entry snapshot for View Details.
+  // The database has no standalone proponent/particulars columns, so use the
+  // history snapshot when it contains the originally submitted form values.
+  const openProposalDetails = async (proposal) => {
+    setSelectedProposal(proposal);
+    setActionModal('view');
+
+    try {
+      const headers = { ...authHeaders() };
+      const [detailResponse, historyResponse] = await Promise.all([
+        fetch(`${API_URL}/budget-proposals/${proposal.id}`, { headers }),
+        fetch(`${API_URL}/budget-proposals/${proposal.id}/history`, { headers })
+      ]);
+
+      const detailData = await detailResponse.json();
+      const historyData = await historyResponse.json();
+
+      if (!detailResponse.ok) {
+        throw new Error(detailData.error || detailData.message || 'Unable to load full proposal details.');
+      }
+
+      const saved = detailData.proposal || {};
+      const history = Array.isArray(historyData.history) ? historyData.history : [];
+      const formSnapshot = history
+        .map(entry => entry?.details?.form_entry)
+        .find(entry => entry && typeof entry === 'object') || {};
+      const snapshot = formSnapshot.raw && typeof formSnapshot.raw === 'object'
+        ? { ...formSnapshot.raw, ...formSnapshot }
+        : formSnapshot;
+
+      setSelectedProposal({
+        ...proposal,
+        ...snapshot,
+        ...saved,
+        proponent: saved.proponent || snapshot.proponent || snapshot.prepared_by || snapshot.requested_by || '',
+        particulars: saved.particulars || saved.program_project_activity ||
+          snapshot.particulars || snapshot.description || snapshot.program_project_activity || '',
+        description: saved.description || saved.program_project_activity ||
+          snapshot.description || snapshot.particulars || snapshot.program_project_activity || '',
+        mfo: saved.mfo || saved.mfo_name || snapshot.mfo || snapshot.mfo_name || '',
+        raw: saved.raw || saved
+      });
+    } catch (error) {
+      console.error('Budget Proposal details error:', error);
+    }
+  };
+
   const loadBudgetProposals = async () => {
     setLoadingProposals(true);
     setProposalError('');
@@ -351,65 +458,70 @@ export default function BudgetProposals({
   }, [selectedProposal?.id]);
 
   const updateProposalForm = (field, value) => {
-    setProposalForm(prev => ({
-      ...prev,
-      [field]: value
-    }));
+    setProposalForm(prev => ({ ...prev, [field]: value }));
+    setValidationErrors(prev => {
+      if (!prev[field]) return prev;
+      const next = { ...prev };
+      delete next[field];
+      return next;
+    });
+    if (proposalError) setProposalError('');
   };
 
   const saveProposal = async (submit = false) => {
+    const wasEditing = Boolean(editingProposalId);
     try {
-      // Clear previous validation/success messages before every new save attempt.
-      // This prevents an old success banner from appearing together with a
-      // validation error when the user starts a new proposal.
       setProposalError('');
       setFormSaved(false);
+      setSuccessNotice(null);
+      setValidationErrors({});
+
+      if (!canCreateProposal) {
+        throw new Error('Only the Budget role can create, edit, and submit budget proposals.');
+      }
+      if (submit && !canSubmitProposal) {
+        throw new Error('Only the Budget role can submit a budget proposal.');
+      }
 
       const psAmount = Number(proposalForm.psAmount || 0);
       const mooeAmount = Number(proposalForm.mooeAmount || 0);
       const coAmount = Number(proposalForm.coAmount || 0);
       const amount = psAmount + mooeAmount + coAmount;
-
-      if (!proposalForm.proposingOffice.trim()) {
-        throw new Error('Proposing Office / Department is required.');
-      }
-      if (!proposalForm.pap) {
-        throw new Error('P/A/P is required.');
-      }
-      if (!proposalForm.title.trim()) {
-        throw new Error('Proposal Title is required.');
-      }
-      if (!proposalForm.particulars.trim()) {
-        throw new Error('Particulars / Description is required.');
-      }
-
       const selectedClusterHasFundCodes = fundCodes.some(
         item => String(item.fund_cluster_id) === String(proposalForm.fundCluster)
       );
 
-      if (
-        !proposalForm.fundCluster ||
-        (selectedClusterHasFundCodes && !proposalForm.fundCode) ||
-        !proposalForm.campus ||
-        !proposalForm.responsibilityCenter ||
-        !proposalForm.wfpDescription ||
-        !proposalForm.mfo ||
-        !proposalForm.uacsCode ||
-        !proposalForm.classification
-      ) {
-        throw new Error(
-          'Please complete Fund Cluster, Fund Code, Campus, Responsibility Center, WFP Description, P/A/P, MFO, UACS Code, and Allotment Class.'
-        );
+      const missing = {};
+      if (!proposalForm.proposingOffice.trim()) missing.proposingOffice = 'Proposing Office / Department is required.';
+      if (!proposalForm.title.trim()) missing.title = 'Proposal Title is required.';
+      if (!proposalForm.fundCluster) missing.fundCluster = 'Select a Fund Cluster.';
+      if (selectedClusterHasFundCodes && !proposalForm.fundCode) missing.fundCode = 'Select a Fund Code.';
+      if (!proposalForm.campus) missing.campus = 'Select a Campus.';
+      if (!proposalForm.responsibilityCenter) missing.responsibilityCenter = 'Select a Responsibility Center.';
+      if (!proposalForm.wfpDescription) missing.wfpDescription = 'Select a WFP Description.';
+      if (!proposalForm.pap) missing.pap = 'Select a P/A/P.';
+      if (!proposalForm.mfo) missing.mfo = 'Select an MFO.';
+      if (!proposalForm.uacsCode) missing.uacsCode = 'Select a UACS Code.';
+      if (!proposalForm.classification) missing.classification = 'Select an Allotment Class.';
+      if (!proposalForm.particulars.trim()) missing.particulars = 'Particulars / Description is required.';
+      if (![psAmount, mooeAmount, coAmount].every(Number.isFinite) || psAmount < 0 || mooeAmount < 0 || coAmount < 0 || amount <= 0) {
+        missing.psAmount = 'Enter a valid amount greater than zero in PS, MOOE, or CO.';
+        missing.mooeAmount = 'Enter a valid amount greater than zero in PS, MOOE, or CO.';
+        missing.coAmount = 'Enter a valid amount greater than zero in PS, MOOE, or CO.';
       }
 
-      if (
-        ![psAmount, mooeAmount, coAmount].every(Number.isFinite) ||
-        psAmount < 0 ||
-        mooeAmount < 0 ||
-        coAmount < 0 ||
-        amount <= 0
-      ) {
-        throw new Error('At least one proposed amount (PS, MOOE, or CO) must be greater than zero.');
+      if (Object.keys(missing).length) {
+        setValidationErrors(missing);
+        const firstField = Object.keys(missing)[0];
+        setProposalError(`Please correct ${Object.keys(missing).length} required field(s). The missing or invalid fields are highlighted below.`);
+        window.setTimeout(() => {
+          const target = document.querySelector(`[data-proposal-field="${firstField}"]`);
+          if (target) {
+            target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            target.focus({ preventScroll: true });
+          }
+        }, 80);
+        return;
       }
 
       const fc = fundClusters.find(x => String(x.id) === String(proposalForm.fundCluster));
@@ -507,6 +619,16 @@ export default function BudgetProposals({
       }
 
       setFormSaved(true);
+      setValidationErrors({});
+      setSuccessNotice({
+        title: submit ? 'Budget Proposals Submitted Successfully' : (wasEditing ? 'Proposal Updated Successfully' : 'Proposal Saved Successfully'),
+        message: submit
+          ? 'Your budget proposal has been submitted successfully and is now awaiting Administrator review. You can monitor its status in Manage & Review.'
+          : (wasEditing
+              ? 'Your budget proposal changes have been saved successfully.'
+              : 'Your budget proposal draft has been saved successfully. You can return to it and submit it when it is ready.'),
+        status: submit ? 'Submitted' : (wasEditing ? 'Updated' : 'Draft Saved')
+      });
       setEditingProposalId(null);
       setSelectedSupportingFile(null);
 
@@ -536,7 +658,15 @@ export default function BudgetProposals({
 
       await Promise.all([loadBudgetProposals(), loadAllHistory()]);
 
-      if (submit) setSelectedSection('records');
+      // After a successful submission, switch BOTH the main content and sidebar
+      // active highlight to Manage & Review. The Sidebar listens for this event.
+      if (submit) {
+        setSelectedSection('records');
+        window.dispatchEvent(
+          new CustomEvent('bmas-budget-proposal-section', { detail: 'records' })
+        );
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
     } catch (error) {
       console.error('Budget Proposal save error:', error);
       setProposalError(error.message || 'Unable to save budget proposal.');
@@ -547,6 +677,7 @@ export default function BudgetProposals({
     setEditingProposalId(proposal.id);
     setSelectedProposal(proposal);
     setFormSaved(false);
+    setSuccessNotice(null);
     setProposalError('');
 
     const allotmentCode = String(proposal.allotment_code || proposal.budget_classification || '').toUpperCase();
@@ -588,12 +719,13 @@ export default function BudgetProposals({
 
   const deleteProposal = async (proposal) => {
     if (!proposal?.id) return;
-    if (!window.confirm(`Delete budget proposal ${proposal.reference}?`)) return;
     try {
       const response = await fetch(`${API_URL}/budget-proposals/${proposal.id}`, { method:'DELETE', headers:{...authHeaders()} });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Unable to delete proposal.');
       setSelectedProposal(null);
+      setDeleteTarget(null);
+      setActionModal(null);
       await Promise.all([loadBudgetProposals(), loadAllHistory()]);
     } catch (error) {
       setProposalError(error.message || 'Unable to delete proposal.');
@@ -607,31 +739,52 @@ export default function BudgetProposals({
   };
 
 
-  const changeProposalStatus = async (status) => {
-    if (!selectedProposal?.id) {
+  const changeProposalStatus = async (status, targetProposal = selectedProposal) => {
+    if (!targetProposal?.id) {
       setProposalError('Select a proposal first.');
       return;
     }
+    if (statusActionLoading) return;
+
+    setStatusActionLoading(true);
+    setProposalError('');
     try {
-      const response = await fetch(`${API_URL}/budget-proposals/${selectedProposal.id}/status`, {
-        method:'PATCH',
-        headers:{'Content-Type':'application/json', ...authHeaders()},
-        body:JSON.stringify({
+      const response = await fetch(`${API_URL}/budget-proposals/${targetProposal.id}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        body: JSON.stringify({
           status,
-          remarks:reviewMessage,
-          actor_id:user?.id || user?.user_id || null,
-          actor_name:user?.name || user?.username || 'System User'
+          remarks: reviewMessage,
+          actor_id: user?.id || user?.user_id || null,
+          actor_name: user?.name || user?.username || 'System User'
         })
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || data.message || 'Unable to update proposal status.');
-      const updatedProposal = data.proposal || selectedProposal;
+
+      const updatedProposal = data.proposal || { ...targetProposal, status };
       setSelectedProposal(updatedProposal);
       setWorkflowAction(status.toLowerCase());
       setReviewMessage('');
-      await Promise.all([loadBudgetProposals(), loadProposalHistory(updatedProposal.id), loadAllHistory()]);
+      await Promise.all([
+        loadBudgetProposals(),
+        loadProposalHistory(updatedProposal.id),
+        loadAllHistory()
+      ]);
+
+      const actionMessages = {
+        'Under Review': 'Review Started Successfully',
+        'Endorsed': 'Proposals Endorsed Successfully',
+        'For Revision': 'Proposal Returned for Revision Successfully',
+        'Rejected': 'Proposals Rejected Successfully',
+        'Approved': 'Proposal Approved Successfully',
+        'Submitted': 'Budget Proposals Submitted Successfully'
+      };
+      setSuccessNotice({ title: actionMessages[status] || 'Proposal Status Updated Successfully' });
     } catch (error) {
       setProposalError(error.message || 'Unable to update proposal status.');
+    } finally {
+      setStatusActionLoading(false);
     }
   };
 
@@ -655,6 +808,8 @@ export default function BudgetProposals({
 
   const handleSectionClick = (section) => {
 
+    setSuccessNotice(null);
+
     // A new proposal starts with a clean message state.
     // Do not carry the previous proposal's success/error banner into the new form.
     if (section === 'create') {
@@ -677,21 +832,32 @@ export default function BudgetProposals({
 
   const goBackToModules = () => {
 
+    setSuccessNotice(null);
     setSelectedSection('modules');
-
+    setShowRoleRestrictionModal(false);
+    setProposalError('');
     setSelectedProposal(null);
-
     setFormSaved(false);
-
     setWorkflowAction(null);
     setEditingProposalId(null);
     setSelectedSupportingFile(null);
+
+    // Keep the Budget Proposals sidebar highlight in sync with the Overview content.
+    // The sidebar listens for this event to activate Overview and clear the Create selection.
+    window.dispatchEvent(new CustomEvent('bmas-budget-proposal-section', { detail: 'modules' }));
 
     window.scrollTo({
       top: 0,
       behavior: 'smooth'
     });
 
+  };
+
+  // Return to Overview when a user without the Budget role clicks the restriction modal button.
+  const returnToBudgetOverview = () => {
+    setShowRoleRestrictionModal(false);
+    setProposalError('');
+    goBackToModules();
   };
 
 
@@ -1095,6 +1261,143 @@ export default function BudgetProposals({
       font-family: inherit;
     }
 
+    
+    .bp-row-actions { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; min-width: 120px; }
+    .bp-row-workflow-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; max-width: 230px; }
+    .bp-row-workflow-actions .bp-small-button { display: inline-flex; align-items: center; justify-content: center; gap: 4px; white-space: nowrap; padding: 5px 7px; min-height: 28px; }
+    .bp-row-workflow-actions .bp-small-button svg { width: 13px; height: 13px; }
+    .bp-row-workflow-actions button:disabled { opacity: .55; cursor: not-allowed; }
+    .bp-row-start-review { color: #1d4ed8; }
+    .bp-row-revision { color: #c2410c; }
+    .bp-row-endorse, .bp-row-approve { color: #047857; }
+    .bp-row-reject { color: #b91c1c; }
+
+
+    /* Responsive icon-only proposal workflow actions */
+    .bp-row-actions {
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 5px;
+      min-width: 90px;
+      max-width: 140px;
+    }
+    .bp-row-workflow-actions { display: contents; }
+    .bp-row-actions .bp-small-button {
+      width: 30px;
+      height: 30px;
+      min-width: 30px;
+      min-height: 30px;
+      padding: 0;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex: 0 0 30px;
+      white-space: nowrap;
+    }
+    .bp-row-actions .bp-small-button svg { width: 15px; height: 15px; flex: 0 0 auto; }
+    .bp-sr-only {
+      position: absolute !important;
+      width: 1px !important;
+      height: 1px !important;
+      padding: 0 !important;
+      margin: -1px !important;
+      overflow: hidden !important;
+      clip: rect(0, 0, 0, 0) !important;
+      white-space: nowrap !important;
+      border: 0 !important;
+    }
+    @media (max-width: 768px) {
+      .bp-row-actions { min-width: 82px; max-width: 112px; gap: 4px; }
+      .bp-row-actions .bp-small-button {
+        width: 32px;
+        height: 32px;
+        min-width: 32px;
+        min-height: 32px;
+        flex-basis: 32px;
+      }
+    }
+
+    
+    /* Keep the Action column controls on a single horizontal line */
+    .bp-row-actions {
+      display: flex !important;
+      flex-direction: row !important;
+      flex-wrap: nowrap !important;
+      align-items: center !important;
+      justify-content: center !important;
+      gap: 6px !important;
+      min-width: max-content !important;
+      max-width: none !important;
+      white-space: nowrap !important;
+    }
+    .bp-row-workflow-actions {
+      display: flex !important;
+      flex-direction: row !important;
+      flex-wrap: nowrap !important;
+      align-items: center !important;
+      gap: 6px !important;
+      white-space: nowrap !important;
+    }
+    .bp-row-actions .bp-small-button,
+    .bp-row-actions .bp-row-workflow-actions .bp-small-button {
+      flex: 0 0 30px !important;
+      width: 30px !important;
+      min-width: 30px !important;
+      max-width: 30px !important;
+      height: 30px !important;
+      min-height: 30px !important;
+      padding: 0 !important;
+      display: inline-flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      white-space: nowrap !important;
+    }
+    .bp-row-actions .bp-small-button svg {
+      width: 15px !important;
+      height: 15px !important;
+      flex: 0 0 auto !important;
+    }
+    @media (max-width: 768px) {
+      .bp-row-actions,
+      .bp-row-workflow-actions {
+        flex-wrap: nowrap !important;
+        min-width: max-content !important;
+        max-width: none !important;
+      }
+      .bp-row-actions .bp-small-button,
+      .bp-row-actions .bp-row-workflow-actions .bp-small-button {
+        flex-basis: 30px !important;
+        width: 30px !important;
+        min-width: 30px !important;
+        max-width: 30px !important;
+        height: 30px !important;
+      }
+    }
+
+    .bp-action-icon-group { min-width: 112px; }
+    .bp-action-icon { width: 30px; height: 30px; flex: 0 0 30px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid #dbe3ef; border-radius: 6px; background: #fff; color: #64748b; cursor: pointer; transition: background .15s, color .15s, border-color .15s; }
+    .bp-action-icon svg { width: 14px; height: 14px; stroke-width: 2; }
+    .bp-action-icon:hover { border-color: #bfdbfe; background: #eff6ff; color: #2563eb; }
+    .bp-action-icon.bp-action-audit:hover { border-color: #ddd6fe; background: #f5f3ff; color: #7c3aed; }
+    .bp-action-icon.bp-action-delete { border-color: #fee2e2; color: #ef4444; }
+    .bp-action-icon.bp-action-delete:hover { background: #fef2f2; border-color: #fecaca; color: #dc2626; }
+    .bp-action-icon:disabled { opacity: .38; cursor: not-allowed; background: #f8fafc; }
+    .bp-action-modal-overlay { position: fixed; inset: 0; z-index: 10020; display: flex; align-items: center; justify-content: center; padding: 20px; background: rgba(15, 23, 42, .48); backdrop-filter: blur(3px); }
+    .bp-action-modal { width: min(980px, 96vw); max-height: 90vh; overflow-y: auto; border-radius: 16px; border: 1px solid #e2e8f0; background: #fff; box-shadow: 0 24px 70px rgba(15,23,42,.24); }
+    .bp-action-modal-header { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:18px 22px; border-bottom:1px solid #e2e8f0; }
+    .bp-action-modal-title { margin:0; color:#102b67; font-size:18px; font-weight:800; }
+    .bp-action-modal-close { width:32px; height:32px; display:flex; align-items:center; justify-content:center; border:1px solid #e2e8f0; border-radius:8px; background:#fff; color:#64748b; cursor:pointer; }
+    .bp-action-modal-body { padding:22px; font-size:14px; color:#334155; }
+    .bp-action-detail-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; }
+    .bp-action-detail { min-width:0; padding:12px; border:1px solid #e2e8f0; border-radius:9px; background:#f8fafc; }
+    .bp-action-detail-label { margin:0 0 5px; color:#64748b; font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:.04em; }
+    .bp-action-detail-value { margin:0; color:#102b67; font-size:13px; font-weight:650; overflow-wrap:anywhere; }
+    .bp-action-audit-row { margin-bottom:12px; padding:14px; border:1px solid #e2e8f0; border-radius:10px; background:#fff; }
+    @media (max-width: 760px) { .bp-action-detail-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } .bp-action-modal-body { padding:14px; } .bp-action-modal-header { padding:14px; } }
+
     .bp-page {
       width: 100%;
       min-height: 100%;
@@ -1122,6 +1425,7 @@ export default function BudgetProposals({
       align-items: center;
       gap: 7px;
       flex-wrap: wrap;
+      margin-left: auto;
     }
 
     .bp-back-button {
@@ -1542,7 +1846,7 @@ export default function BudgetProposals({
     .bp-overview-toolbar {
       display: flex;
       align-items: center;
-      justify-content: space-between;
+      justify-content: flex-end;
       gap: 12px;
       margin-bottom: 14px;
     }
@@ -1714,6 +2018,19 @@ export default function BudgetProposals({
       margin-bottom: 14px;
     }
 
+    /* Make Fund Group Reference span the full content width. This is screen CSS, not print CSS. */
+    .bp-overview-two-col.bp-overview-fund-full {
+      grid-template-columns: minmax(0, 1fr) !important;
+      width: 100%;
+      gap: 0 !important;
+    }
+
+    .bp-overview-two-col.bp-overview-fund-full > .bp-panel {
+      grid-column: 1 / -1;
+      width: 100%;
+      min-width: 0;
+    }
+
 
     /* ========================================================
        STATUS
@@ -1873,6 +2190,49 @@ export default function BudgetProposals({
       margin-bottom: 12px;
     }
 
+    .bp-fund-dropdown-wrap {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+      margin: 2px 0 12px;
+    }
+
+    .bp-fund-dropdown-label {
+      flex: 0 0 auto;
+      color: #334155;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .bp-fund-dropdown {
+      flex: 1 1 auto;
+      min-width: 0;
+      height: 40px;
+      padding: 0 12px;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      background: #fff;
+      color: #10255c;
+      font: inherit;
+      font-size: 14px;
+      font-weight: 600;
+      outline: none;
+    }
+
+    .bp-fund-dropdown:focus {
+      border-color: #2563eb;
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+    }
+
+    @media (max-width: 640px) {
+      .bp-fund-dropdown-wrap {
+        align-items: stretch;
+        flex-direction: column;
+        gap: 6px;
+      }
+    }
+
     .bp-fund-pill {
       border: 1px solid #dbe3ee;
       background: #ffffff;
@@ -1985,8 +2345,8 @@ export default function BudgetProposals({
 
     .bp-budget-table th {
       padding: 8px 6px;
-      background: #f8fafc;
-      color: #64748b;
+      background: #102b67;
+      color: #ffffff;
       border-bottom: 1px solid #e2e8f0;
       font-size: 7.5px;
       line-height: 1.25;
@@ -2820,16 +3180,42 @@ export default function BudgetProposals({
 
     .bp-report-layout {
       display: grid;
-      grid-template-columns:
-        260px
-        minmax(0, 1fr);
+      grid-template-columns: minmax(0, 1fr);
       gap: 14px;
+      align-items: start;
+      width: 100%;
     }
 
     .bp-report-menu {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
+      display: block;
+      width: 100%;
+    }
+
+    .bp-report-type-select {
+      display: block;
+      width: 100%;
+      min-height: 40px;
+      padding: 8px 34px 8px 11px;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      background: #ffffff;
+      color: #17356f;
+      font: inherit;
+      font-size: 13px;
+      font-weight: 650;
+      cursor: pointer;
+      outline-offset: 2px;
+    }
+
+    .bp-report-type-select:focus {
+      border-color: #2563eb;
+      box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.12);
+    }
+
+    @media (max-width: 900px) {
+      .bp-report-layout {
+        grid-template-columns: minmax(0, 1fr);
+      }
     }
 
     .bp-report-menu-button {
@@ -2864,10 +3250,24 @@ export default function BudgetProposals({
 
     .bp-report-filters {
       display: grid;
-      grid-template-columns:
-        repeat(3, minmax(0, 1fr));
-      gap: 9px;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
       margin-bottom: 14px;
+      align-items: end;
+    }
+
+    .bp-report-filters .bp-form-group {
+      min-width: 0;
+    }
+
+    .bp-report-filters .bp-report-type-select {
+      min-height: 40px;
+    }
+
+    @media (max-width: 1100px) {
+      .bp-report-filters {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
     }
 
     .bp-report-preview {
@@ -2891,12 +3291,21 @@ export default function BudgetProposals({
       margin: 0 auto 7px;
     }
 
+    .bp-report-preview-header .bp-report-republic {
+      display: block;
+      margin: 0 0 2px;
+      color: #173b78;
+      font-size: 9px;
+    }
+
     .bp-report-preview-header strong {
       display: block;
       color: #10255c;
       font-size: 11px;
+      font-weight: 700;
     }
 
+    .bp-report-preview-header .bp-report-system-name,
     .bp-report-preview-header span {
       display: block;
       margin-top: 3px;
@@ -3228,16 +3637,9 @@ export default function BudgetProposals({
       align-items: center;
       gap: 10px;
       text-align: left;
-      cursor: pointer;
       position: relative;
       overflow: hidden;
       box-shadow: 0 2px 8px rgba(15, 23, 42, 0.035);
-      transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease;
-    }
-
-    .bp-dashboard-summary-card:hover {
-      transform: translateY(-1px);
-      box-shadow: 0 6px 16px rgba(15, 23, 42, 0.08);
     }
 
     .bp-summary-icon {
@@ -3595,6 +3997,37 @@ export default function BudgetProposals({
       gap: 12px;
     }
 
+    .bp-status-legend-all {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      min-width: 0;
+    }
+    .bp-status-legend-all .bp-status-legend-row {
+      font-size: 10.5px;
+      line-height: 1.25;
+      gap: 8px;
+    }
+    .bp-status-legend-all .bp-status-legend-row span {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      min-width: 0;
+    }
+    .bp-status-legend-all .bp-status-legend-row strong {
+      white-space: nowrap;
+      font-size: 10px;
+    }
+    .bp-status-legend-all .legend-dot {
+      display: inline-block;
+      width: 7px;
+      height: 7px;
+      min-width: 7px;
+      border-radius: 50%;
+    }
+    @media (max-width: 1100px) {
+      .bp-status-legend-all .bp-status-legend-row { font-size: 10px; }
+    }
     .bp-status-legend-row {
       display: flex;
       justify-content: space-between;
@@ -3823,8 +4256,8 @@ export default function BudgetProposals({
 
     .bp-dashboard-table th {
       padding: 8px 9px;
-      background: #f8fafc;
-      color: #52627a;
+      background: #102b67;
+      color: #ffffff;
       border-bottom: 1px solid #e7edf5;
       font-size: 10px;
       font-weight: 850;
@@ -4078,6 +4511,10 @@ export default function BudgetProposals({
     html.bmas-dark-mode .bp-overview-heading,
     html.bmas-dark-mode .bp-kpi,
     html.bmas-dark-mode .bp-chart-card,
+    .bp-field-invalid { border: 2px solid #dc2626 !important; box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.12) !important; background-color: #fff7f7 !important; }
+    .bp-validation-summary { margin: 12px 0 18px; padding: 14px 16px; border: 1px solid #ef4444; border-left: 5px solid #dc2626; border-radius: 10px; color: #991b1b; background: #fff1f2; font-size: 14px; line-height: 1.5; }
+    .bp-validation-summary ul { margin: 8px 0 0; padding-left: 22px; }
+    .bp-validation-summary li { margin: 3px 0; }
     html.bmas-dark-mode .bp-status-card,
     html.bmas-dark-mode .bp-table-wrap,
     html.bmas-dark-mode .bp-table-container,
@@ -4153,8 +4590,8 @@ export default function BudgetProposals({
       border-color: #344258 !important;
     }
     html.bmas-dark-mode .bp-page th {
-      background-color: #1b293d !important;
-      color: #e5edf8 !important;
+      background-color: #102b67 !important;
+      color: #ffffff !important;
     }
     html.bmas-dark-mode .bp-page td {
       color: #d8e2f0 !important;
@@ -4201,27 +4638,448 @@ export default function BudgetProposals({
       html.bmas-dark-mode .bp-page .bp-pagination-info { font-size: 11px !important; }
     }
 
+    /* FINAL TYPOGRAPHY PASS — make Budget Proposals match the readable RBUD dashboard */
+    .bp-page { font-size: 15px !important; line-height: 1.5 !important; }
+    .bp-page p,
+    .bp-page label,
+    .bp-page li,
+    .bp-page td,
+    .bp-page th,
+    .bp-page input,
+    .bp-page select,
+    .bp-page textarea,
+    .bp-page button,
+    .bp-page a,
+    .bp-page small,
+    .bp-page .bp-card-description,
+    .bp-page .bp-pagination-info,
+    .bp-page .bp-action-label,
+    .bp-page .bp-status-legend-row,
+    .bp-page .bp-status-legend-row strong,
+    .bp-page .bp-proposal-status-label,
+    .bp-page .bp-proposal-status-item > strong,
+    .bp-page .bp-fund-pill,
+    .bp-page .bp-fund-name,
+    .bp-page .bp-fund-value,
+    .bp-page .bp-dashboard-eyebrow,
+    .bp-page .bp-panel-subtitle,
+    .bp-page .bp-dashboard-section-heading p,
+    .bp-page .bp-dashboard-status-header p,
+    .bp-page .bp-dashboard-recent-header p,
+    .bp-page .bp-summary-label,
+    .bp-page .bp-summary-content > span:last-child,
+    .bp-page .bp-kpi-label,
+    .bp-page .bp-kpi-note,
+    .bp-page .bp-mini-year select,
+    .bp-page .bp-dashboard-status-pill,
+    .bp-page .bp-table-view-button {
+      font-size: 14px !important;
+      line-height: 1.45 !important;
+    }
+    .bp-page .bp-kpi-value,
+    .bp-page .bp-summary-content strong { font-size: 26px !important; line-height: 1.15 !important; }
+    .bp-page .bp-dashboard-hero-copy h1 { font-size: 30px !important; line-height: 1.2 !important; }
+    .bp-page .bp-overview-heading-title,
+    .bp-page .bp-panel-title,
+    .bp-page .bp-dashboard-status-header h2,
+    .bp-page .bp-dashboard-recent-header h2,
+    .bp-page .bp-dashboard-section-heading h2 { font-size: 19px !important; line-height: 1.35 !important; }
+    .bp-page h1 { font-size: 30px !important; }
+    .bp-page h2 { font-size: 22px !important; }
+    .bp-page h3 { font-size: 18px !important; }
+    .bp-page .bp-budget-table th,
+    .bp-page .bp-budget-table td,
+    .bp-page .bp-dashboard-table th,
+    .bp-page .bp-dashboard-table td { font-size: 13px !important; padding: 10px 11px !important; }
+    .bp-page .bp-fund-pill { padding: 8px 12px !important; }
+    .bp-page .bp-table-view-button { min-height: 32px !important; padding: 0 10px !important; }
+    /* FINAL SCREEN TYPOGRAPHY NORMALIZATION
+       Apply a consistent readable size across every Budget Proposals screen.
+       Kept screen-only so printed reports retain their paper layout. */
+    @media screen {
+      .bp-page,
+      .bp-page * {
+        font-size: 14px !important;
+      }
+
+      .bp-page h1,
+      .bp-page .bp-dashboard-hero-copy h1 { font-size: 30px !important; line-height: 1.2 !important; }
+      .bp-page h2 { font-size: 22px !important; line-height: 1.3 !important; }
+      .bp-page h3,
+      .bp-page .bp-panel-title,
+      .bp-page .bp-overview-heading-title { font-size: 18px !important; line-height: 1.35 !important; }
+      .bp-page h4 { font-size: 16px !important; line-height: 1.35 !important; }
+
+      .bp-page p,
+      .bp-page label,
+      .bp-page input,
+      .bp-page select,
+      .bp-page textarea,
+      .bp-page button,
+      .bp-page th,
+      .bp-page td,
+      .bp-page .bp-form-hint,
+      .bp-page .bp-muted,
+      .bp-page small { font-size: 13px !important; line-height: 1.45 !important; }
+
+      .bp-page .bp-budget-table th,
+      .bp-page .bp-budget-table td,
+      .bp-page .bp-dashboard-table th,
+      .bp-page .bp-dashboard-table td,
+      .bp-page table th,
+      .bp-page table td { font-size: 13px !important; padding: 10px 11px !important; }
+
+      .bp-page .bp-kpi-value,
+      .bp-page .bp-summary-content strong,
+      .bp-page .bp-stat-value { font-size: 26px !important; line-height: 1.15 !important; }
+
+      .bp-page svg { flex-shrink: 0; }
+    }
+
+    @media screen and (max-width: 760px) {
+      .bp-page h1,
+      .bp-page .bp-dashboard-hero-copy h1 { font-size: 25px !important; }
+      .bp-page h2 { font-size: 20px !important; }
+      .bp-page h3,
+      .bp-page .bp-panel-title { font-size: 17px !important; }
+      .bp-page p,
+      .bp-page label,
+      .bp-page input,
+      .bp-page select,
+      .bp-page textarea,
+      .bp-page button,
+      .bp-page table th,
+      .bp-page table td { font-size: 13px !important; }
+    }
+
+    /* FORCE readable typography on Budget Proposal submodules.
+       These rules are scoped to Create, Manage & Review, History & Reports,
+       and Proposal Details, leaving the already-approved Overview styling intact. */
+    @media screen {
+      .bp-readable-submodule,
+      .bp-readable-submodule * { font-size: 14px !important; }
+      .bp-readable-submodule h1 { font-size: 28px !important; line-height: 1.25 !important; }
+      .bp-readable-submodule h2 { font-size: 22px !important; line-height: 1.3 !important; }
+      .bp-readable-submodule h3,
+      .bp-readable-submodule .bp-panel-title,
+      .bp-readable-submodule .bp-screen-heading h2 { font-size: 18px !important; line-height: 1.35 !important; }
+      .bp-readable-submodule h4 { font-size: 16px !important; line-height: 1.35 !important; }
+      .bp-readable-submodule p,
+      .bp-readable-submodule label,
+      .bp-readable-submodule input,
+      .bp-readable-submodule select,
+      .bp-readable-submodule textarea,
+      .bp-readable-submodule button,
+      .bp-readable-submodule th,
+      .bp-readable-submodule td,
+      .bp-readable-submodule small,
+      .bp-readable-submodule .bp-muted,
+      .bp-readable-submodule .bp-form-hint { font-size: 14px !important; line-height: 1.45 !important; }
+      .bp-readable-submodule table th,
+      .bp-readable-submodule table td { padding: 10px 11px !important; }
+      .bp-readable-submodule .bp-pagination-info,
+      .bp-readable-submodule .bp-pagination-controls button { font-size: 13px !important; }
+    }
+
+
+    /* Responsive layout for Manage & Review, History, Reports and Audit Trail.
+       Tables stay on one line and scroll horizontally instead of squeezing text
+       into narrow columns on phones. */
+    .bp-readable-submodule {
+      width: 100%;
+      min-width: 0;
+      box-sizing: border-box;
+    }
+    .bp-readable-submodule *,
+    .bp-readable-submodule *::before,
+    .bp-readable-submodule *::after { box-sizing: border-box; }
+
+    .bp-readable-submodule .bp-screen-toolbar {
+      display: flex;
+      width: 100%;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .bp-readable-submodule .bp-screen-toolbar-right {
+      display: flex;
+      justify-content: flex-end;
+      align-items: center;
+      flex: 1 1 auto;
+      min-width: 0;
+    }
+    .bp-readable-submodule .bp-screen-toolbar-right > button {
+      margin-left: auto;
+      white-space: nowrap;
+      flex: 0 0 auto;
+    }
+    .bp-readable-submodule .bp-panel,
+    .bp-readable-submodule .bp-screen-heading,
+    .bp-readable-submodule .bp-panel-header {
+      min-width: 0;
+      max-width: 100%;
+    }
+    .bp-readable-submodule .bp-panel-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .bp-readable-submodule .bp-budget-table-wrap {
+      display: block;
+      width: 100%;
+      max-width: 100%;
+      overflow-x: auto !important;
+      overflow-y: hidden;
+      -webkit-overflow-scrolling: touch;
+      overscroll-behavior-x: contain;
+      scrollbar-width: thin;
+    }
+    .bp-readable-submodule .bp-budget-table-wrap > table {
+      width: max-content;
+      min-width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      table-layout: auto;
+    }
+    .bp-readable-submodule .bp-budget-table-wrap table th,
+    .bp-readable-submodule .bp-budget-table-wrap table td {
+      white-space: nowrap !important;
+      word-break: normal !important;
+      overflow-wrap: normal !important;
+      hyphens: none !important;
+      vertical-align: middle;
+    }
+    .bp-readable-submodule .bp-budget-table-wrap table td > *,
+    .bp-readable-submodule .bp-budget-table-wrap table th > * {
+      max-width: none;
+    }
+    .bp-readable-submodule .bp-budget-table-wrap table td:last-child {
+      white-space: nowrap !important;
+    }
+    .bp-readable-submodule .bp-panel-header > div:last-child {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .bp-readable-submodule .bp-panel-header button,
+    .bp-readable-submodule .bp-screen-toolbar button {
+      max-width: 100%;
+    }
+    .bp-readable-submodule .bp-pagination,
+    .bp-readable-submodule .bp-pagination-controls {
+      flex-wrap: wrap;
+    }
+
+    @media (max-width: 768px) {
+      .bp-readable-submodule {
+        padding-left: 12px !important;
+        padding-right: 12px !important;
+      }
+      .bp-readable-submodule .bp-screen-toolbar {
+        width: 100%;
+        display: flex;
+        justify-content: flex-end;
+      }
+      .bp-readable-submodule .bp-screen-toolbar-right {
+        width: 100%;
+        flex: 1 1 100%;
+        justify-content: flex-end;
+      }
+      .bp-readable-submodule .bp-screen-toolbar-right > button {
+        margin-left: auto;
+        min-height: 40px;
+      }
+      .bp-readable-submodule .bp-screen-heading h2 {
+        overflow-wrap: normal;
+        word-break: normal;
+      }
+      .bp-readable-submodule .bp-panel {
+        padding-left: 12px;
+        padding-right: 12px;
+      }
+      .bp-readable-submodule .bp-panel-header > div:first-child {
+        flex: 1 1 100%;
+      }
+      .bp-readable-submodule .bp-panel-header > div:last-child {
+        width: 100%;
+        justify-content: flex-start;
+      }
+      .bp-readable-submodule .bp-budget-table-wrap table th,
+      .bp-readable-submodule .bp-budget-table-wrap table td {
+        padding: 10px 12px !important;
+      }
+    }
+
+    @media (max-width: 420px) {
+      .bp-readable-submodule {
+        padding-left: 8px !important;
+        padding-right: 8px !important;
+      }
+      .bp-readable-submodule .bp-panel {
+        padding-left: 9px;
+        padding-right: 9px;
+        border-radius: 10px;
+      }
+      .bp-readable-submodule .bp-panel-header > div:last-child button {
+        min-height: 38px;
+      }
+      .bp-readable-submodule .bp-budget-table-wrap {
+        margin-right: 0;
+      }
+    }
+
+    /* Fix the circled Overview table header: preserve each column label on one line.
+       Keep the table wider than the viewport on phones and allow horizontal scrolling. */
+    .bp-section-page .bp-budget-table-wrap:has(> table.bp-table-summary),
+    .bp-overview-two-col .bp-budget-table-wrap:has(> table.bp-table-summary) {
+      display: block !important;
+      width: 100% !important;
+      max-width: 100% !important;
+      min-width: 0 !important;
+      overflow-x: auto !important;
+      overflow-y: hidden !important;
+      -webkit-overflow-scrolling: touch;
+      overscroll-behavior-x: contain;
+      scrollbar-width: thin;
+    }
+    .bp-section-page .bp-budget-table-wrap > table.bp-table-summary,
+    .bp-overview-two-col .bp-budget-table-wrap > table.bp-table-summary {
+      display: table !important;
+      width: max-content !important;
+      min-width: 760px !important;
+      max-width: none !important;
+      table-layout: auto !important;
+      border-collapse: separate;
+      white-space: nowrap !important;
+    }
+    .bp-section-page .bp-budget-table-wrap > table.bp-table-summary th,
+    .bp-section-page .bp-budget-table-wrap > table.bp-table-summary td,
+    .bp-overview-two-col .bp-budget-table-wrap > table.bp-table-summary th,
+    .bp-overview-two-col .bp-budget-table-wrap > table.bp-table-summary td {
+      white-space: nowrap !important;
+      word-break: keep-all !important;
+      overflow-wrap: normal !important;
+      hyphens: none !important;
+      min-width: 125px;
+      padding: 10px 14px !important;
+    }
+    .bp-section-page .bp-budget-table-wrap > table.bp-table-summary th:first-child,
+    .bp-section-page .bp-budget-table-wrap > table.bp-table-summary td:first-child,
+    .bp-overview-two-col .bp-budget-table-wrap > table.bp-table-summary th:first-child,
+    .bp-overview-two-col .bp-budget-table-wrap > table.bp-table-summary td:first-child {
+      min-width: 180px;
+      text-align: left;
+    }
+
+
+    /* History & Reports: prevent the report panel/preview from shrinking
+       when the browser viewport is reduced or DevTools is docked. */
+    .bp-readable-submodule .bp-report-layout {
+      display: grid !important;
+      grid-template-columns: minmax(0, 1fr) !important;
+      width: 100% !important;
+      max-width: 100% !important;
+      min-width: 0 !important;
+    }
+    .bp-readable-submodule .bp-report-layout > .bp-panel {
+      display: block;
+      width: 100% !important;
+      max-width: 100% !important;
+      min-width: 0 !important;
+      box-sizing: border-box;
+    }
+    .bp-readable-submodule .bp-report-filters {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      width: 100%;
+      min-width: 0;
+    }
+    .bp-readable-submodule .bp-report-filters .bp-form-group,
+    .bp-readable-submodule .bp-report-filters .bp-form-select {
+      width: 100%;
+      max-width: 100%;
+      min-width: 0;
+    }
+    .bp-readable-submodule .bp-report-preview {
+      display: block;
+      width: 100% !important;
+      max-width: 100% !important;
+      min-width: 0 !important;
+      overflow: hidden;
+      box-sizing: border-box;
+    }
+    .bp-readable-submodule .bp-report-preview-header {
+      width: 100%;
+      padding: clamp(12px, 2vw, 22px);
+      overflow-wrap: anywhere;
+    }
+    .bp-readable-submodule .bp-report-summary {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      width: 100%;
+      min-width: 0;
+    }
+    .bp-readable-submodule .bp-report-summary-card {
+      min-width: 0;
+      overflow-wrap: anywhere;
+    }
+    .bp-readable-submodule .bp-report-actions {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      width: 100%;
+      min-width: 0;
+    }
+    .bp-readable-submodule .bp-report-actions button {
+      flex: 0 1 auto;
+      min-width: 0;
+      white-space: normal;
+    }
+    .bp-readable-submodule .bp-budget-table-wrap {
+      width: 100% !important;
+      max-width: 100% !important;
+      min-width: 0 !important;
+      overflow-x: auto !important;
+      overflow-y: hidden;
+      -webkit-overflow-scrolling: touch;
+    }
+    .bp-readable-submodule .bp-table-report {
+      width: max-content;
+      min-width: 100%;
+      table-layout: auto;
+    }
+    @media (max-width: 900px) {
+      .bp-readable-submodule .bp-report-filters {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+      .bp-readable-submodule .bp-report-summary {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+    @media (max-width: 520px) {
+      .bp-readable-submodule .bp-report-filters,
+      .bp-readable-submodule .bp-report-summary {
+        grid-template-columns: minmax(0, 1fr);
+      }
+      .bp-readable-submodule .bp-report-actions {
+        justify-content: stretch;
+      }
+      .bp-readable-submodule .bp-report-actions button {
+        flex: 1 1 100%;
+        width: 100%;
+      }
+      .bp-readable-submodule .bp-report-preview-logo {
+        width: 52px;
+        height: 52px;
+      }
+    }
+
+
   `;
-
-
-  // ==========================================================
-  // BACK BUTTON
-  // ==========================================================
-
-  const BackButton = () => (
-
-    <button
-      className="bp-back-button"
-      onClick={goBackToModules}
-    >
-
-      <ArrowLeft />
-
-      Back to Budget Proposals
-
-    </button>
-
-  );
 
 
   // ==========================================================
@@ -4244,7 +5102,7 @@ export default function BudgetProposals({
 
         <div className="bp-overview-toolbar">
 
-          <BackButton />
+          
 
           <div className="bp-overview-filter">
 
@@ -4412,79 +5270,7 @@ export default function BudgetProposals({
         </div>
 
 
-        <div className="bp-overview-two-col">
-
-          <div className="bp-panel">
-
-            <div className="bp-panel-header">
-
-              <div>
-
-                <h3 className="bp-panel-title">
-                  Proposal Status
-                </h3>
-
-                <p className="bp-panel-subtitle">
-                  Current proposal workflow status
-                </p>
-
-              </div>
-
-            </div>
-
-            <div className="bp-proposal-status-visual">
-
-              <div
-                className="bp-proposal-status-donut"
-                style={{
-                  background: statusGradient
-                }}
-              >
-                <div className="bp-proposal-status-donut-hole">
-                  <strong>{statusTotal}</strong>
-                  <span>Total</span>
-                </div>
-              </div>
-
-              <div className="bp-proposal-status-list">
-
-                {proposalStatuses.map(item => (
-
-                  <div
-                    className="bp-proposal-status-item"
-                    key={item.label}
-                  >
-
-                    <div className="bp-proposal-status-label">
-
-                      <span
-                        className="bp-proposal-status-dot"
-                        style={{
-                          background:
-                            statusColors[item.label]
-                        }}
-                      />
-
-                      <span>
-                        {item.label}
-                      </span>
-
-                    </div>
-
-                    <strong>
-                      {item.count}
-                    </strong>
-
-                  </div>
-
-                ))}
-
-              </div>
-
-            </div>
-
-          </div>
-
+        <div className="bp-overview-two-col bp-overview-fund-full">
 
           <div className="bp-panel">
 
@@ -4504,49 +5290,23 @@ export default function BudgetProposals({
 
             </div>
 
-            <div className="bp-fund-selector">
-
-              <button
-                className={
-                  `bp-fund-pill ${
-                    overviewFundGroup ===
-                    'All Fund Groups'
-                      ? 'active'
-                      : ''
-                  }`
-                }
-                onClick={() =>
-                  setOverviewFundGroup(
-                    'All Fund Groups'
-                  )
-                }
+            <div className="bp-fund-dropdown-wrap">
+              <label className="bp-fund-dropdown-label" htmlFor="bp-overview-fund-filter">
+                Filter by Fund Group
+              </label>
+              <select
+                id="bp-overview-fund-filter"
+                className="bp-fund-dropdown"
+                value={overviewFundGroup}
+                onChange={(event) => setOverviewFundGroup(event.target.value)}
               >
-                All
-              </button>
-
-              {fundGroupData.map(item => (
-
-                <button
-                  key={item.name}
-                  className={
-                    `bp-fund-pill ${
-                      overviewFundGroup ===
-                      item.name
-                        ? 'active'
-                        : ''
-                    }`
-                  }
-                  onClick={() =>
-                    setOverviewFundGroup(
-                      item.name
-                    )
-                  }
-                >
-                  {item.name}
-                </button>
-
-              ))}
-
+                <option value="All Fund Groups">All Fund Groups</option>
+                {fundGroupData.map(item => (
+                  <option key={item.name} value={item.name}>
+                    {item.name}
+                  </option>
+                ))}
+              </select>
             </div>
 
             <div className="bp-fund-list">
@@ -4715,7 +5475,7 @@ export default function BudgetProposals({
 
             </div>
 
-            <div className="bp-info-grid">
+      <div className="bp-info-grid">
 
               <div className="bp-info-card">
                 <div className="bp-info-label">
@@ -4920,10 +5680,10 @@ export default function BudgetProposals({
   // ==========================================================
 
   const renderCreateProposal = () => (
-    <div className="bp-section-page">
+    <div className="bp-section-page bp-readable-submodule">
 
       <div className="bp-screen-toolbar">
-        <BackButton />
+        
         <div className="bp-screen-toolbar-right">
           <span className="bp-overview-fy">
             <FileSpreadsheet />
@@ -4941,8 +5701,8 @@ export default function BudgetProposals({
         </p>
       </div>
 
-      {proposalError && (
-        <div className="bp-error-message">
+      {proposalError && !/only the budget role|access restricted|not authorized to (create|submit)/i.test(String(proposalError)) && (
+        <div className="bp-error-message" role="alert">
           <AlertCircle />
           {proposalError}
         </div>
@@ -4952,6 +5712,13 @@ export default function BudgetProposals({
         <div className="bp-success-message">
           <Check />
           Budget proposal saved successfully.
+        </div>
+      )}
+
+      {Object.keys(validationErrors).length > 0 && (
+        <div className="bp-validation-summary" role="alert" aria-live="assertive">
+          <strong>Please complete the highlighted fields before submitting.</strong>
+          <ul>{Object.entries(validationErrors).map(([field, message]) => <li key={field}>{message}</li>)}</ul>
         </div>
       )}
 
@@ -4996,7 +5763,9 @@ export default function BudgetProposals({
           <div className="bp-form-group">
             <label className="bp-form-label">Proposing Office / Department <span>*</span></label>
             <input
-              className="bp-form-input"
+              className={`bp-form-input ${validationErrors.proposingOffice ? 'bp-field-invalid' : ''}`}
+              data-proposal-field="proposingOffice"
+              aria-invalid={Boolean(validationErrors.proposingOffice)}
               placeholder="e.g. Information Technology Office"
               value={proposalForm.proposingOffice}
               onChange={event => updateProposalForm('proposingOffice', event.target.value)}
@@ -5019,7 +5788,9 @@ export default function BudgetProposals({
           <div className="bp-form-group">
             <label className="bp-form-label">Proposal Title <span>*</span></label>
             <input
-              className="bp-form-input"
+              className={`bp-form-input ${validationErrors.title ? 'bp-field-invalid' : ''}`}
+              data-proposal-field="title"
+              aria-invalid={Boolean(validationErrors.title)}
               placeholder="Enter the proposed budget title"
               value={proposalForm.title}
               onChange={event => updateProposalForm('title', event.target.value)}
@@ -5042,7 +5813,9 @@ export default function BudgetProposals({
           <div className="bp-form-group">
             <label className="bp-form-label">Fund Cluster <span>*</span></label>
             <select
-              className="bp-form-select"
+              className={`bp-form-select ${validationErrors.fundCluster ? 'bp-field-invalid' : ''}`}
+              data-proposal-field="fundCluster"
+              aria-invalid={Boolean(validationErrors.fundCluster)}
               value={proposalForm.fundCluster}
               disabled={loadingReferenceData}
               onChange={event => {
@@ -5060,7 +5833,7 @@ export default function BudgetProposals({
               </option>
               {fundClusters.map(item => (
                 <option key={item.id} value={String(item.id)}>
-                  {item.code ? `${item.code} - ${item.name}` : item.name}
+                  {item.code || ''}
                 </option>
               ))}
             </select>
@@ -5069,7 +5842,9 @@ export default function BudgetProposals({
           <div className="bp-form-group">
             <label className="bp-form-label">Fund Code <span>*</span></label>
             <select
-              className="bp-form-select"
+              className={`bp-form-select ${validationErrors.fundCode ? 'bp-field-invalid' : ''}`}
+              data-proposal-field="fundCode"
+              aria-invalid={Boolean(validationErrors.fundCode)}
               value={proposalForm.fundCode}
               disabled={
                 loadingReferenceData ||
@@ -5091,7 +5866,7 @@ export default function BudgetProposals({
                 .filter(item => String(item.fund_cluster_id) === String(proposalForm.fundCluster))
                 .map(item => (
                   <option key={item.id} value={String(item.id)}>
-                    {item.code} - {item.name}
+                    {item.code || ''}
                   </option>
                 ))}
             </select>
@@ -5100,7 +5875,9 @@ export default function BudgetProposals({
           <div className="bp-form-group">
             <label className="bp-form-label">Campus <span>*</span></label>
             <select
-              className="bp-form-select"
+              className={`bp-form-select ${validationErrors.campus ? 'bp-field-invalid' : ''}`}
+              data-proposal-field="campus"
+              aria-invalid={Boolean(validationErrors.campus)}
               value={proposalForm.campus}
               disabled={loadingReferenceData}
               onChange={event => updateProposalForm('campus', event.target.value)}
@@ -5110,7 +5887,7 @@ export default function BudgetProposals({
               </option>
               {campuses.map(item => (
                 <option key={item.id} value={String(item.id)}>
-                  {item.code ? `${item.code} - ${item.name}` : item.name}
+                  {item.code || ''}
                 </option>
               ))}
             </select>
@@ -5119,7 +5896,9 @@ export default function BudgetProposals({
           <div className="bp-form-group">
             <label className="bp-form-label">Responsibility Center <span>*</span></label>
             <select
-              className="bp-form-select"
+              className={`bp-form-select ${validationErrors.responsibilityCenter ? 'bp-field-invalid' : ''}`}
+              data-proposal-field="responsibilityCenter"
+              aria-invalid={Boolean(validationErrors.responsibilityCenter)}
               value={proposalForm.responsibilityCenter}
               disabled={loadingReferenceData}
               onChange={event => updateProposalForm('responsibilityCenter', event.target.value)}
@@ -5129,7 +5908,7 @@ export default function BudgetProposals({
               </option>
               {responsibilityCenters.map(item => (
                 <option key={item.id} value={String(item.id)}>
-                  {item.code ? `${item.code} - ${item.name}` : item.name}
+                  {item.code || ''}
                 </option>
               ))}
             </select>
@@ -5138,7 +5917,9 @@ export default function BudgetProposals({
           <div className="bp-form-group">
             <label className="bp-form-label">WFP Description <span>*</span></label>
             <select
-              className="bp-form-select"
+              className={`bp-form-select ${validationErrors.wfpDescription ? 'bp-field-invalid' : ''}`}
+              data-proposal-field="wfpDescription"
+              aria-invalid={Boolean(validationErrors.wfpDescription)}
               value={proposalForm.wfpDescription}
               disabled={loadingReferenceData}
               onChange={event => {
@@ -5157,7 +5938,7 @@ export default function BudgetProposals({
               </option>
               {wfpOptions.map(item => (
                 <option key={item.id} value={String(item.id)}>
-                  {item.code ? `${item.code} - ${item.name}` : item.name}
+                  {item.name || item.description || item.wfp_description || ''}
                 </option>
               ))}
             </select>
@@ -5179,7 +5960,9 @@ export default function BudgetProposals({
           <div className="bp-form-group">
             <label className="bp-form-label">P/A/P <span>*</span></label>
             <select
-              className="bp-form-select"
+              className={`bp-form-select ${validationErrors.pap ? 'bp-field-invalid' : ''}`}
+              data-proposal-field="pap"
+              aria-invalid={Boolean(validationErrors.pap)}
               value={proposalForm.pap}
               disabled={loadingReferenceData}
               onChange={event => updateProposalForm('pap', event.target.value)}
@@ -5189,7 +5972,7 @@ export default function BudgetProposals({
               </option>
               {papOptions.map(item => (
                 <option key={item.id} value={String(item.id)}>
-                  {item.code ? `${item.code} - ${item.name}` : item.name}
+                  {item.code || ''}
                 </option>
               ))}
             </select>
@@ -5198,7 +5981,9 @@ export default function BudgetProposals({
           <div className="bp-form-group">
             <label className="bp-form-label">MFO <span>*</span></label>
             <select
-              className="bp-form-select"
+              className={`bp-form-select ${validationErrors.mfo ? 'bp-field-invalid' : ''}`}
+              data-proposal-field="mfo"
+              aria-invalid={Boolean(validationErrors.mfo)}
               value={proposalForm.mfo}
               disabled={loadingReferenceData}
               onChange={event => updateProposalForm('mfo', event.target.value)}
@@ -5208,7 +5993,7 @@ export default function BudgetProposals({
               </option>
               {mfoOptions.map(item => (
                 <option key={item.id} value={String(item.id)}>
-                  {item.code ? `${item.code} - ${item.name}` : item.name}
+                  {item.code || ''}
                 </option>
               ))}
             </select>
@@ -5217,7 +6002,9 @@ export default function BudgetProposals({
           <div className="bp-form-group">
             <label className="bp-form-label">UACS Code <span>*</span></label>
             <select
-              className="bp-form-select"
+              className={`bp-form-select ${validationErrors.uacsCode ? 'bp-field-invalid' : ''}`}
+              data-proposal-field="uacsCode"
+              aria-invalid={Boolean(validationErrors.uacsCode)}
               value={proposalForm.uacsCode}
               disabled={loadingReferenceData}
               onChange={event => updateProposalForm('uacsCode', event.target.value)}
@@ -5227,8 +6014,7 @@ export default function BudgetProposals({
               </option>
               {uacsOptions.map(item => (
                 <option key={item.id} value={String(item.id)}>
-                  {item.code}
-                  {item.account_title ? ` - ${item.account_title}` : item.name ? ` - ${item.name}` : ''}
+                  {item.account_title || item.name || item.description || ''}
                 </option>
               ))}
             </select>
@@ -5237,7 +6023,9 @@ export default function BudgetProposals({
           <div className="bp-form-group">
             <label className="bp-form-label">Allotment Class <span>*</span></label>
             <select
-              className="bp-form-select"
+              className={`bp-form-select ${validationErrors.classification ? 'bp-field-invalid' : ''}`}
+              data-proposal-field="classification"
+              aria-invalid={Boolean(validationErrors.classification)}
               value={proposalForm.classification}
               disabled={loadingReferenceData}
               onChange={event => updateProposalForm('classification', event.target.value)}
@@ -5245,7 +6033,7 @@ export default function BudgetProposals({
               <option value="">Select Allotment Class</option>
               {allotmentClasses.map(item => (
                 <option key={item.id} value={String(item.id)}>
-                  {item.code} - {item.name}
+                  {item.name || item.allotment_class_name || item.description || ''}
                 </option>
               ))}
             </select>
@@ -5266,21 +6054,24 @@ export default function BudgetProposals({
         <div className="bp-form-grid-three">
           <div className="bp-form-group">
             <label className="bp-form-label">Proposed PS</label>
-            <input type="number" min="0" step="0.01" className="bp-form-input"
+            <input type="number" min="0" step="0.01" className={`bp-form-input ${validationErrors.psAmount ? 'bp-field-invalid' : ''}`}
+              data-proposal-field="psAmount" aria-invalid={Boolean(validationErrors.psAmount)}
               placeholder="0.00" value={proposalForm.psAmount}
               onChange={event => updateProposalForm('psAmount', event.target.value)} />
           </div>
 
           <div className="bp-form-group">
             <label className="bp-form-label">Proposed MOOE</label>
-            <input type="number" min="0" step="0.01" className="bp-form-input"
+            <input type="number" min="0" step="0.01" className={`bp-form-input ${validationErrors.mooeAmount ? 'bp-field-invalid' : ''}`}
+              data-proposal-field="mooeAmount" aria-invalid={Boolean(validationErrors.mooeAmount)}
               placeholder="0.00" value={proposalForm.mooeAmount}
               onChange={event => updateProposalForm('mooeAmount', event.target.value)} />
           </div>
 
           <div className="bp-form-group">
             <label className="bp-form-label">Proposed CO</label>
-            <input type="number" min="0" step="0.01" className="bp-form-input"
+            <input type="number" min="0" step="0.01" className={`bp-form-input ${validationErrors.coAmount ? 'bp-field-invalid' : ''}`}
+              data-proposal-field="coAmount" aria-invalid={Boolean(validationErrors.coAmount)}
               placeholder="0.00" value={proposalForm.coAmount}
               onChange={event => updateProposalForm('coAmount', event.target.value)} />
           </div>
@@ -5311,7 +6102,9 @@ export default function BudgetProposals({
         <div className="bp-form-grid">
           <div className="bp-form-group full">
             <label className="bp-form-label">Particulars / Description <span>*</span></label>
-            <textarea className="bp-form-textarea"
+            <textarea className={`bp-form-textarea ${validationErrors.particulars ? 'bp-field-invalid' : ''}`}
+              data-proposal-field="particulars"
+              aria-invalid={Boolean(validationErrors.particulars)}
               placeholder="Describe the proposed budget requirement..."
               value={proposalForm.particulars}
               onChange={event => updateProposalForm('particulars', event.target.value)} />
@@ -5384,11 +6177,11 @@ export default function BudgetProposals({
   const renderRecords = () => {
     const recordsPagination = paginate(filteredProposals, recordsPage);
     return (
-    <div className="bp-section-page">
+    <div className="bp-section-page bp-readable-submodule">
 
       <div className="bp-screen-toolbar">
 
-        <BackButton />
+        
 
         <div className="bp-screen-toolbar-right">
 
@@ -5582,21 +6375,43 @@ export default function BudgetProposals({
                     </td>
 
                     <td>
-
-                      <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
-                        <button className="bp-small-button" onClick={() => openProposal(proposal)}><Eye /> View</button>
-                        {canEditProposal && ['Draft', 'For Revision'].includes(proposal.status) && (
-                          <button className="bp-small-button" onClick={() => editProposal(proposal)}>
-                            <Pencil /> Edit
-                          </button>
-                        )}
-                        {(isAdministration || isBudget) && proposal.status === 'Draft' && (
-                          <button className="bp-small-button" onClick={() => deleteProposal(proposal)}>
-                            <XCircle /> Delete
-                          </button>
+                      <div className="bp-row-actions">
+                        <button type="button" className="bp-small-button" title="View proposal details" onClick={() => openProposalDetails(proposal)}>
+                          <Eye aria-hidden="true" /><span className="bp-sr-only">View proposal details</span>
+                        </button>
+                        {isAdministration && (
+                          <div className="bp-row-workflow-actions">
+                            {proposal.status === 'Submitted' && (
+                              <button type="button" className="bp-small-button bp-row-start-review" title="Start Review" aria-label="Start Review" disabled={statusActionLoading} onClick={() => changeProposalStatus('Under Review', proposal)}>
+                                <Clock3 aria-hidden="true" /><span className="bp-sr-only">Start Review</span>
+                              </button>
+                            )}
+                            {proposal.status === 'Under Review' && (
+                              <>
+                                <button type="button" className="bp-small-button bp-row-revision" title="For Revision" aria-label="For Revision" disabled={statusActionLoading} onClick={() => changeProposalStatus('For Revision', proposal)}>
+                                  <RotateCcw aria-hidden="true" /><span className="bp-sr-only">For Revision</span>
+                                </button>
+                                <button type="button" className="bp-small-button bp-row-endorse" title="Endorse" aria-label="Endorse" disabled={statusActionLoading} onClick={() => changeProposalStatus('Endorsed', proposal)}>
+                                  <CheckCircle2 aria-hidden="true" /><span className="bp-sr-only">Endorse</span>
+                                </button>
+                                <button type="button" className="bp-small-button bp-row-reject" title="Reject" aria-label="Reject" disabled={statusActionLoading} onClick={() => changeProposalStatus('Rejected', proposal)}>
+                                  <XCircle aria-hidden="true" /><span className="bp-sr-only">Reject</span>
+                                </button>
+                              </>
+                            )}
+                            {proposal.status === 'Endorsed' && (
+                              <>
+                                <button type="button" className="bp-small-button bp-row-approve" title="Approve" aria-label="Approve" disabled={statusActionLoading} onClick={() => changeProposalStatus('Approved', proposal)}>
+                                  <CheckCircle2 aria-hidden="true" /><span className="bp-sr-only">Approve</span>
+                                </button>
+                                <button type="button" className="bp-small-button bp-row-reject" title="Reject" aria-label="Reject" disabled={statusActionLoading} onClick={() => changeProposalStatus('Rejected', proposal)}>
+                                  <XCircle aria-hidden="true" /><span className="bp-sr-only">Reject</span>
+                                </button>
+                              </>
+                            )}
+                          </div>
                         )}
                       </div>
-
                     </td>
 
                   </tr>
@@ -5652,7 +6467,7 @@ export default function BudgetProposals({
     const reviewPagination = paginate(reviewRecords, reviewPage);
     return (
       <div className="bp-section-page">
-        <div className="bp-screen-toolbar"><BackButton /></div>
+        
         <div className="bp-screen-heading"><h2>Review &amp; Endorsement</h2><p>Review submitted proposals, return them for revision, or endorse them for approval.</p></div>
         <div className="bp-review-layout">
           <div className="bp-panel"><div className="bp-panel-header"><div><h3 className="bp-panel-title">Proposals for Review</h3><p className="bp-panel-subtitle">Submitted and currently under review</p></div></div>
@@ -5666,9 +6481,9 @@ export default function BudgetProposals({
             {selectedProposal ? <><div className="bp-review-item"><div className="bp-review-icon"><FileText /></div><div><div className="bp-review-label">Proposal</div><div className="bp-review-value">{selectedProposal.reference}</div></div></div><div className="bp-review-item"><div className="bp-review-icon"><Building2 /></div><div><div className="bp-review-label">Department / Unit</div><div className="bp-review-value">{getDepartment(selectedProposal)}</div></div></div><div className="bp-review-item"><div className="bp-review-icon"><WalletCards /></div><div><div className="bp-review-label">Proposed Amount</div><div className="bp-review-value">{formatCurrency(selectedProposal.amount)}</div></div></div>
               <textarea className="bp-review-textarea" placeholder="Review remarks..." value={reviewMessage} onChange={e => setReviewMessage(e.target.value)} />
               <div className="bp-review-actions">
-                {selectedProposal.status === 'Submitted' && <button className="bp-review-action neutral" onClick={() => changeProposalStatus('Under Review')}><Clock3 /> Start Review</button>}
-                <button className="bp-review-action return" onClick={() => changeProposalStatus('For Revision')}><RotateCcw /> Return for Revision</button>
-                <button className="bp-review-action endorse" disabled={selectedProposal.status !== 'Under Review'} onClick={() => changeProposalStatus('Endorsed')}><CheckCircle2 /> Endorse Proposal</button>
+                {canReviewProposal && selectedProposal.status === 'Submitted' && <button className="bp-review-action neutral" onClick={() => changeProposalStatus('Under Review')}><Clock3 /> Start Review</button>}
+                {canReviewProposal && selectedProposal.status === 'Under Review' && <button className="bp-review-action return" onClick={() => changeProposalStatus('For Revision')}><RotateCcw /> Return for Revision</button>}
+                {canReviewProposal && selectedProposal.status === 'Under Review' && <button className="bp-review-action endorse" onClick={() => changeProposalStatus('Endorsed')}><CheckCircle2 /> Endorse Proposal</button>}
                 <button className="bp-review-action neutral" onClick={() => openProposal(selectedProposal)}><Eye /> View Full Details</button>
               </div>
             </> : <div className="bp-empty"><FileCheck2 /><div className="bp-empty-title">No Proposal Selected</div><div className="bp-empty-text">Select a proposal from the review table.</div></div>}
@@ -5689,7 +6504,7 @@ export default function BudgetProposals({
     const selectedStatus = selectedProposal?.status || '—';
     return (
       <div className="bp-section-page">
-        <div className="bp-screen-toolbar"><BackButton /></div>
+        
         <div className="bp-screen-heading"><h2>Approval Workflow</h2><p>Process proposals through the actual database workflow: Draft → Submitted → Under Review → For Revision → Submitted → Under Review → Endorsed → Approved.</p></div>
         <div className="bp-panel"><div className="bp-panel-header"><div><h3 className="bp-panel-title">Workflow Queue</h3><p className="bp-panel-subtitle">Select a proposal to see its allowed next actions</p></div></div>
           <div className="bp-budget-table-wrap"><table className="bp-budget-table bp-table-workflow"><thead><tr><th>Reference</th><th>Department</th><th>Amount</th><th>Status</th><th>Action</th></tr></thead><tbody>
@@ -5723,8 +6538,8 @@ export default function BudgetProposals({
       : allHistory;
     const historyPagination = paginate(historyRows, historyPage);
     return (
-      <div className="bp-section-page">
-        <div className="bp-screen-toolbar"><BackButton /></div>
+      <div className="bp-section-page bp-readable-submodule">
+        
         <div className="bp-screen-heading">
           <h2>Proposal History</h2>
           <p>Database-backed chronological record of proposal actions.</p>
@@ -5732,7 +6547,10 @@ export default function BudgetProposals({
         <div className="bp-panel">
           <div className="bp-panel-header">
             <div><h3 className="bp-panel-title">{selectedProposal ? `History — ${selectedProposal.reference}` : 'All Proposal History'}</h3><p className="bp-panel-subtitle">Actual workflow activity from the database</p></div>
-            {selectedProposal && <button className="bp-secondary-button" onClick={() => { setSelectedProposal(null); setHistoryPage(1); }}>Show All</button>}
+            <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+              <button type="button" className="bp-secondary-button" onClick={() => { setSelectedProposal(null); setHistoryPage(1); handleSectionClick('auditTrail'); }}><History size={15} /> Open Audit Trail</button>
+              {selectedProposal && <button className="bp-secondary-button" onClick={() => { setSelectedProposal(null); setHistoryPage(1); }}>Show All</button>}
+            </div>
           </div>
           <div className="bp-budget-table-wrap">
             <table className="bp-budget-table bp-table-history"><thead><tr><th>Date</th><th>Reference</th><th>Action</th><th>Status</th><th>Remarks</th><th>Actor</th></tr></thead><tbody>
@@ -5741,6 +6559,86 @@ export default function BudgetProposals({
           </div>
           <Pagination {...historyPagination} onPageChange={setHistoryPage} />
           {!historyRows.length && <div className="bp-empty"><History /><div className="bp-empty-title">No history records yet</div><div className="bp-empty-text">Workflow actions will appear here after a proposal is created or updated.</div></div>}
+        </div>
+      </div>
+    );
+  };
+
+
+  // ==========================================================
+  // DEDICATED BUDGET PROPOSAL AUDIT TRAIL PAGE
+  // Shows form-entry snapshots and the authenticated Budget user,
+  // separate from workflow status history and proposal row actions.
+  // ==========================================================
+  const renderAuditTrail = () => {
+    const formEntryRows = (allHistory || []).filter((item) => {
+      const meta = item.details && typeof item.details === 'object' ? item.details : null;
+      const actionText = String(item.action || item.action_type || '').toLowerCase();
+      return Boolean(meta?.form_entry) || actionText.includes('proposal entered') ||
+        actionText.includes('form entry') || actionText.includes('draft created');
+    }).sort((a, b) => new Date(b.created_at || b.changed_at || 0) - new Date(a.created_at || a.changed_at || 0));
+    const auditPagination = paginate(formEntryRows, historyPage);
+    return (
+      <div className="bp-section-page bp-readable-submodule">
+        <div className="bp-screen-heading">
+          <h2>Budget Proposal Audit Trail</h2>
+          <p>Form-entry records showing who created each proposal and the submitted form data.</p>
+        </div>
+        <div className="bp-panel">
+          <div className="bp-panel-header">
+            <div>
+              <h3 className="bp-panel-title">Proposal Form Entries — FY {selectedYear}</h3>
+              <p className="bp-panel-subtitle">Creator details and saved proposal fields. Approval status changes remain in Proposal History.</p>
+            </div>
+            <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+              <button type="button" className="bp-secondary-button" onClick={() => { setHistoryPage(1); handleSectionClick('history'); }}><History size={15} /> Proposal History</button>
+              <button type="button" className="bp-secondary-button" onClick={() => { setHistoryPage(1); loadAllHistory(); }}><RefreshCcw size={15} /> Refresh</button>
+            </div>
+          </div>
+          <div className="bp-budget-table-wrap">
+            <table className="bp-budget-table bp-table-history">
+              <thead><tr><th>Date & Time</th><th>Reference</th><th>Entered By</th><th>Email</th><th>Role</th></tr></thead>
+              <tbody>
+                {auditPagination.rows.map((item, index) => {
+                  const meta = item.details && typeof item.details === 'object' ? item.details : {};
+                  const storedForm = meta.form_entry && typeof meta.form_entry === 'object' ? meta.form_entry : {};
+                  const form = storedForm.raw && typeof storedForm.raw === 'object'
+                    ? { ...storedForm.raw, ...storedForm }
+                    : storedForm;
+                  const proposal = proposalRecords.find(p => Number(p.id) === Number(item.proposal_id));
+                  const actor = meta.entered_by || item.actor_name || item.performed_by_name || item.user_name || '—';
+                  const date = item.created_at || item.changed_at || item.timestamp;
+                  const ref = proposal?.reference || meta.reference || `Proposal #${item.proposal_id ?? '—'}`;
+                  const readableFields = [
+                    ['Proponent', form.proponent || form.prepared_by || form.requested_by],
+                    ['Proposal Title', form.title || form.proposal_title],
+                    ['Office / Department', form.department || form.department_unit || form.proposing_office],
+                    ['Particulars / Description', form.particulars || form.description || form.program_project_activity],
+                    ['MFO', form.mfo || form.mfo_name],
+                    ['UACS Code', form.uacs_code || form.uacs_account_title],
+                    ['Proposed Amount', form.amount || form.requested_amount],
+                    ['Justification', form.justification],
+                    ['Expected Outputs', form.expected_outputs || form.expectedOutputs],
+                    ['Remarks', form.remarks]
+                  ];
+                  const details = readableFields
+                    .filter(([, value]) => value !== null && value !== undefined && String(value).trim() !== '')
+                    .map(([label, value]) => `${label}: ${typeof value === 'object' ? '[saved value]' : String(value)}`)
+                    .join(' • ');
+                  return <tr key={item.id || `${item.proposal_id}-${date}-${index}`}>
+                    <td>{date ? new Date(date).toLocaleString('en-PH') : '—'}</td>
+                    <td>{ref}</td>
+                    <td>{actor}</td>
+                    <td>{meta.entered_by_email || item.actor_email || '—'}</td>
+                    <td>{meta.entered_by_role || item.actor_role || 'Budget'}</td>
+                    
+                  </tr>;
+                })}
+              </tbody>
+            </table>
+          </div>
+          <Pagination {...auditPagination} onPageChange={setHistoryPage} />
+          {!formEntryRows.length && <div className="bp-empty"><History /><div className="bp-empty-title">No form-entry audit records yet</div><div className="bp-empty-text">New proposal form submissions by the Budget role will appear here when the backend records the form-entry snapshot.</div></div>}
         </div>
       </div>
     );
@@ -5797,69 +6695,93 @@ export default function BudgetProposals({
           body{
             font-family:Arial,sans-serif;
             margin:0;
-            padding:28px;
+            padding:24px 28px;
             color:#1e293b;
             background:#fff
           }
           .report-header{
             text-align:center;
-            border-bottom:2px solid #173b78;
-            padding-bottom:14px;
-            margin-bottom:18px
+            border-bottom:1px solid #173b78;
+            padding-bottom:8px;
+            margin-bottom:10px
           }
           .report-logo{
             display:block;
-            width:72px;
-            height:72px;
+            width:64px;
+            height:64px;
             object-fit:contain;
-            margin:0 auto 8px
+            margin:0 auto 5px
+          }
+          .republic{
+            font-size:10px;
+            margin:0 0 2px;
+            color:#173b78
           }
           .university{
-            font-size:20px;
+            font-size:13px;
             font-weight:700;
             color:#173b78;
             margin:0
           }
           .system-name{
-            font-size:11px;
-            color:#64748b;
-            margin:4px 0 0
+            font-size:10px;
+            color:#173b78;
+            margin:2px 0 0
           }
           .report-title{
-            font-size:18px;
+            font-size:14px;
             font-weight:700;
-            color:#173b78;
-            margin:18px 0 4px
+            color:#1e293b;
+            margin:6px 0 2px
           }
           .report-subtitle{
-            font-size:12px;
-            color:#64748b;
+            font-size:10px;
+            color:#334155;
             margin:0
           }
           table{
             width:100%;
             border-collapse:collapse;
-            margin-top:18px
+            margin-top:10px
           }
           th,td{
-            border:1px solid #cbd5e1;
-            padding:7px;
-            font-size:10px;
+            border:1px solid #64748b;
+            padding:5px;
+            font-size:9px;
             text-align:left
           }
           th{
             background:#f1f5f9;
             color:#173b78
           }
+          .signatures{
+            display:flex;
+            justify-content:space-between;
+            gap:36px;
+            margin-top:54px;
+            page-break-inside:avoid
+          }
+          .signature-block{
+            flex:1;
+            text-align:center;
+            font-size:10px;
+            color:#1e293b
+          }
+          .signature-line{
+            border-top:1px solid #1e293b;
+            margin-bottom:5px;
+            height:1px
+          }
+          .signature-title{font-weight:700;margin:0 0 3px}
+          .signature-subtitle{margin:0;font-size:9px}
           .footer{
             text-align:center;
-            margin-top:18px;
+            margin-top:14px;
             font-size:9px;
             color:#64748b
           }
-          @media print{
-            body{padding:18mm}
-          }
+          @page { size: landscape; margin: 12mm; }
+          @media print{ body{padding:0} }
         
 
     /* READABILITY PASS — slightly larger typography at 100% zoom */
@@ -5889,14 +6811,86 @@ export default function BudgetProposals({
 
     .bp-status-legend-row { font-size: 11.5px !important; }
     .bp-status-legend-row strong { font-size: 11.5px !important; }
+
+
+    /* BMAS Overview readability and spacing adjustments */
+    .bp-overview-fund-full {
+      grid-template-columns: minmax(0, 1fr) !important;
+      gap: 0 !important;
+      margin-bottom: 18px !important;
+    }
+    .bp-overview-fund-full > .bp-panel { width: 100%; min-width: 0; }
+    .bp-panel-title { font-size: 16px !important; line-height: 1.35 !important; }
+    .bp-panel-subtitle { font-size: 12px !important; line-height: 1.5 !important; }
+    .bp-fund-pill { font-size: 11px !important; padding: 8px 11px !important; }
+    .bp-fund-name { font-size: 11px !important; height: auto !important; min-height: 28px; }
+    .bp-fund-value { font-size: 12px !important; }
+    .bp-fund-row { padding: 9px 10px !important; gap: 6px 10px !important; }
+    .bp-budget-table th, .bp-budget-table td { font-size: 11px !important; }
+    .bp-dashboard-eyebrow { font-size: 11px !important; }
+    .bp-dashboard-hero-copy h1 { font-size: 26px !important; line-height: 1.2 !important; }
+    .bp-dashboard-hero-copy p { font-size: 12px !important; line-height: 1.6 !important; }
+    .bp-summary-label { font-size: 10px !important; }
+    .bp-summary-content > span:last-child { font-size: 10px !important; }
+    .bp-dashboard-status-header h2 { font-size: 12px !important; }
+    .bp-dashboard-status-header p { font-size: 10px !important; }
+    .bp-status-legend-all .bp-status-legend-row,
+    .bp-status-legend-all .bp-status-legend-row strong { font-size: 11px !important; }
+    @media (max-width: 760px) {
+      .bp-overview-fund-full { grid-template-columns: 1fr !important; }
+      .bp-dashboard-hero-copy h1 { font-size: 22px !important; }
+      .bp-fund-list { grid-template-columns: 1fr !important; }
+    }
+
+
+
+    /* Keep the Proposal Summary by Fund Group headers readable on every viewport.
+       The table scrolls horizontally on narrow screens instead of breaking labels
+       such as OBLIGATIONS and DISBURSEMENTS into multiple lines. */
+    @media screen {
+      .bp-budget-table-wrap:has(> .bp-table-summary) {
+        width: 100%;
+        max-width: 100%;
+        overflow-x: auto !important;
+        overflow-y: hidden !important;
+        -webkit-overflow-scrolling: touch;
+        overscroll-behavior-x: contain;
+        scrollbar-width: thin;
+      }
+      .bp-budget-table-wrap > .bp-table-summary {
+        width: 100%;
+        min-width: 700px;
+        max-width: none;
+        table-layout: auto;
+      }
+      .bp-budget-table-wrap > .bp-table-summary th,
+      .bp-budget-table-wrap > .bp-table-summary td {
+        white-space: nowrap !important;
+        word-break: normal !important;
+        overflow-wrap: normal !important;
+        hyphens: none !important;
+        padding: 10px 12px;
+      }
+      .bp-budget-table-wrap > .bp-table-summary th:first-child,
+      .bp-budget-table-wrap > .bp-table-summary td:first-child {
+        min-width: 180px;
+        text-align: left;
+      }
+      .bp-budget-table-wrap > .bp-table-summary th:not(:first-child),
+      .bp-budget-table-wrap > .bp-table-summary td:not(:first-child) {
+        min-width: 125px;
+      }
+    }
+
 </style>
       </head>
       <body>
         <div class="report-header">
           <img class="report-logo" src="${logoUrl}" alt="University of Abra Logo" />
+          <p class="republic">Republic of the Philippines</p>
           <h1 class="university">UNIVERSITY OF ABRA</h1>
-          <p class="system-name">Budget Monitoring &amp; Allocation System</p>
-          <div class="report-title">${reportType} - FY ${selectedYear}</div>
+          <p class="system-name">BUDGET MONITORING AND ALLOCATION SYSTEM</p>
+          <div class="report-title">${reportType.toUpperCase()} - FY ${selectedYear}</div>
           <p class="report-subtitle">Budget Proposal Monitoring Report</p>
         </div>
 
@@ -5909,9 +6903,19 @@ export default function BudgetProposals({
           <tbody>${rows}</tbody>
         </table>
 
-        <div class="footer">
-          Generated from BMAS Budget Proposals - FY ${selectedYear}
+        <div class="signatures">
+          <div class="signature-block">
+            <div class="signature-line"></div>
+            <p class="signature-title">Prepared by</p>
+            <p class="signature-subtitle">Signature over printed name / Date</p>
+          </div>
+          <div class="signature-block">
+            <div class="signature-line"></div>
+            <p class="signature-title">Certified Correct / Approved by</p>
+            <p class="signature-subtitle">Signature over printed name / Date</p>
+          </div>
         </div>
+
       </body>
       </html>
     `);
@@ -5984,13 +6988,9 @@ export default function BudgetProposals({
 
   const renderReports = () => (
 
-    <div className="bp-section-page">
+    <div className="bp-section-page bp-readable-submodule">
 
-      <div className="bp-screen-toolbar">
-
-        <BackButton />
-
-      </div>
+      
 
 
       <div className="bp-screen-heading">
@@ -6015,83 +7015,11 @@ export default function BudgetProposals({
             <div>
 
               <h3 className="bp-panel-title">
-                Report Type
-              </h3>
-
-              <p className="bp-panel-subtitle">
-                Select report
-              </p>
-
-            </div>
-
-          </div>
-
-
-          <div className="bp-report-menu">
-
-            {[
-              [
-                'Proposal Summary',
-                <FileText />
-              ],
-              [
-                'By Department',
-                <Building2 />
-              ],
-              [
-                'By Fund Source',
-                <Database />
-              ],
-              [
-                'By Status',
-                <PieChart />
-              ]
-
-            ].map(
-              ([name, icon]) => (
-
-                <button
-                  key={name}
-                  className={
-                    `bp-report-menu-button ${
-                      reportType === name
-                        ? 'active'
-                        : ''
-                    }`
-                  }
-                  onClick={() =>
-                    setReportType(
-                      name
-                    )
-                  }
-                >
-
-                  {icon}
-
-                  {name}
-
-                </button>
-
-              )
-            )}
-
-          </div>
-
-        </div>
-
-
-        <div className="bp-panel">
-
-          <div className="bp-panel-header">
-
-            <div>
-
-              <h3 className="bp-panel-title">
                 Report Filters
               </h3>
 
               <p className="bp-panel-subtitle">
-                Define the report coverage
+                Choose the report type and define the report coverage
               </p>
 
             </div>
@@ -6100,6 +7028,27 @@ export default function BudgetProposals({
 
 
           <div className="bp-report-filters">
+
+            <div className="bp-form-group">
+              <label className="bp-form-label" htmlFor="bp-report-type-select">
+                Report Type
+              </label>
+              <select
+                id="bp-report-type-select"
+                className="bp-form-select bp-report-type-select"
+                aria-label="Select report type"
+                value={reportType}
+                onChange={(event) => {
+                  setReportType(event.target.value);
+                  setReportPage(1);
+                }}
+              >
+                <option value="Proposal Summary">Proposal Summary</option>
+                <option value="By Department">By Department</option>
+                <option value="By Fund Source">By Fund Source</option>
+                <option value="By Status">By Status</option>
+              </select>
+            </div>
 
             <div className="bp-form-group">
 
@@ -6203,12 +7152,20 @@ export default function BudgetProposals({
                 alt="University of Abra Logo"
               />
 
+              <span className="bp-report-republic">
+                Republic of the Philippines
+              </span>
+
               <strong>
                 UNIVERSITY OF ABRA
               </strong>
 
+              <span className="bp-report-system-name">
+                BUDGET MONITORING AND ALLOCATION SYSTEM
+              </span>
+
               <span>
-                {reportType} — FY {selectedYear}
+                {reportType.toUpperCase()} — FY {selectedYear}
               </span>
 
               <span>
@@ -6379,11 +7336,9 @@ export default function BudgetProposals({
 
       return (
 
-        <div className="bp-section-page">
+        <div className="bp-section-page bp-readable-submodule">
 
-          <div className="bp-screen-toolbar">
-            <BackButton />
-          </div>
+
 
           <div className="bp-empty">
 
@@ -6404,7 +7359,7 @@ export default function BudgetProposals({
 
     return (
 
-      <div className="bp-section-page">
+      <div className="bp-section-page bp-readable-submodule">
 
         <div className="bp-screen-toolbar">
 
@@ -6843,8 +7798,29 @@ export default function BudgetProposals({
   // MODULES
   // ==========================================================
 
+  // Shared proposal display helpers (also used by the View/Audit/Delete modals).
+  // Keep these at component scope so JSX rendered outside renderModules can access them.
+  const referenceOf = (proposal) =>
+    proposal?.reference || proposal?.reference_no || proposal?.referenceNo ||
+    proposal?.proposal_reference || proposal?.proposal_no || '—';
+
+  const titleOf = (proposal) =>
+    proposal?.title || proposal?.proposal_title || proposal?.particulars ||
+    proposal?.description || '—';
+
+  const departmentOf = (proposal) => getDepartment(proposal);
+
+  const fundOf = (proposal) =>
+    proposal?.fundGroup || proposal?.fund_group || proposal?.fund_source ||
+    proposal?.fundCode || '—';
+
+  const amountOf = (proposal) => Number(proposal?.amount || proposal?.proposed_amount || 0);
+
+  const statusLabel = (proposal) => proposal?.status || 'Draft';
+
   const renderModules = () => {
 
+    const maximumBudget = Math.max(...overviewData.map((item) => item.budget), 1);
     const total = summaryData.totalProposals || 0;
     const approved = summaryData.approvedProposals || 0;
     const review = (summaryData.submittedProposals || 0) + (summaryData.reviewProposals || 0);
@@ -6923,69 +7899,44 @@ export default function BudgetProposals({
           </div>
         </div>
 
-        {/* Summary cards */}
+        {/* Summary cards (display only; not clickable) */}
         <div className="bp-dashboard-summary-grid">
 
-          <button
-            type="button"
-            className="bp-dashboard-summary-card summary-blue"
-            onClick={() => handleSectionClick('overview')}
-          >
+          <div className="bp-dashboard-summary-card summary-blue">
             <div className="bp-summary-icon"><ClipboardList /></div>
             <div className="bp-summary-content">
               <span className="bp-summary-label">TOTAL PROPOSALS</span>
               <strong>{total}</strong>
               <span>for FY {selectedYear}</span>
             </div>
-          </button>
+          </div>
 
-          <button
-            type="button"
-            className="bp-dashboard-summary-card summary-green"
-            onClick={() => {
-              setStatusFilter('Approved');
-              handleSectionClick('records');
-            }}
-          >
+          <div className="bp-dashboard-summary-card summary-green">
             <div className="bp-summary-icon"><CheckCircle2 /></div>
             <div className="bp-summary-content">
               <span className="bp-summary-label">APPROVED</span>
               <strong>{approved}</strong>
               <span>{percentage(approved)}% of total</span>
             </div>
-          </button>
+          </div>
 
-          <button
-            type="button"
-            className="bp-dashboard-summary-card summary-orange"
-            onClick={() => {
-              setStatusFilter('Under Review');
-              handleSectionClick('records');
-            }}
-          >
+          <div className="bp-dashboard-summary-card summary-orange">
             <div className="bp-summary-icon"><Clock3 /></div>
             <div className="bp-summary-content">
               <span className="bp-summary-label">FOR REVIEW</span>
               <strong>{review}</strong>
               <span>{percentage(review)}% of total</span>
             </div>
-          </button>
+          </div>
 
-          <button
-            type="button"
-            className="bp-dashboard-summary-card summary-red"
-            onClick={() => {
-              setStatusFilter('Rejected');
-              handleSectionClick('records');
-            }}
-          >
+          <div className="bp-dashboard-summary-card summary-red">
             <div className="bp-summary-icon"><XCircle /></div>
             <div className="bp-summary-content">
               <span className="bp-summary-label">REJECTED</span>
               <strong>{rejected}</strong>
               <span>{percentage(rejected)}% of total</span>
             </div>
-          </button>
+          </div>
 
         </div>
 
@@ -7025,26 +7976,13 @@ export default function BudgetProposals({
                 <h2>PROPOSALS BY STATUS</h2>
                 <p>Distribution of budget proposals for FY {selectedYear}.</p>
               </div>
-              <div className="bp-mini-year">
-                <CalendarDays />
-                <select
-                  value={selectedYear}
-                  onChange={(event) => setSelectedYear(Number(event.target.value))}
-                  aria-label="Status fiscal year"
-                >
-                  {FISCAL_YEARS.map((year) => (
-                    <option key={year} value={year}>{year}</option>
-                  ))}
-                </select>
-                <ChevronDown />
-              </div>
             </div>
 
             <div className="bp-status-chart-area">
               <div
                 className="bp-donut"
                 style={{
-                  background: `conic-gradient(#10a968 0% ${percentage(approved)}%, #f59e0b ${percentage(approved)}% ${percentage(approved + review)}%, #ef4444 ${percentage(approved + review)}% ${percentage(approved + review + rejected)}%, #e2e8f0 ${percentage(approved + review + rejected)}% 100%)`
+                  background: statusGradient
                 }}
               >
                 <div className="bp-donut-center">
@@ -7053,72 +7991,321 @@ export default function BudgetProposals({
                 </div>
               </div>
 
-              <div className="bp-status-legend">
-                <div className="bp-status-legend-row">
-                  <span><i className="legend-dot dot-green"></i>Approved</span>
-                  <strong>{approved} ({percentage(approved)}%)</strong>
-                </div>
-                <div className="bp-status-legend-row">
-                  <span><i className="legend-dot dot-orange"></i>For Review</span>
-                  <strong>{review} ({percentage(review)}%)</strong>
-                </div>
-                <div className="bp-status-legend-row">
-                  <span><i className="legend-dot dot-red"></i>Rejected</span>
-                  <strong>{rejected} ({percentage(rejected)}%)</strong>
-                </div>
+              <div className="bp-status-legend bp-status-legend-all">
+                {proposalStatuses.map((item) => (
+                  <div className="bp-status-legend-row" key={item.label}>
+                    <span>
+                      <i
+                        className="legend-dot"
+                        style={{ background: statusColors[item.label] }}
+                      />
+                      {item.label}
+                    </span>
+                    <strong>
+                      {Number(item.count || 0)} ({percentage(Number(item.count || 0))}%)
+                    </strong>
+                  </div>
+                ))}
               </div>
             </div>
           </div>
 
         </div>
 
-        {/* Module shortcuts */}
-        <div className="bp-dashboard-section-heading">
-          <div>
-            <h2>MODULES</h2>
-            <p>Quick access to budget proposal functions.</p>
+        {/* Overview analytics moved here to replace the duplicate module shortcut cards. */}
+        <div className="bp-overview-two-col bp-overview-fund-full">
+
+          <div className="bp-panel">
+
+            <div className="bp-panel-header">
+
+              <div>
+
+                <h3 className="bp-panel-title">
+                  Fund Group Reference
+                </h3>
+
+                <p className="bp-panel-subtitle">
+                  Reference budget structure
+                </p>
+
+              </div>
+
+            </div>
+
+            <div className="bp-fund-selector-dropdown" style={{ marginBottom: '16px', maxWidth: '420px' }}>
+              <label
+                htmlFor="overview-fund-group-filter"
+                style={{ display: 'block', fontSize: '14px', fontWeight: 700, color: '#17356f', marginBottom: '7px' }}
+              >
+                Filter by Fund Group
+              </label>
+              <select
+                id="overview-fund-group-filter"
+                value={overviewFundGroup}
+                onChange={(event) => setOverviewFundGroup(event.target.value)}
+                style={{
+                  display: 'block',
+                  width: '100%',
+                  minHeight: '42px',
+                  padding: '9px 12px',
+                  border: '1px solid #cbd5e1',
+                  borderRadius: '7px',
+                  backgroundColor: '#fff',
+                  color: '#17356f',
+                  fontSize: '14px',
+                  fontWeight: 600,
+                  cursor: 'pointer'
+                }}
+              >
+                <option value="All Fund Groups">All Fund Groups</option>
+                {fundGroupData.map(item => (
+                  <option key={item.name} value={item.name}>
+                    {item.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="bp-fund-list">
+
+              {overviewData.map(item => (
+
+                <div
+                  className="bp-fund-row"
+                  key={item.name}
+                >
+
+                  <span className="bp-fund-name">
+                    {item.name}
+                  </span>
+
+                  <span className="bp-fund-value">
+                    {formatCompact(
+                      item.budget
+                    )}
+                  </span>
+
+                  <div className="bp-fund-mini-bar">
+
+                    <div
+                      className="bp-fund-mini-fill"
+                      style={{
+                        width:
+                          `${(
+                            item.budget /
+                            maximumBudget
+                          ) * 100}%`
+                      }}
+                    />
+
+                  </div>
+
+                </div>
+
+              ))}
+
+            </div>
+
           </div>
-        </div>
-
-        <div className="bp-dashboard-module-grid">
-
-          <button type="button" className="bp-dashboard-module-card module-blue" onClick={() => { setOverviewMode('summary'); handleSectionClick('overview'); }}>
-            <div className="bp-module-icon"><BarChart3 /></div>
-            <div className="bp-module-copy">
-              <h3>1. Overview</h3>
-              <p>View proposal summary, status, and recent submissions.</p>
-            </div>
-            <span className="bp-module-action">View Overview <ArrowRight /></span>
-          </button>
-
-          <button type="button" className="bp-dashboard-module-card module-green" onClick={() => handleSectionClick('create')}>
-            <div className="bp-module-icon"><Plus /></div>
-            <div className="bp-module-copy">
-              <h3>2. Create Proposal</h3>
-              <p>Create a new budget proposal and enter required information.</p>
-            </div>
-            <span className="bp-module-action">Create Proposal <ArrowRight /></span>
-          </button>
-
-          <button type="button" className="bp-dashboard-module-card module-purple" onClick={() => handleSectionClick('records')}>
-            <div className="bp-module-icon"><ClipboardList /></div>
-            <div className="bp-module-copy">
-              <h3>3. Manage &amp; Review</h3>
-              <p>View, edit, and process proposals through the approval workflow.</p>
-            </div>
-            <span className="bp-module-action">Manage Proposals <ArrowRight /></span>
-          </button>
-
-          <button type="button" className="bp-dashboard-module-card module-orange" onClick={() => handleSectionClick('reports')}>
-            <div className="bp-module-icon"><History /></div>
-            <div className="bp-module-copy">
-              <h3>4. History &amp; Reports</h3>
-              <p>View proposal history and generate summaries and reports.</p>
-            </div>
-            <span className="bp-module-action">View Reports <ArrowRight /></span>
-          </button>
 
         </div>
+
+
+        <div className="bp-overview-two-col">
+
+          <div className="bp-panel">
+
+            <div className="bp-panel-header">
+
+              <div>
+
+                <h3 className="bp-panel-title">
+                  {overviewMode === 'status' ? 'Proposal Status Summary' : overviewMode === 'department' ? 'Proposals by Department' : overviewMode === 'fund' ? 'Proposals by Fund Group' : 'Proposal Summary by Fund Group'}
+                </h3>
+
+                <p className="bp-panel-subtitle">
+                  Actual proposal records and proposed amounts for the selected breakdown.
+                </p>
+
+              </div>
+
+            </div>
+
+            <div className="bp-budget-table-wrap">
+
+              <table className="bp-budget-table bp-table-summary">
+
+                <thead>
+
+                  <tr>
+                    <th>Fund Group</th>
+                    <th>Budget</th>
+                    <th>Obligations</th>
+                    <th>Disbursements</th>
+                    <th>Balance</th>
+                  </tr>
+
+                </thead>
+
+                <tbody>
+
+                  {overviewPagination.rows.map(item => (
+
+                    <tr key={item.name}>
+
+                      <td>{item.name}</td>
+
+                      <td className="amount">
+                        {formatCurrency(item.budget)}
+                      </td>
+
+                      <td className="amount">
+                        {formatCurrency(item.obligations)}
+                      </td>
+
+                      <td className="amount">
+                        {formatCurrency(item.disbursements)}
+                      </td>
+
+                      <td className="amount">
+                        {formatCurrency(item.balance)}
+                      </td>
+
+                    </tr>
+
+                  ))}
+
+                  <tr className="bp-total-row">
+
+                    <td>TOTAL</td>
+
+                    <td className="amount">
+                      {formatCurrency(
+                        overviewTotals.budget
+                      )}
+                    </td>
+
+                    <td className="amount">
+                      {formatCurrency(
+                        overviewTotals.obligations
+                      )}
+                    </td>
+
+                    <td className="amount">
+                      {formatCurrency(
+                        overviewTotals.disbursements
+                      )}
+                    </td>
+
+                    <td className="amount">
+                      {formatCurrency(
+                        overviewTotals.balance
+                      )}
+                    </td>
+
+                  </tr>
+
+                </tbody>
+
+              </table>
+
+            </div>
+
+          </div>
+
+
+          <div className="bp-panel">
+
+            <div className="bp-panel-header">
+
+              <div>
+
+                <h3 className="bp-panel-title">
+                  Budget Classification
+                </h3>
+
+                <p className="bp-panel-subtitle">
+                  Allotment class reference
+                </p>
+
+              </div>
+
+            </div>
+
+            <div className="bp-info-grid">
+
+              <div className="bp-info-card">
+                <div className="bp-info-label">
+                  PS
+                </div>
+                <div className="bp-info-value">
+                  {formatCurrency(classificationTotals.PS)}
+                </div>
+              </div>
+
+              <div className="bp-info-card">
+                <div className="bp-info-label">
+                  MOOE
+                </div>
+                <div className="bp-info-value">
+                  {formatCurrency(classificationTotals.MOOE)}
+                </div>
+              </div>
+
+              <div className="bp-info-card">
+                <div className="bp-info-label">
+                  CO
+                </div>
+                <div className="bp-info-value">
+                  {formatCurrency(classificationTotals.CO)}
+                </div>
+              </div>
+
+              <div className="bp-info-card">
+                <div className="bp-info-label">
+                  Total
+                </div>
+                <div className="bp-info-value">
+                  {formatCurrency(classificationTotals.total)}
+                </div>
+              </div>
+
+            </div>
+
+            <div className="bp-rate-grid">
+
+              <div className="bp-info-card">
+
+                <div className="bp-info-label">
+                  Obligation Reference Rate
+                </div>
+
+                <div className="bp-info-value">
+                  {utilizationRate.toFixed(2)}%
+                </div>
+
+              </div>
+
+              <div className="bp-info-card">
+
+                <div className="bp-info-label">
+                  Disbursement Reference Rate
+                </div>
+
+                <div className="bp-info-value">
+                  {disbursementRate.toFixed(2)}%
+                </div>
+
+              </div>
+
+            </div>
+
+          </div>
+
+        </div>
+
+
 
         {/* Recent proposals */}
         <div className="bp-dashboard-recent-card">
@@ -7185,9 +8372,10 @@ export default function BudgetProposals({
                       </span>
                     </td>
                     <td>
-                      <button type="button" className="bp-table-view-button" onClick={() => openProposal(proposal)}>
-                        <Eye /> View
-                      </button>
+                      <div className="bp-action-icon-group" style={{ display:'flex', alignItems:'center', gap:5, flexWrap:'nowrap' }}>
+                        <button type="button" title="View proposal" aria-label="View proposal" className="bp-action-icon" onClick={() => openProposalDetails(proposal)}><Eye /></button>
+                        <button type="button" title={(isAdministration || isBudget) && statusLabel(proposal) === 'Draft' ? 'Delete proposal' : 'Only Draft proposals can be deleted'} aria-label="Delete proposal" className="bp-action-icon bp-action-delete" disabled={!((isAdministration || isBudget) && statusLabel(proposal) === 'Draft')} onClick={() => setDeleteTarget(proposal)}><Trash2 /></button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -7219,6 +8407,14 @@ export default function BudgetProposals({
   };
 
 
+  // Refresh proposal history whenever the dedicated Audit Trail page is opened.
+  useEffect(() => {
+    if (selectedSection === 'auditTrail') {
+      setHistoryPage(1);
+      loadAllHistory();
+    }
+  }, [selectedSection]);
+
   // ==========================================================
   // SELECT SCREEN
   // ==========================================================
@@ -7228,7 +8424,8 @@ export default function BudgetProposals({
     switch (selectedSection) {
 
       case 'overview':
-        return renderOverview();
+      case 'modules':
+        return renderModules();
 
       case 'create':
         return renderCreateProposal();
@@ -7244,6 +8441,9 @@ export default function BudgetProposals({
 
       case 'history':
         return renderHistory();
+
+      case 'auditTrail':
+        return renderAuditTrail();
 
       case 'reports':
         return renderReports();
@@ -7274,9 +8474,163 @@ export default function BudgetProposals({
 
       <style>
         {styles}
-      </style>
+      
+</style>
 
       {renderContent()}
+
+      {successNotice && (
+        <div
+          role="status"
+          aria-live="polite"
+          style={{
+            position: 'fixed', top: '24px', right: '24px', zIndex: 10001,
+            maxWidth: 'min(420px, calc(100vw - 32px))',
+            padding: '15px 20px', borderRadius: '12px',
+            background: '#f0fdf4', color: '#166534',
+            border: '1px solid #bbf7d0', boxShadow: '0 8px 28px rgba(15, 23, 42, 0.14)',
+            fontSize: '15px', fontWeight: 800,
+          }}
+        >
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '10px' }}>
+            <CheckCircle2 size={20} aria-hidden="true" />
+            {successNotice.title}
+          </span>
+        </div>
+      )}
+
+      {actionModal && selectedProposal && (
+        <div className="bp-action-modal-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setActionModal(null); }}>
+          <section className="bp-action-modal" role="dialog" aria-modal="true" aria-labelledby="bp-action-modal-title">
+            <header className="bp-action-modal-header">
+              <h2 id="bp-action-modal-title" className="bp-action-modal-title">{actionModal === 'audit' ? `Audit Trail — ${referenceOf(selectedProposal)}` : `Proposal Details — ${referenceOf(selectedProposal)}`}</h2>
+              <button type="button" className="bp-action-modal-close" aria-label="Close modal" onClick={() => setActionModal(null)}><span aria-hidden="true">×</span></button>
+            </header>
+            <div className="bp-action-modal-body">
+              {actionModal === 'view' ? (
+                <div className="bp-action-detail-grid">
+                  {[
+                    ['Reference', referenceOf(selectedProposal)], ['Date', selectedProposal.date || selectedProposal.created_at || selectedProposal.submitted_at],
+                    ['Status', statusLabel(selectedProposal)], ['Fund Group', selectedProposal.fundGroup || selectedProposal.fund_group_name || selectedProposal.fund_cluster_name],
+                    ['Fund Code', selectedProposal.fundCode || selectedProposal.fund_code], ['Campus', selectedProposal.campus || selectedProposal.campus_name],
+                    ['Responsibility Center', selectedProposal.responsibilityCenter || selectedProposal.responsibility_center_name], ['Proposing Office / Department', departmentOf(selectedProposal)],
+                    ['Proponent', selectedProposal.proponent || selectedProposal.prepared_by || selectedProposal.requested_by || selectedProposal.created_by_name || selectedProposal.raw?.proponent || selectedProposal.raw?.prepared_by],
+                    ['Proposal Title', titleOf(selectedProposal)],
+                    ['WFP Description', selectedProposal.wfpDescription || selectedProposal.wfp_description || selectedProposal.wfp_source_name || selectedProposal.raw?.wfp_description],
+                    ['MFO', selectedProposal.mfo || selectedProposal.mfo_name || selectedProposal.raw?.mfo_name],
+                    ['UACS Code', selectedProposal.uacsCode || selectedProposal.uacs_code || selectedProposal.uacs_code_name || selectedProposal.raw?.uacs_code || selectedProposal.raw?.uacs_account_title],
+                    ['Proposed Amount', formatCurrency(amountOf(selectedProposal))],
+                    ['Particulars / Description', selectedProposal.particulars || selectedProposal.description || selectedProposal.proposal_description || selectedProposal.raw?.particulars || selectedProposal.raw?.description],
+                    ['Justification', selectedProposal.justification || selectedProposal.raw?.justification],
+                    ['Expected Outputs', selectedProposal.expected_outputs || selectedProposal.expectedOutputs || selectedProposal.raw?.expected_outputs],
+                    ['Remarks', selectedProposal.remarks || selectedProposal.review_remarks || selectedProposal.raw?.remarks]
+                  ].map(([label, value]) => <div className="bp-action-detail" key={label}><p className="bp-action-detail-label">{label}</p><p className="bp-action-detail-value">{value == null || value === '' ? '—' : String(value)}</p></div>)}
+                </div>
+              ) : (
+                <div>
+                  {proposalHistory.filter((item) => {
+                    const meta = item.details && typeof item.details === 'object' ? item.details : null;
+                    const actionText = String(item.action || item.action_type || '').toLowerCase();
+                    return Boolean(meta?.form_entry) || actionText.includes('proposal entered') || actionText.includes('form entry') || actionText.includes('draft created');
+                  }).length ? proposalHistory.filter((item) => {
+                    const meta = item.details && typeof item.details === 'object' ? item.details : null;
+                    const actionText = String(item.action || item.action_type || '').toLowerCase();
+                    return Boolean(meta?.form_entry) || actionText.includes('proposal entered') || actionText.includes('form entry') || actionText.includes('draft created');
+                  }).map((item, index) => {
+                    const action = 'Proposal Form Entry';
+                    const auditMeta = item.details && typeof item.details === 'object' ? item.details : null;
+                    const actor = auditMeta?.entered_by || item.actor_name || item.performed_by_name || item.changed_by_name || item.user_name || item.created_by_name || item.performed_by || '—';
+                    const when = item.created_at || item.changed_at || item.timestamp;
+                    const details = item.details && typeof item.details !== 'object' ? item.details : (item.message || item.remarks || item.comments || '');
+                    const formEntry = auditMeta?.form_entry && typeof auditMeta.form_entry === 'object' ? auditMeta.form_entry : null;
+                    const entryFields = formEntry ? Object.entries(formEntry).filter(([key, value]) => value !== null && value !== undefined && value !== '') : [];
+                    return <article className="bp-action-audit-row" key={item.id || `${action}-${when || index}-${index}`}>
+                      <div style={{display:'flex',justifyContent:'space-between',gap:14,flexWrap:'wrap',borderBottom:'1px solid #e2e8f0',paddingBottom:9,marginBottom:9}}>
+                        <div><div style={{fontWeight:800,color:'#102b67',fontSize:14}}>{String(action).replaceAll('_',' ')}</div><div style={{fontSize:12,color:'#64748b',marginTop:3}}>{when ? new Date(when).toLocaleString() : 'Date not recorded'}</div></div>
+                        <div style={{fontSize:12,fontWeight:700,color:'#334155'}}>By: {actor}</div>
+                      </div>
+                      {auditMeta && <div style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:12,fontSize:12}}>
+                        {auditMeta.entered_by_email && <span style={{padding:'4px 8px',borderRadius:6,background:'#eff6ff',color:'#1d4ed8'}}>Email: {auditMeta.entered_by_email}</span>}
+                        {auditMeta.entered_by_role && <span style={{padding:'4px 8px',borderRadius:6,background:'#f1f5f9',color:'#334155'}}>Role: {auditMeta.entered_by_role}</span>}
+                      </div>}
+                      {entryFields.length > 0 ? (
+                        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))',gap:8}}>
+                          {entryFields.map(([key,value]) => <div key={key} style={{border:'1px solid #e2e8f0',borderRadius:7,padding:'9px 10px',background:'#f8fafc',minWidth:0}}>
+                            <div style={{fontSize:10,fontWeight:800,textTransform:'uppercase',letterSpacing:'.04em',color:'#64748b',marginBottom:4}}>{String(key).replace(/_/g,' ')}</div>
+                            <div style={{fontSize:12,lineHeight:1.5,color:'#102b67',overflowWrap:'anywhere'}}>{typeof value === 'object' ? JSON.stringify(value) : String(value)}</div>
+                          </div>)}
+                        </div>
+                      ) : (
+                        <p style={{margin:0,fontSize:13,lineHeight:1.6,overflowWrap:'anywhere'}}>{details || item.description || item.new_status || item.status || 'Proposal workflow activity recorded.'}</p>
+                      )}
+                    </article>;
+                  }) : <div style={{padding:'28px 12px',textAlign:'center',color:'#64748b'}}>No form-entry audit record found. New proposal entries will show the Budget user who created the form and the submitted form details here. Workflow status changes are shown in Proposal History.</div>}
+                </div>
+              )}
+              <div style={{display:'flex',justifyContent:'flex-end',gap:8,marginTop:18}}>
+                {actionModal === 'view' && canEditProposal && ['Draft','For Revision'].includes(statusLabel(selectedProposal)) && <button type="button" className="bp-review-action neutral" onClick={() => { const row = selectedProposal; setActionModal(null); editProposal(row); }}><Pencil /> Edit Proposal</button>}
+              </div>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {deleteTarget && (
+        <div className="bp-action-modal-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setDeleteTarget(null); }}>
+          <section className="bp-action-modal" style={{width:'min(460px, 94vw)'}} role="alertdialog" aria-modal="true" aria-labelledby="bp-delete-modal-title">
+            <header className="bp-action-modal-header"><h2 id="bp-delete-modal-title" className="bp-action-modal-title">Delete Budget Proposal</h2><button type="button" className="bp-action-modal-close" aria-label="Close modal" onClick={() => setDeleteTarget(null)}><span aria-hidden="true">×</span></button></header>
+            <div className="bp-action-modal-body"><p style={{margin:0,lineHeight:1.7}}>Are you sure you want to delete budget proposal <strong>{referenceOf(deleteTarget)}</strong>? This action cannot be undone.</p><div style={{display:'flex',justifyContent:'flex-end',gap:9,marginTop:22}}><button type="button" className="bp-review-action neutral" onClick={() => setDeleteTarget(null)}>Cancel</button><button type="button" className="bp-review-action return" onClick={() => deleteProposal(deleteTarget)}><Trash2 /> Delete Record</button></div></div>
+          </section>
+        </div>
+      )}
+
+      {showRoleRestrictionModal && (
+        <div
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              returnToBudgetOverview();
+            }
+          }}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 10000, display: 'flex',
+            alignItems: 'center', justifyContent: 'center', padding: '24px',
+            background: 'rgba(8, 20, 48, 0.58)', backdropFilter: 'blur(3px)',
+          }}
+        >
+          <div
+            role="alertdialog" aria-modal="true"
+            aria-labelledby="bp-role-restriction-title"
+            aria-describedby="bp-role-restriction-description"
+            style={{
+              width: 'min(100%, 460px)', background: '#ffffff', borderRadius: '18px',
+              padding: '30px', boxShadow: '0 24px 70px rgba(8, 20, 48, 0.28)',
+              border: '1px solid #e2e8f0', textAlign: 'center',
+            }}
+          >
+            <div style={{
+              width: '64px', height: '64px', margin: '0 auto 18px', borderRadius: '50%',
+              background: '#fff7ed', color: '#c2410c', display: 'flex',
+              alignItems: 'center', justifyContent: 'center',
+            }}>
+              <AlertCircle size={32} aria-hidden="true" />
+            </div>
+            <h2 id="bp-role-restriction-title" style={{
+              margin: '0 0 10px', color: '#10234f', fontSize: '22px', fontWeight: 800,
+            }}>Access Restricted</h2>
+            <p id="bp-role-restriction-description" style={{
+              margin: '0 0 24px', color: '#475569', fontSize: '15px', lineHeight: 1.65,
+            }}>
+              Only users with the <strong>Budget</strong> role can create, edit, and submit budget proposals. You can still view proposal records and check their current status.
+            </p>
+            <button type="button" onClick={returnToBudgetOverview} style={{
+              width: '100%', minHeight: '44px', border: 0, borderRadius: '10px',
+              background: '#1d4ed8', color: '#ffffff', fontSize: '14px',
+              fontWeight: 700, cursor: 'pointer',
+            }}>Back to Budget Proposals Overview</button>
+          </div>
+        </div>
+      )}
 
     </Layout>
 

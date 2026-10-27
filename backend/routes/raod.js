@@ -50,6 +50,8 @@ const RAOD_FIELDS = [
 
   "registry_no","burs_serial_no","entry_date","fund_cluster_id","fund_source_id","campus_id",
 
+  "po_date","disbursement_date","review_datetime",
+
   "serial_no_transferred","payee","particulars",
 
   "responsibility_center_id","pap_id","uacs_code_id","ref_no",
@@ -96,9 +98,9 @@ const RAOD_BUDGET_FIELDS = new Set([
 
 ]);
 
-const RAOD_ACCOUNTING_FIELDS = new Set(["dv_payroll_no","disbursement_amount"]);
+const RAOD_ACCOUNTING_FIELDS = new Set(["dv_payroll_no","db_no","disbursement_amount","disbursement_date","notice_of_adjustment","adjustment_reason","accounting_status","reviewed_by","review_datetime","accounting_remarks"]);
 
-const RAOD_PROCUREMENT_FIELDS = new Set(["po_no","iar_no","par_no","ics_no","ris_no","po_status"]);
+const RAOD_PROCUREMENT_FIELDS = new Set(["po_no","po_date","supplier_payee","po_amount","air_far_reference","iar_no","par_no","ics_no","ris_no","po_status","procurement_remarks"]);
 
 
 
@@ -776,7 +778,7 @@ function entrySelect() {
         AND EXISTS (
           SELECT 1
           FROM jsonb_array_elements_text(COALESCE(changed_fields, '[]'::jsonb)) AS f(field_name)
-          WHERE f.field_name IN ('po_no','iar_no','par_no','ics_no','ris_no','po_status','status_of_po')
+          WHERE f.field_name IN ('po_no','po_date','supplier_payee','po_amount','air_far_reference','iar_no','par_no','ics_no','ris_no','po_status','status_of_po','procurement_remarks')
         )
       ORDER BY created_at ASC, id ASC
       LIMIT 1
@@ -790,7 +792,7 @@ function entrySelect() {
         AND EXISTS (
           SELECT 1
           FROM jsonb_array_elements_text(COALESCE(changed_fields, '[]'::jsonb)) AS f(field_name)
-          WHERE f.field_name IN ('po_no','iar_no','par_no','ics_no','ris_no','po_status','status_of_po')
+          WHERE f.field_name IN ('po_no','po_date','supplier_payee','po_amount','air_far_reference','iar_no','par_no','ics_no','ris_no','po_status','status_of_po','procurement_remarks')
         )
       ORDER BY created_at DESC, id DESC
       LIMIT 1
@@ -982,6 +984,9 @@ router.get("/reference-data", requireRaodView, async (_req, res) => {
 
 router.get("/overview", requireRaodView, async (req, res) => {
 
+  if (["Procurement", "Accountant"].includes(req.raodRole)) {
+    return res.status(403).json({ success: false, error: `Access restricted: ${req.raodRole} may access RAOD Transactions and role-specific reports only.` });
+  }
   const fiscalYear = n(req.query.fiscal_year, FY);
 
   try {
@@ -1479,6 +1484,9 @@ router.get("/", requireRaodView, async (req, res) => {
 
 router.get("/department-summary", requireRaodView, async (req, res) => {
 
+  if (["Procurement", "Accountant"].includes(req.raodRole)) {
+    return res.status(403).json({ success: false, error: `Access restricted: ${req.raodRole} may access RAOD Transactions and role-specific reports only.` });
+  }
   const fiscalYear = n(req.query.fiscal_year, FY);
 
   try {
@@ -1588,6 +1596,12 @@ router.get("/department-summary", requireRaodView, async (req, res) => {
 router.get("/module/:view", requireRaodView, async (req, res) => {
 
   const view = String(req.params.view || "").toLowerCase();
+  const role = req.raodRole;
+  const restrictedOperationalRoles = ["Procurement", "Accountant"].includes(role);
+  const reportViews = ["financial-reports", "reports-export"];
+  if (restrictedOperationalRoles && !reportViews.includes(view)) {
+    return res.status(403).json({ success: false, error: `Access restricted: ${role} may access RAOD Transactions and role-specific reports only.` });
+  }
 
   const fiscalYear = n(req.query.fiscal_year, FY);
 
@@ -1745,7 +1759,12 @@ router.get("/module/:view", requireRaodView, async (req, res) => {
 
       );
 
-      const entries = entriesResult.rows || [];
+      let entries = entriesResult.rows || [];
+      if (role === "Procurement") {
+        entries = entries.filter(row => [row.po_no, row.iar_no, row.par_no, row.ics_no, row.ris_no, row.po_status].some(value => String(value || "").trim() !== ""));
+      } else if (role === "Accountant") {
+        entries = entries.filter(row => Number(row.obligation_amount || 0) > 0 || Number(row.disbursement_amount || 0) > 0 || String(row.dv_payroll_no || "").trim() !== "");
+      }
       const budget = budgetResult.rows[0] || {};
       const totalObligation = entries.reduce((sum, row) => sum + Number(row.obligation_amount || 0), 0);
       const totalDisbursement = entries.reduce((sum, row) => sum + Number(row.disbursement_amount || 0), 0);
@@ -1984,7 +2003,7 @@ const columns = [
 
   "dv_payroll_no","disbursement_amount","remarks",
 
-  "unpaid_obligation","po_no","iar_no","par_no","ics_no","ris_no","status_of_po","created_by","updated_by"
+  "unpaid_obligation","po_no","po_date","supplier_payee","po_amount","air_far_reference","iar_no","par_no","ics_no","ris_no","status_of_po","procurement_remarks","db_no","disbursement_date","notice_of_adjustment","adjustment_reason","accounting_status","reviewed_by","review_datetime","accounting_remarks","created_by","updated_by"
 
 ];
 
@@ -2002,7 +2021,7 @@ const idFields = [
 
 const moneyFields = [
 
-  "obligation_amount","ps_amount","mooe_amount","co_amount",
+  "obligation_amount","ps_amount","mooe_amount","co_amount","po_amount",
 
   "disbursement_amount","unpaid_obligation"
 
@@ -2140,6 +2159,21 @@ router.post("/", requireRaodCreate, async (req, res) => {
 
 
   try {
+
+    // Enforce role ownership on create as well as update. Budget owns only
+    // budget/obligation fields; Procurement and Accounting must complete their
+    // own sections later through the dedicated role-specific endpoints.
+    if (req.raodRole === "Budget") {
+      body.dv_payroll_no = null;
+      body.disbursement_amount = 0;
+      body.po_no = null;
+      body.iar_no = null;
+      body.par_no = null;
+      body.ics_no = null;
+      body.ris_no = null;
+      body.po_status = null;
+      body.status_of_po = null;
+    }
 
     const fiscalYear = n(body.fiscal_year, FY);
     const wfpSource = await getWfpSource(body.wfp_source_id ?? body.wfp_source);
@@ -2309,12 +2343,18 @@ router.put("/:id", requireRaodView, async (req, res) => {
      */
     if (role === "Procurement") {
       const fieldMap = {
+        // Keep every Procurement form field mapped to its actual database column.
         po_no: "po_no",
+        po_date: "po_date",
+        supplier_payee: "supplier_payee",
+        po_amount: "po_amount",
+        air_far_reference: "air_far_reference",
         iar_no: "iar_no",
         par_no: "par_no",
         ics_no: "ics_no",
         ris_no: "ris_no",
         po_status: "status_of_po",
+        procurement_remarks: "procurement_remarks",
       };
 
       const updates = [];
@@ -2327,7 +2367,17 @@ router.put("/:id", requireRaodView, async (req, res) => {
         if (!Object.prototype.hasOwnProperty.call(requestBody, apiField)) continue;
 
         const raw = requestBody[apiField];
-        const value = raw === undefined || raw === null || String(raw).trim() === "" ? null : String(raw).trim();
+        let value = raw === undefined || raw === null || String(raw).trim() === "" ? null : String(raw).trim();
+        if (apiField === "po_amount" && value !== null) {
+          const numericAmount = Number(value);
+          if (!Number.isFinite(numericAmount) || numericAmount < 0) {
+            return res.status(400).json({ error: "PO Amount must be a valid non-negative amount." });
+          }
+          value = numericAmount;
+        }
+        if (apiField === "po_date" && value !== null && !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+          return res.status(400).json({ error: "PO Date must be a valid date." });
+        }
         const oldValue = existing[dbField] ?? null;
 
         if (String(oldValue ?? "") !== String(value ?? "")) {
@@ -2464,13 +2514,20 @@ router.put("/:id/procurement", requireRaodView, async (req, res) => {
   }
 
   const userId = raodUser(req)?.id ?? raodUser(req)?.user_id ?? raodUser(req)?.userId ?? null;
+  // Persist every editable field shown in the Procurement form, not only the reference numbers.
+  // The database column for PO status is status_of_po; the API/UI uses po_status.
   const fieldMap = {
     po_no: "po_no",
+    po_date: "po_date",
+    supplier_payee: "supplier_payee",
+    po_amount: "po_amount",
+    air_far_reference: "air_far_reference",
     iar_no: "iar_no",
     par_no: "par_no",
     ics_no: "ics_no",
     ris_no: "ris_no",
     po_status: "status_of_po",
+    procurement_remarks: "procurement_remarks",
   };
 
   try {

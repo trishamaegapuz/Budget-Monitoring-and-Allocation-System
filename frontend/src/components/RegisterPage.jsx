@@ -223,7 +223,7 @@ export default function RegisterPage({ onSwitchToLogin }) {
 
             {/* Role */}
             <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1.5">Role Requested</label>
+              <label className="block text-xs font-semibold text-gray-700 mb-1.5">Role</label>
               <select
                 className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 text-sm rounded-xl focus:ring-2 focus:ring-[#1a237e] focus:bg-white focus:outline-none transition"
                 value={formData.role}

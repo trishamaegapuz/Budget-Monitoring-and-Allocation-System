@@ -1971,8 +1971,10 @@ export default function MasterData({
                     <label className="block text-xs font-semibold text-gray-700 mb-1">Fee Category *</label>
                     <select name="category" value={formData.category} onChange={handleFormChange} required className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-xs bg-white focus:outline-none focus:ring-1 focus:ring-blue-600 focus:border-blue-600">
                       <option value="">Select Fee Category</option>
-                      <option value="Fiduciary Fees">Fiduciary Fees</option>
-                      <option value="Non-Fiduciary Fees">Non-Fiduciary Fees</option>
+                      <option value="Non-Fiduciary Fees - Tuition Fees">Non-Fiduciary Fees - Tuition Fees</option>
+                      <option value="Fiduciary Fees - College">Fiduciary Fees - College</option>
+                      <option value="Fiduciary Fees - JHS">Fiduciary Fees - JHS</option>
+                      <option value="Fiduciary Fees - Other School Fees">Fiduciary Fees - Other School Fees</option>
                     </select>
                   </div>
                 )}

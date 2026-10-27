@@ -1,3 +1,5 @@
+// Updated backend masterdata.js — save as masterdata.js in your backend routes folder.
+
 // backend/routes/masterdata.js
 
 const express = require('express');
@@ -3602,21 +3604,27 @@ router.get(
 // ============================================================
 // FEE MANAGEMENT — master data for Fee Monitoring
 // ============================================================
-const FEE_CATEGORIES = ['Fiduciary Fees', 'Non-Fiduciary Fees'];
+const FEE_CATEGORIES = ['Non-Fiduciary Fees - Tuition Fees', 'Fiduciary Fees - College', 'Fiduciary Fees - JHS', 'Fiduciary Fees - Other School Fees'];
 
 router.get('/fees', async (req, res) => {
   try {
     const { page, limit, offset } = getPagination(req);
     const search = getSearch(req);
+    // Only expose active particulars from the four official FY 2026 categories.
+    // Legacy rows are retained in PostgreSQL but are excluded from new-entry dropdowns.
     const result = await pool.query(
       `SELECT id, code, name, category, description, status, created_at, updated_at
          FROM fee_master_particulars
-        WHERE ($1 = '' OR code ILIKE '%' || $1 || '%' OR name ILIKE '%' || $1 || '%' OR category ILIKE '%' || $1 || '%')
+        WHERE status = 'Active'
+          AND category = ANY($1::text[])
+          AND ($2 = '' OR code ILIKE '%' || $2 || '%' OR name ILIKE '%' || $2 || '%' OR category ILIKE '%' || $2 || '%')
         ORDER BY category, name
-        LIMIT $2 OFFSET $3`, [search, limit, offset]);
+        LIMIT $3 OFFSET $4`, [FEE_CATEGORIES, search, limit, offset]);
     const count = await pool.query(
       `SELECT COUNT(*)::int AS total FROM fee_master_particulars
-        WHERE ($1 = '' OR code ILIKE '%' || $1 || '%' OR name ILIKE '%' || $1 || '%' OR category ILIKE '%' || $1 || '%')`, [search]);
+        WHERE status = 'Active'
+          AND category = ANY($1::text[])
+          AND ($2 = '' OR code ILIKE '%' || $2 || '%' OR name ILIKE '%' || $2 || '%' OR category ILIKE '%' || $2 || '%')`, [FEE_CATEGORIES, search]);
     const totalItems = Number(count.rows[0]?.total) || 0;
     return res.json({ items: result.rows, currentPage: page, totalItems, totalPages: Math.max(1, Math.ceil(totalItems / limit)) });
   } catch (error) { return sendDatabaseError(res, error, 'Fee master data fetch error:'); }

@@ -30,7 +30,7 @@ const { writeAuditLog } = require("../utils/auditLogger");
 
 const FY = 2026;
 const IGP_FUND_CODE = "161";
-const VIEW_ROLES = ["Administration", "Budget"];
+const VIEW_ROLES = ["Administration", "Budget", "Procurement", "Accountant"];
 const PROGRAM_MANAGE_ROLES = ["Administration", "Budget"];
 const TRANSACTION_MANAGE_ROLES = ["Administration", "Budget"];
 const ADMIN_ONLY_ROLES = ["Administration"];
@@ -207,6 +207,7 @@ router.get("/overview", async (req, res) => {
            t.transaction_type,
            t.reference_no,
            t.description,
+           t.payee,
            CASE
              WHEN t.transaction_type = 'Income' THEN t.income_amount
              WHEN t.transaction_type = 'Utilization' THEN t.utilization_amount
@@ -1115,6 +1116,43 @@ router.post("/transactions", requireIgpTransactionManage, async (req, res) => {
   }
 });
 
+
+// Role-scoped Procurement / Accounting updates for existing Fund 161 transactions.
+// These endpoints never accept budget/program fields from these roles.
+const IGP_PROCUREMENT_FIELDS = ["po_no", "po_date", "supplier_payee", "po_amount", "air_far_reference", "iar_no", "par_no", "ics_no", "ris_no", "po_status", "procurement_remarks"];
+const IGP_ACCOUNTING_FIELDS = ["db_no", "dv_payroll_no", "burs_serial_no", "disbursement_date", "disbursement_amount", "notice_of_adjustment", "adjustment_reason", "accounting_status", "reviewed_by", "review_datetime", "accounting_remarks"];
+router.put("/transactions/:id/office-details", (req, res, next) => verifyToken(req, res, next), async (req, res) => {
+  const rawRole = String(req.user?.role || "").trim().toLowerCase();
+  const role = rawRole === "procurement" ? "Procurement" : rawRole === "accountant" ? "Accountant" : rawRole;
+  const fields = role === "Procurement" ? IGP_PROCUREMENT_FIELDS : role === "Accountant" ? IGP_ACCOUNTING_FIELDS : null;
+  if (!fields) return res.status(403).json({ success: false, error: "Only Procurement or Accountant may update office details." });
+  const id = nullableInt(req.params.id);
+  if (!id) return res.status(400).json({ success: false, error: "Invalid transaction ID." });
+  const updates = fields.filter((field) => Object.prototype.hasOwnProperty.call(req.body || {}, field));
+  if (!updates.length) return res.status(400).json({ success: false, error: "No permitted office fields were supplied." });
+  const values = [];
+  const setSql = updates.map((field) => {
+    let value = req.body[field];
+    if (field === "po_amount" || field === "disbursement_amount") value = amount(value);
+    if (value === "") value = null;
+    values.push(value ?? null);
+    return `${field} = $${values.length}`;
+  });
+  try {
+    const beforeResult = await pool.query("SELECT * FROM igp_transactions WHERE id = $1", [id]);
+    if (!beforeResult.rows.length) return res.status(404).json({ success: false, error: "IGP transaction not found." });
+    const updateValues = [...values, nullableInt(req.user?.id), id];
+    const updatedByParam = values.length + 1;
+    const idParam = values.length + 2;
+    const result = await pool.query(`UPDATE igp_transactions SET ${setSql.join(", ")}, updated_by = $${updatedByParam}, updated_at=CURRENT_TIMESTAMP WHERE id=$${idParam} RETURNING *`, updateValues);
+    if (!result.rows.length) return res.status(404).json({ success: false, error: "IGP transaction not found." });
+    await writeAuditLog({ req, module: "IGP Registry", action: "UPDATE OFFICE DETAILS", tableName: "igp_transactions", recordId: id, oldValues: beforeResult.rows[0], newValues: result.rows[0] });
+    return res.json({ success: true, transaction: result.rows[0] });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: errorMessage(error) });
+  }
+});
+
 router.put("/transactions/:id", requireIgpTransactionManage, async (req, res) => {
   const id = nullableInt(req.params.id);
   const body = req.body || {};
@@ -1166,49 +1204,45 @@ router.put("/transactions/:id", requireIgpTransactionManage, async (req, res) =>
       `UPDATE igp_transactions
           SET transaction_date = $1,
               transaction_type = $2,
-              registry_no = registry_no,
-              fund_cluster_id = $4,
-              campus_id = $5,
-              burs_serial_no = burs_serial_no,
-              serial_no_transferred = $7,
-              payee = $8,
-              description = $9,
-              responsibility_center_id = $10,
-              pap_id = $11,
-              uacs_code_id = $12,
-              reference_no = $13,
-              allotment_class_id = $14,
-              uacs_funding_source_code = $15,
-              month = $16,
-              series = $17,
-              series2 = $18,
-              quarter = $19,
-              object_expenditure_id = $20,
-              mfo_id = $21,
-              old_uacs_code_id = $22,
-              account_title = $23,
-              income_amount = $24,
-              utilization_amount = $25,
-              ps_utilization = $26,
-              mooe_utilization = $27,
-              co_utilization = $28,
-              wfp_source_id = $29,
-              wfp_source_code = $30,
-              running_balance = $31,
-              remarks = $32,
-              unpaid_utilization = $33,
-              updated_by = $34,
+              fund_cluster_id = $3,
+              campus_id = $4,
+              serial_no_transferred = $5,
+              payee = $6,
+              description = $7,
+              responsibility_center_id = $8,
+              pap_id = $9,
+              uacs_code_id = $10,
+              reference_no = $11,
+              allotment_class_id = $12,
+              uacs_funding_source_code = $13,
+              month = $14,
+              series = $15,
+              series2 = $16,
+              quarter = $17,
+              object_expenditure_id = $18,
+              mfo_id = $19,
+              old_uacs_code_id = $20,
+              account_title = $21,
+              income_amount = $22,
+              utilization_amount = $23,
+              ps_utilization = $24,
+              mooe_utilization = $25,
+              co_utilization = $26,
+              wfp_source_id = $27,
+              wfp_source_code = $28,
+              running_balance = $29,
+              remarks = $30,
+              unpaid_utilization = $31,
+              updated_by = $32,
               updated_at = CURRENT_TIMESTAMP
-        WHERE id = $35
-          AND fund_source_id = $36
+        WHERE id = $33
+          AND fund_source_id = $34
         RETURNING *`,
       [
         body.transaction_date,
         type,
-        body.registry_no || null,
         nullableInt(body.fund_cluster_id),
         nullableInt(body.campus_id),
-        body.burs_serial_no || null,
         body.serial_no_transferred || null,
         body.payee || null,
         body.particulars || body.description || null,

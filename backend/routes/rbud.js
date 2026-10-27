@@ -519,7 +519,29 @@ router.get("/", async (req, res) => {
         ) AS calculated_unpaid_utilization,
         r.unpaid_utilization,
         r.status AS record_status,
+        r.po_no,
+        r.po_date,
+        r.supplier_payee,
+        r.po_amount,
+        r.air_far_reference,
+        r.iar_no,
+        r.par_no,
+        r.ics_no,
+        r.ris_no,
+        r.po_status,
+        r.procurement_remarks,
+        r.db_no,
+        r.dv_payroll_no,
+        r.disbursement_date,
+        r.notice_of_adjustment,
+        r.adjustment_reason,
+        r.accounting_status,
+        r.reviewed_by,
+        r.review_datetime,
+        r.accounting_remarks,
+        r.status_of_po,
         r.burs_serial_no,
+        r.serial_no_transferred,
         r.ref_no,
         r.remarks,
         r.created_by_name,
@@ -555,7 +577,7 @@ router.get("/", async (req, res) => {
         ws.code AS wfp_source_code,
         ws.name AS wfp_source_name,
         ws.name AS wfp_source,
-        uacs.code AS uacs_code,
+        COALESCE(NULLIF(TRIM(uacs.account_title), ''), NULLIF(TRIM(uacs.revised_description), ''), NULLIF(TRIM(uacs.account_description), ''), uacs.code) AS uacs_code,
         uacs.old_code AS uacs_old_code,
         uacs.account_title AS uacs_account_title,
         uacs.account_title,
@@ -2644,7 +2666,7 @@ router.post("/fees", async (req, res) => {
   const category = String(b.fee_category || "").trim();
   const particulars = String(b.particulars || "").trim();
   const campus = String(b.campus || "").trim();
-  const validCategories = ["Fiduciary Fees", "Non-Fiduciary Fees"];
+  const validCategories = ["Non-Fiduciary Fees - Tuition Fees", "Fiduciary Fees - College", "Fiduciary Fees - JHS", "Fiduciary Fees - Other School Fees"];
   if (!validCategories.includes(category) || !particulars || !campus) {
     return res.status(400).json({ error: "Select a valid fee category, particulars, and campus from Master Data." });
   }
@@ -2693,7 +2715,7 @@ router.put("/fees/:id", async (req, res) => {
   const category = String(b.fee_category || "").trim();
   const particulars = String(b.particulars || "").trim();
   const campus = String(b.campus || "").trim();
-  if (!["Fiduciary Fees", "Non-Fiduciary Fees"].includes(category) || !particulars || !campus) {
+  if (!["Non-Fiduciary Fees - Tuition Fees", "Fiduciary Fees - College", "Fiduciary Fees - JHS", "Fiduciary Fees - Other School Fees"].includes(category) || !particulars || !campus) {
     return res.status(400).json({ error: "Select a valid fee category, particulars, and campus from Master Data." });
   }
   const amounts = ["billing_amount", "collected_amount", "obligated_amount", "disbursed_amount"].map((k) => Number(b[k] || 0));
@@ -2771,7 +2793,7 @@ router.post("/fee-budget-reference", async (req, res) => {
   const category = String(b.fee_category || "").trim();
   const particulars = String(b.particulars || "").trim();
   const amount = Number(b.budget_amount);
-  if (!campus || !["Fiduciary Fees", "Non-Fiduciary Fees"].includes(category) || !particulars || !Number.isFinite(amount) || amount < 0) return res.status(400).json({ error: "Campus, valid fee category, particular, and non-negative WFP amount are required." });
+  if (!campus || !["Non-Fiduciary Fees - Tuition Fees", "Fiduciary Fees - College", "Fiduciary Fees - JHS", "Fiduciary Fees - Other School Fees"].includes(category) || !particulars || !Number.isFinite(amount) || amount < 0) return res.status(400).json({ error: "Campus, valid fee category, particular, and non-negative WFP amount are required." });
   try {
     const campusCheck = await pool.query("SELECT 1 FROM campuses WHERE is_active=TRUE AND LOWER(TRIM(name))=LOWER(TRIM($1)) LIMIT 1", [campus]);
     if (!campusCheck.rowCount) return res.status(400).json({ error: "Select an active campus from Master Data." });
@@ -2786,6 +2808,43 @@ router.post("/fee-budget-reference", async (req, res) => {
   } catch (error) {
     console.error("RBUD fee budget reference save error:", error);
     res.status(500).json({ error: error.message, code: error.code || null });
+  }
+});
+
+router.get("/audit-trail", async (req, res) => {
+  try {
+    await ensureRbudAuditTable(pool);
+    const search = String(req.query.search || "").trim();
+    const action = String(req.query.action || "").trim().toUpperCase();
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 50, 1), 200);
+    const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
+    const offset = (page - 1) * limit;
+    const filters = `WHERE ($1 = '' OR registry_no ILIKE '%' || $1 || '%'
+               OR performed_by_name ILIKE '%' || $1 || '%'
+               OR performed_by_email ILIKE '%' || $1 || '%'
+               OR action ILIKE '%' || $1 || '%')
+          AND ($2 = '' OR UPPER(action) = $2)`;
+    const [result, countResult] = await Promise.all([
+      pool.query(
+        `SELECT id, rbud_entry_id, registry_no, action, performed_by_id,
+                performed_by_name, performed_by_email, performed_by_role,
+                changed_fields, old_values, new_values, created_at
+           FROM rbud_audit_trail
+           ${filters}
+          ORDER BY created_at DESC, id DESC
+          LIMIT $3 OFFSET $4`,
+        [search, action, limit, offset]
+      ),
+      pool.query(
+        `SELECT COUNT(*)::int AS total FROM rbud_audit_trail ${filters}`,
+        [search, action]
+      ),
+    ]);
+    const total = Number(countResult.rows[0]?.total || 0);
+    res.json({ items: result.rows, total, page, limit, totalPages: Math.ceil(total / limit) });
+  } catch (error) {
+    console.error("RBUD audit trail load error:", error);
+    res.status(500).json({ error: "Unable to load RBUD audit trail." });
   }
 });
 
@@ -2816,7 +2875,7 @@ router.get("/:id", async (req, res) => {
         mfo.code AS mfo_code,
         mfo.name AS mfo_name,
 
-        uacs.code AS uacs_code,
+        COALESCE(NULLIF(TRIM(uacs.account_title), ''), NULLIF(TRIM(uacs.revised_description), ''), NULLIF(TRIM(uacs.account_description), ''), uacs.code) AS uacs_code,
         uacs.old_code AS uacs_old_code,
         uacs.account_title AS uacs_account_title,
         uacs.account_title,
@@ -2999,6 +3058,10 @@ const RBUD_FIELDS = [
   "running_balance",
   "remarks",
   "unpaid_utilization",
+  "po_no", "po_date", "supplier_payee", "po_amount", "air_far_reference",
+  "iar_no", "par_no", "ics_no", "ris_no", "po_status", "procurement_remarks",
+  "db_no", "dv_payroll_no", "disbursement_date", "notice_of_adjustment", "adjustment_reason",
+  "accounting_status", "reviewed_by", "review_datetime", "accounting_remarks",
 ];
 
 const ID_FIELDS = [
@@ -3022,6 +3085,7 @@ const NUMERIC_FIELDS = [
   "mooe_utilization",
   "co_utilization",
   "disbursement_amount",
+  "po_amount",
   "running_balance",
   "unpaid_utilization",
 ];
@@ -3034,6 +3098,15 @@ const NUMERIC_FIELDS = [
 | The client is never trusted to choose its own role.
 |-------------------------------------------------------------------------- 
 */
+
+const RBUD_PROCUREMENT_EDIT_FIELDS = new Set([
+  "po_no", "po_date", "supplier_payee", "po_amount", "air_far_reference",
+  "iar_no", "par_no", "ics_no", "ris_no", "po_status", "procurement_remarks"
+]);
+const RBUD_ACCOUNTING_EDIT_FIELDS = new Set([
+  "db_no", "burs_serial_no", "dv_payroll_no", "disbursement_date", "disbursement_amount",
+  "notice_of_adjustment", "adjustment_reason", "accounting_status", "reviewed_by", "review_datetime", "accounting_remarks"
+]);
 
 const RBUD_SYSTEM_FIELDS = new Set([
   "registry_no",
@@ -3137,6 +3210,27 @@ function auditActor(req) {
   };
 }
 
+async function ensureRbudAuditTable(client) {
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS rbud_audit_trail (
+      id BIGSERIAL PRIMARY KEY,
+      rbud_entry_id BIGINT NULL,
+      registry_no TEXT NULL,
+      action VARCHAR(30) NOT NULL,
+      performed_by_id TEXT NULL,
+      performed_by_name TEXT NOT NULL DEFAULT 'Unknown User',
+      performed_by_email TEXT NULL,
+      performed_by_role TEXT NULL,
+      changed_fields JSONB NOT NULL DEFAULT '[]'::jsonb,
+      old_values JSONB NULL,
+      new_values JSONB NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  await client.query(`CREATE INDEX IF NOT EXISTS idx_rbud_audit_created_at ON rbud_audit_trail (created_at DESC)`);
+  await client.query(`CREATE INDEX IF NOT EXISTS idx_rbud_audit_registry_no ON rbud_audit_trail (registry_no)`);
+}
+
 async function writeRbudAudit(client, {
   req,
   entryId,
@@ -3146,6 +3240,7 @@ async function writeRbudAudit(client, {
   oldValues = null,
   newValues = null,
 }) {
+  await ensureRbudAuditTable(client);
   const actor = auditActor(req);
 
   await client.query(
@@ -3198,6 +3293,8 @@ function rbudEditableFields(role) {
   }
 
   if (role === "Budget") return RBUD_BUDGET_EDIT_FIELDS;
+  if (role === "Procurement") return RBUD_PROCUREMENT_EDIT_FIELDS;
+  if (role === "Accountant") return RBUD_ACCOUNTING_EDIT_FIELDS;
 
   return new Set();
 }
@@ -3218,7 +3315,7 @@ function requireRbudCreateRole(req, res) {
 function requireRbudEditRole(req, res) {
   const role = rbudRole(req);
 
-  if (!["Administration", "Budget"].includes(role)) {
+  if (!["Administration", "Budget", "Procurement", "Accountant"].includes(role)) {
     res.status(403).json({
       error: "Your role is not allowed to edit RBUD transactions.",
     });

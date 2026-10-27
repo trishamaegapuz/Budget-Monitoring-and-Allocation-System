@@ -133,19 +133,13 @@ const requireProposalStatusRole = (req, res, next) => {
 
 
   const roleByStatus = {
-
-    Submitted: ['Administration', 'Budget'],
-
-    'Under Review': ['Administration', 'Budget'],
-
-    'For Revision': ['Administration', 'Budget'],
-
-    Endorsed: ['Administration', 'Budget'],
-
-    Approved: ['Administration', 'Budget'],
-
-    Rejected: ['Administration', 'Budget']
-
+    // Budget may submit proposals; Administration alone controls review decisions.
+    Submitted: ['Budget'],
+    'Under Review': ['Administration'],
+    'For Revision': ['Administration'],
+    Endorsed: ['Administration'],
+    Approved: ['Administration'],
+    Rejected: ['Administration']
   };
 
 
@@ -309,15 +303,11 @@ function normalizeProposal(row) {
 
 
   const particulars = pick(d, [
-
     'particulars',
-
+    'program_project_activity',
     'description',
-
     'proposal_description',
-
     'title'
-
   ], '');
 
 
@@ -343,9 +333,8 @@ function normalizeProposal(row) {
 
 
   return {
-
+    raw: d,
     id,
-
     reference,
 
     proposal_no: pick(d, ['proposal_no', 'budget_proposal_no'], reference),
@@ -401,6 +390,10 @@ function normalizeProposal(row) {
     pap: pick(d, ['pap_name', 'pap', 'pap_department', 'program'], ''),
 
     particulars,
+
+    justification: pick(d, ['justification', 'proposal_justification'], ''),
+
+    expected_outputs: pick(d, ['expected_outputs', 'expectedOutputs', 'expected_result'], ''),
 
     amount,
 
@@ -532,6 +525,9 @@ async function ensureHistoryTable() {
 
   `);
 
+  // Keep the form-entry snapshot and authenticated creator with each audit record.
+  await pool.query(`ALTER TABLE budget_proposal_history ADD COLUMN IF NOT EXISTS details JSONB`);
+
   await pool.query(`
 
     CREATE INDEX IF NOT EXISTS idx_budget_proposal_history_proposal
@@ -586,6 +582,9 @@ async function readRows(year) {
 
         'uacs_account_title', uacs.account_title,
 
+        'mfo_name', mfo.name,
+        'object_expenditure_name', oe.name,
+        
         'allotment_class_name', ac.name,
 
         'allotment_class_code', ac.code
@@ -967,7 +966,20 @@ function valueForColumn(column, body, generated) {
 
     proposal_description: clean(body.description || body.particulars),
 
+    // Actual schema column for the form's Particulars / Description.
+    program_project_activity: clean(
+      body.particulars || body.description || body.program_project_activity
+    ),
+
     particulars: clean(body.particulars || body.description),
+
+    justification: clean(body.justification || body.proposal_justification),
+
+    proposal_justification: clean(body.justification || body.proposal_justification),
+
+    expected_outputs: clean(body.expected_outputs || body.expectedOutputs || body.expected_result),
+
+    expected_result: clean(body.expected_outputs || body.expectedOutputs || body.expected_result),
 
 
 
@@ -1589,7 +1601,7 @@ async function ensureBudgetItemForProposal(db, proposalId) {
 
 
 
-async function insertProposal(body, status) {
+async function insertProposal(body, status, user) {
 
   body = await resolveReferenceIds(body);
 
@@ -1727,9 +1739,9 @@ async function insertProposal(body, status) {
 
     INSERT INTO budget_proposal_history
 
-      (proposal_id, action, status, remarks, actor_id, actor_name)
+      (proposal_id, action, status, remarks, actor_id, actor_name, details)
 
-    VALUES ($1, $2, $3, $4, $5, $6)
+    VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb)
 
     `,
 
@@ -1737,15 +1749,28 @@ async function insertProposal(body, status) {
 
       proposal.id,
 
-      status === 'Submitted' ? 'Submitted' : 'Draft Created',
+      status === 'Submitted' ? 'Proposal Entered & Submitted' : 'Proposal Entered (Draft)',
 
       status,
 
       clean(body.remarks),
 
-      body.created_by ? Number(body.created_by) : null,
+      user?.id ? Number(user.id) : null,
 
-      clean(body.proponent)
+      clean(user?.full_name) || clean(user?.name) || clean(user?.username) || clean(user?.email) || 'Authenticated User',
+
+      JSON.stringify({
+        entered_by: clean(user?.full_name) || clean(user?.name) || clean(user?.username) || clean(user?.email) || 'Authenticated User',
+        entered_by_email: clean(user?.email) || null,
+        entered_by_role: clean(user?.role) || null,
+        // Capture submitted form fields too: some UI-only values such as
+        // proponent have no dedicated column in budget_proposals.
+        form_entry: {
+          ...body,
+          proposal_id: proposal.id,
+          proposal_no: proposal.reference
+        }
+      })
 
     ]
 
@@ -1979,7 +2004,7 @@ router.get('/history', verifyToken, requireProposalRoles('Administration', 'Budg
 
       SELECT h.id, h.proposal_id, bp.proposal_no, h.action, h.status, h.remarks,
 
-             h.actor_id, h.actor_name, h.created_at
+             h.actor_id, h.actor_name, h.details, h.created_at
 
       FROM budget_proposal_history h
 
@@ -2035,7 +2060,7 @@ router.get('/:id/history', verifyToken, requireProposalRoles('Administration', '
 
       SELECT id, proposal_id, action, status, remarks,
 
-             actor_id, actor_name, created_at
+             actor_id, actor_name, details, created_at
 
       FROM budget_proposal_history
 
@@ -2137,7 +2162,10 @@ router.get('/:id', verifyToken, requireProposalRoles('Administration', 'Budget',
 
            'uacs_account_title', uacs.account_title,
 
-           'allotment_class_name', ac.name, 'allotment_class_code', ac.code
+           'mfo_name', mfo.name,
+        'object_expenditure_name', oe.name,
+        
+        'allotment_class_name', ac.name, 'allotment_class_code', ac.code
 
          ) AS data
 
@@ -2219,7 +2247,7 @@ router.post(
 
   verifyToken,
 
-  requireProposalRoles('Administration', 'Budget'),
+  requireProposalRoles('Budget'),
 
   async (req, res) => {
 
@@ -2285,7 +2313,7 @@ router.post(
 
 
 
-    const proposal = await insertProposal(body, 'Draft');
+    const proposal = await insertProposal(body, 'Draft', req.user);
 
 
 
@@ -2325,7 +2353,7 @@ router.put(
 
   verifyToken,
 
-  requireProposalRoles('Administration', 'Budget'),
+  requireProposalRoles('Budget'),
 
   async (req, res) => {
 
@@ -2551,7 +2579,7 @@ router.put(
 
         body.created_by ? Number(body.created_by) : null,
 
-        clean(body.proponent)
+        clean(req.user?.full_name) || clean(req.user?.name) || clean(req.user?.username) || 'System User'
 
       ]
 

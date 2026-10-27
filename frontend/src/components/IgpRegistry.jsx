@@ -11,6 +11,7 @@ import {
   CheckCircle2,
   Download,
   Eye,
+  History,
   FileBarChart,
   FileText,
   Landmark,
@@ -31,6 +32,9 @@ const FISCAL_YEARS = Array.from(
   (_, index) => new Date().getFullYear() - index
 );
 const LIMIT = 30;
+const RECENT_TRANSACTIONS_LIMIT = 10;
+const PROGRAMS_LIMIT = 30;
+const MONITORING_LIMIT = 10;
 
 const money = (value) =>
   `₱${Number(value || 0).toLocaleString("en-US", {
@@ -69,6 +73,7 @@ const emptyProgram = {
 const emptyTransaction = {
   igp_program_id: "",
   transaction_date: new Date().toISOString().slice(0, 10),
+  fiscal_year: String(new Date().getFullYear()),
   transaction_type: "Income",
   registry_no: "",
   fund_cluster_id: "",
@@ -100,6 +105,8 @@ const emptyTransaction = {
   running_balance: "",
   remarks: "",
   unpaid_utilization: "",
+  po_no: "", po_date: "", supplier_payee: "", po_amount: "", air_far_reference: "", iar_no: "", par_no: "", ics_no: "", ris_no: "", po_status: "", procurement_remarks: "",
+  db_no: "", dv_payroll_no: "", burs_serial_no: "", disbursement_date: "", disbursement_amount: "", notice_of_adjustment: "", adjustment_reason: "", accounting_status: "Pending", reviewed_by: "", review_datetime: "", accounting_remarks: "",
 };
 
 function SectionTitle({ title, text, action }) {
@@ -181,17 +188,9 @@ function CardButton({ item, onClick, disabled = false }) {
   );
 }
 
-function BackBar({ title, onBack }) {
+function BackBar({ title }) {
   return (
-    <div className="mb-4 flex items-center gap-3">
-      <button
-        type="button"
-        onClick={onBack}
-        className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-[10px] font-bold text-slate-600 hover:bg-slate-50"
-      >
-        <ArrowLeft className="h-3.5 w-3.5" />
-        Back to IGP Modules
-      </button>
+    <div className="mb-4 flex items-center justify-between gap-3">
       <h2 className="text-base font-extrabold text-[#10245b]">{title}</h2>
     </div>
   );
@@ -200,11 +199,11 @@ function BackBar({ title, onBack }) {
 function Table({ columns, rows, empty = "No records found." }) {
   return (
     <div className="overflow-x-auto rounded-xl border border-slate-100 bg-white shadow-sm">
-      <table className="min-w-full text-left">
+      <table className="w-max min-w-full text-left">
         <thead>
           <tr className="bg-[#102b67] text-[9px] font-bold uppercase tracking-wide text-white">
             {columns.map((column) => (
-              <th key={column.key} className="whitespace-nowrap px-3 py-3">
+              <th key={column.key} className="!text-white whitespace-nowrap px-3 py-3">
                 {column.label}
               </th>
             ))}
@@ -254,7 +253,7 @@ function StatusBadge({ value }) {
 function Modal({ title, children, onClose, wide = false }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-3">
-      <div className={`max-h-[94vh] w-full overflow-y-auto rounded-2xl bg-white shadow-2xl ${wide ? "max-w-6xl" : "max-w-3xl"}`}>
+      <div className={`max-h-[92vh] w-full overflow-y-auto rounded-2xl bg-white shadow-2xl ${wide ? "max-w-[1400px] w-[95vw]" : "max-w-3xl"}`}>
         <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-100 bg-white px-5 py-4">
           <h3 className="text-sm font-extrabold text-[#10245b]">{title}</h3>
           <button type="button" onClick={onClose} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100">
@@ -305,7 +304,7 @@ function ConfirmDialog({
             disabled={busy}
             className="inline-flex items-center gap-1.5 rounded-lg bg-red-600 px-4 py-2 text-[10px] font-bold text-white hover:bg-red-700 disabled:opacity-50"
           >
-            <Trash2 className="h-3.5 w-3.5" />
+            <Trash2 className="h-4 w-4 shrink-0" />
             {busy ? "Deleting..." : confirmLabel}
           </button>
         </div>
@@ -326,19 +325,25 @@ function Field({ label, children, className = "", required = false }) {
 }
 
 function Input(props) {
+  const disabledStyle = props.disabled || props.readOnly
+    ? "!border-2 !border-red-500 !bg-red-50/50 !ring-1 !ring-red-200 disabled:cursor-not-allowed disabled:opacity-100"
+    : "";
   return (
     <input
       {...props}
-      className={`h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-[10px] text-slate-700 outline-none focus:border-blue-400 ${props.className || ""}`}
+      className={`h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-[10px] text-slate-700 outline-none focus:border-blue-400 ${disabledStyle} ${props.className || ""}`}
     />
   );
 }
 
 function Select({ children, ...props }) {
+  const disabledStyle = props.disabled
+    ? "!border-2 !border-red-500 !bg-red-50/50 !ring-1 !ring-red-200 disabled:cursor-not-allowed disabled:opacity-100"
+    : "";
   return (
     <select
       {...props}
-      className={`h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-[10px] text-slate-700 outline-none focus:border-blue-400 ${props.className || ""}`}
+      className={`h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-[10px] text-slate-700 outline-none focus:border-blue-400 ${disabledStyle} ${props.className || ""}`}
     >
       {children}
     </select>
@@ -359,13 +364,17 @@ function RefSelect({
       <Select value={value ?? ""} onChange={onChange} required={required}>
         <option value="">{placeholder} {label}</option>
         {items.map((item) => {
-          const code = displayKey === "old_code" ? item.old_code : item.code;
-          const fallback = displayKey === "old_code"
-            ? (item.code || item.account_title || "Unnamed")
-            : (item.name || item.description || item.account_title || "Unnamed");
+          let displayValue;
+          if (displayKey === "name") {
+            displayValue = item.name || item.account_title || item.description || item.title || item.old_code || item.code || "Unnamed";
+          } else if (displayKey === "old_code") {
+            displayValue = item.account_title || item.name || item.description || item.old_code || item.code || "Unnamed";
+          } else {
+            displayValue = item.code || item.old_code || item.fund_code || item.campus_code || item.rc_code || item.pap_code || item.mfo_code || "Unnamed";
+          }
           return (
             <option key={item.id} value={item.id}>
-              {code ? `${code} — ` : ""}{fallback}
+              {displayValue}
             </option>
           );
         })}
@@ -374,10 +383,83 @@ function RefSelect({
   );
 }
 
-function ProgramForm({ form, setForm, references, saving, onSubmit, onClose }) {
+function ProgramForm({ form, setForm, references, saving, onSubmit, onClose, error = "" }) {
+  const [formValidationError, setFormValidationError] = useState("");
+  const handleValidatedSubmit = (event) => {
+    const formElement = event.currentTarget;
+    event.preventDefault();
+    const fields = Array.from(formElement.querySelectorAll("input, select, textarea"))
+      .filter((field) => !field.disabled && !field.readOnly && field.type !== "button" && field.type !== "submit" && field.type !== "reset");
+    const getFieldName = (field) => {
+      const label = field.closest("label") || (field.id ? formElement.querySelector(`label[for="${field.id}"]`) : null) || field.parentElement;
+      const text = (label?.innerText || label?.textContent || field.getAttribute("aria-label") || field.getAttribute("placeholder") || field.name || field.id || "Required field").replace(/\*/g, "").replace(/\s+/g, " ").trim();
+      return text.split("\n")[0].replace(/\s+/g, " ").trim() || "Required field";
+    };
+    const requiredLabels = ["Program / Project Code", "Program / Project Name", "Fund Cluster", "WFP Source"];
+    const isRequiredByLabel = (field) => {
+      const label = field.closest("label") || field.parentElement;
+      const text = (label?.innerText || label?.textContent || "").replace(/\\*/g, "").replace(/\\s+/g, " ").trim().toLowerCase();
+      return requiredLabels.some((name) => text.includes(name.toLowerCase()));
+    };
+    const isEmpty = (field) => {
+      if (field.type === "checkbox" || field.type === "radio") return !field.checked;
+      return String(field.value ?? "").trim() === "";
+    };
+    const invalidFields = fields.filter((field) =>
+      ((field.required || isRequiredByLabel(field)) && isEmpty(field)) || !field.checkValidity()
+    );
+    const redClasses = ["!border-2", "!border-red-600", "!bg-red-50", "!ring-2", "!ring-red-300", "focus:!border-red-600"];
+    fields.forEach((field) => {
+      const invalid = invalidFields.includes(field);
+      field.classList.remove("!border-2", "!border-red-500", "!bg-red-50", "ring-1", "ring-red-200", "focus:!border-red-500");
+      if (invalid) { field.classList.add(...redClasses); field.setAttribute("aria-invalid", "true"); }
+      else { field.classList.remove(...redClasses); field.removeAttribute("aria-invalid"); }
+    });
+    if (invalidFields.length) {
+      const names = [...new Set(invalidFields.map(getFieldName))];
+      setFormValidationError(`Please fill in the following required field${names.length === 1 ? "" : "s"}: ${names.join(", ")}.`);
+      const firstInvalid = invalidFields[0];
+      firstInvalid.setAttribute("aria-invalid", "true");
+      window.requestAnimationFrame(() => {
+        // Move the modal's scroll panel to the missing field, keeping the alert at the top of the form.
+        let container = firstInvalid.parentElement;
+        while (container && container !== formElement) {
+          const style = window.getComputedStyle(container);
+          if (container.scrollHeight > container.clientHeight + 4 && /(auto|scroll)/.test(`${style.overflowY} ${style.overflow}`)) break;
+          container = container.parentElement;
+        }
+        if (container && container !== formElement) {
+          const c = container.getBoundingClientRect();
+          const f = firstInvalid.getBoundingClientRect();
+          container.scrollTo({ top: Math.max(0, container.scrollTop + f.top - c.top - 90), behavior: "smooth" });
+        } else {
+          firstInvalid.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
+        }
+        window.setTimeout(() => { try { firstInvalid.focus({ preventScroll: true }); } catch { firstInvalid.focus(); } }, 350);
+      });
+      return;
+    }
+    setFormValidationError("");
+    onSubmit(event);
+  };
+  const clearFieldValidation = (event) => {
+    const field = event.target;
+    if (!field || !field.matches?.("input, select, textarea")) return;
+    if (field.checkValidity()) {
+      field.classList.remove("!border-2", "!border-red-500", "!bg-red-50", "ring-1", "ring-red-200", "focus:!border-red-500");
+      field.removeAttribute("aria-invalid");
+    }
+    const formElement = event.currentTarget;
+    const remainingInvalid = Array.from(formElement.querySelectorAll("input, select, textarea"))
+      .some((item) => !item.disabled && !item.readOnly && !item.checkValidity());
+    if (!remainingInvalid) setFormValidationError("");
+  };
   const set = (key, value) => setForm((current) => ({ ...current, [key]: value }));
   return (
-    <form onSubmit={onSubmit} className="space-y-5">
+    <form noValidate onSubmit={handleValidatedSubmit} onChange={clearFieldValidation} onInput={clearFieldValidation} className="space-y-5">
+      {formValidationError && <div role="alert" className="sticky top-0 z-20 rounded-lg border-2 border-red-400 bg-red-50 px-4 py-3 text-xs font-bold text-red-800 shadow-sm"><div className="flex items-start gap-2"><span aria-hidden="true">⚠</span><span>{formValidationError}</span></div></div>}
+      {error && <div role="alert" className="rounded-lg border-2 border-red-400 bg-red-50 px-4 py-3 text-xs font-bold text-red-800"><span aria-hidden="true">⚠ </span>{error}</div>}
+      <div role="note" className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-[10px] leading-4 text-blue-900"><b>Field access guide:</b> Red-outlined fields are locked, system-generated, or unavailable for editing under your role. Missing or invalid required values will be outlined in red when you save.</div>
       <div className="rounded-xl border border-blue-100 bg-blue-50/50 p-4">
         <p className="mb-3 text-[10px] font-extrabold uppercase tracking-wide text-blue-700">
           IGP Program / Project — Fund 161
@@ -403,6 +485,7 @@ function ProgramForm({ form, setForm, references, saving, onSubmit, onClose }) {
               set("wfp_source_code", item?.code || "");
             }}
             items={references.wfp_sources}
+            displayKey="name"
             required
           />
 
@@ -452,7 +535,119 @@ function ProgramForm({ form, setForm, references, saving, onSubmit, onClose }) {
   );
 }
 
-function TransactionForm({ form, setForm, programs, references, saving, onSubmit, onClose, allowedTransactionTypes = ["Income", "Utilization", "Adjustment"], role = "" }) {
+function TransactionForm({ form, setForm, programs, references, saving, onSubmit, onClose, allowedTransactionTypes = ["Income", "Utilization", "Adjustment"], role = "", error = "" }) {
+  const [formValidationError, setFormValidationError] = useState("");
+  // Normalize role names so casing/spacing differences never unlock the wrong fields.
+  const normalizedRole = String(role || "").trim().toLowerCase();
+  // In the transaction form, Administrator follows the same field permissions as Budget.
+  // Administrator does not receive Procurement or Accounting edit access here.
+  const isAdminRole = false;
+  const isBudgetRole = normalizedRole === "budget";
+  const isProcurementRole = normalizedRole === "procurement";
+  const isAccountantRole = normalizedRole === "accountant";
+  const getFieldLabel = (field, formElement) => {
+    const wrapper = field.closest("label");
+    const text = (wrapper?.querySelector("span")?.textContent || wrapper?.innerText ||
+      (field.id ? formElement.querySelector(`label[for="${field.id}"]`)?.textContent : "") ||
+      field.getAttribute("aria-label") || field.getAttribute("placeholder") || field.name || field.id || "Required field");
+    return String(text).replace(/\*/g, "").replace(/\s+/g, " ").trim();
+  };
+  const isEditableControl = (field) =>
+    !field.disabled && !field.readOnly && !["button", "submit", "reset", "hidden"].includes(field.type) && field.getClientRects().length > 0;
+  const isRequiredControl = (field, formElement) => {
+    const label = getFieldLabel(field, formElement).toLowerCase();
+
+    // These reference fields are optional for every role, even when they are editable.
+    // Do not block submission if they are blank.
+    const optionalLabels = ["uacs funding source code", "series", "series 2", "series2"];
+    if (optionalLabels.some((name) => label === name || label.includes(name))) {
+      return false;
+    }
+
+    if (isProcurementRole) {
+      // Procurement's required fields, including the requested PO Status and Remarks.
+      return ["po no.", "po date", "supplier / payee", "po amount", "procurement status", "procurement remarks"]
+        .some((name) => label.includes(name));
+    }
+    if (isAccountantRole) {
+      // Every editable field in Accounting / Disbursement Review must be completed.
+      return !!field.closest(".accounting-fields");
+    }
+    // Budget and Administrator follow the same requirements: every editable field
+    // in the Budget portion of the transaction form is required. Office-only fields
+    // and system-generated/automatic fields are excluded.
+    return !field.closest(".procurement-fields") && !field.closest(".accounting-fields");
+  };
+  const isEmptyControl = (field) => {
+    if (field.type === "checkbox" || field.type === "radio") return !field.checked;
+    return String(field.value ?? "").trim() === "";
+  };
+  const validationClasses = ["!border-2", "!border-red-600", "!bg-red-50", "!ring-2", "!ring-red-300", "focus:!border-red-600"];
+  const handleValidatedSubmit = (event) => {
+    event.preventDefault();
+    const formElement = event.currentTarget;
+    const fields = Array.from(formElement.querySelectorAll("input, select, textarea")).filter(isEditableControl);
+    const invalidFields = fields.filter((field) =>
+      (isRequiredControl(field, formElement) && isEmptyControl(field)) || !field.checkValidity()
+    );
+
+    fields.forEach((field) => {
+      field.classList.remove("!border-2", "!border-red-500", "!border-red-600", "!bg-red-50", "ring-1", "ring-red-200", "!ring-2", "!ring-red-300", "focus:!border-red-500", "focus:!border-red-600");
+      if (invalidFields.includes(field)) {
+        field.classList.add(...validationClasses);
+        field.setAttribute("aria-invalid", "true");
+      } else {
+        field.removeAttribute("aria-invalid");
+      }
+    });
+
+    if (invalidFields.length) {
+      const names = [...new Set(invalidFields.map((field) => getFieldLabel(field, formElement) || "Required field"))];
+      setFormValidationError(`Submission blocked. Please complete the required field${names.length === 1 ? "" : "s"}: ${names.join(", ")}. Missing fields are highlighted in red.`);
+      const firstInvalid = invalidFields[0];
+      window.requestAnimationFrame(() => {
+        const scrollContainer = firstInvalid.closest(".overflow-y-auto, .overflow-auto, [data-form-scroll-container]");
+        if (scrollContainer) {
+          const containerRect = scrollContainer.getBoundingClientRect();
+          const fieldRect = firstInvalid.getBoundingClientRect();
+          if (fieldRect.top < containerRect.top || fieldRect.bottom > containerRect.bottom) {
+            scrollContainer.scrollTo({
+              top: scrollContainer.scrollTop + fieldRect.top - containerRect.top - (containerRect.height / 2) + (fieldRect.height / 2),
+              behavior: "smooth",
+            });
+          }
+        }
+        firstInvalid.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
+        window.setTimeout(() => {
+          try { firstInvalid.focus({ preventScroll: true }); } catch { firstInvalid.focus(); }
+        }, 250);
+      });
+      return;
+    }
+
+    setFormValidationError("");
+    onSubmit(event);
+  };
+  const clearFieldValidation = (event) => {
+    const field = event.target;
+    if (!field || !field.matches?.("input, select, textarea")) return;
+    const formElement = event.currentTarget;
+    const fields = Array.from(formElement.querySelectorAll("input, select, textarea")).filter(isEditableControl);
+    fields.forEach((item) => {
+      const invalid = (isRequiredControl(item, formElement) && isEmptyControl(item)) || !item.checkValidity();
+      item.classList.remove("!border-2", "!border-red-500", "!border-red-600", "!bg-red-50", "ring-1", "ring-red-200", "!ring-2", "!ring-red-300", "focus:!border-red-500", "focus:!border-red-600");
+      if (invalid) {
+        item.classList.add(...validationClasses);
+        item.setAttribute("aria-invalid", "true");
+      } else {
+        item.removeAttribute("aria-invalid");
+      }
+    });
+    const remainingInvalid = fields.some((item) =>
+      (isRequiredControl(item, formElement) && isEmptyControl(item)) || !item.checkValidity()
+    );
+    if (!remainingInvalid) setFormValidationError("");
+  };
   const set = (key, value) => setForm((current) => ({ ...current, [key]: value }));
   const selectedProgram = programs.find((p) => String(p.id) === String(form.igp_program_id));
 
@@ -469,16 +664,63 @@ function TransactionForm({ form, setForm, programs, references, saving, onSubmit
   }, [selectedProgram]);
 
   useEffect(() => {
-    const month = Number(form.month || 1);
-    if (month >= 1 && month <= 12) {
-      const q = Math.ceil(month / 3);
-      if (String(q) !== String(form.quarter)) set("quarter", String(q));
-    }
-  }, [form.month]);
+    if (!form.transaction_date) return;
+    const selectedDate = new Date(`${String(form.transaction_date).slice(0, 10)}T00:00:00`);
+    if (Number.isNaN(selectedDate.getTime())) return;
+    const year = String(selectedDate.getFullYear());
+    const month = String(selectedDate.getMonth() + 1);
+    const quarter = String(Math.ceil(Number(month) / 3));
+    setForm((current) => ({
+      ...current,
+      fiscal_year: year,
+      month,
+      quarter,
+    }));
+  }, [form.transaction_date]);
 
   return (
-    <form onSubmit={onSubmit} className="space-y-5">
-      <div className="rounded-xl border border-blue-100 bg-blue-50/40 p-4">
+    <form noValidate onSubmit={handleValidatedSubmit} onChange={clearFieldValidation} onInput={clearFieldValidation} className="space-y-5">
+      <style>{`
+        .igp-role-locked[disabled] { opacity: 1 !important; }
+        .igp-role-locked[disabled] input,
+        .igp-role-locked[disabled] select,
+        .igp-role-locked[disabled] textarea,
+        fieldset[disabled] input,
+        fieldset[disabled] select,
+        fieldset[disabled] textarea,
+        input:disabled,
+        select:disabled,
+        textarea:disabled,
+        .procurement-fields input:disabled,
+        .procurement-fields select:disabled,
+        .procurement-fields textarea:disabled,
+        .accounting-fields input:disabled,
+        .accounting-fields select:disabled,
+        .accounting-fields textarea:disabled,
+        input[readonly],
+        select[readonly],
+        textarea[readonly] {
+          border: 2px solid #ef4444 !important;
+          background: #fef2f2 !important;
+          color: #334155 !important;
+          cursor: not-allowed !important;
+          opacity: 1 !important;
+          box-shadow: 0 0 0 1px rgba(239,68,68,.15) !important;
+          -webkit-text-fill-color: #334155 !important;
+        }
+        fieldset[disabled] { pointer-events: none !important; }
+        fieldset[disabled] * { cursor: not-allowed !important; }
+        .igp-role-locked input:disabled:focus,
+        .igp-role-locked select:disabled:focus,
+        .igp-role-locked textarea:disabled:focus { outline: none !important; }
+        .igp-role-locked input:not(:disabled):not([readonly]),
+        .igp-role-locked select:not(:disabled),
+        .igp-role-locked textarea:not(:disabled) { pointer-events: auto; }
+      `}</style>
+      {formValidationError && <div role="alert" className="sticky top-0 z-20 rounded-lg border-2 border-red-400 bg-red-50 px-4 py-3 text-xs font-bold text-red-800 shadow-sm"><div className="flex items-start gap-2"><span aria-hidden="true">⚠</span><span>{formValidationError}</span></div></div>}
+      {error && <div role="alert" className="rounded-lg border-2 border-red-400 bg-red-50 px-4 py-3 text-xs font-bold text-red-800"><span aria-hidden="true">⚠ </span>{error}</div>}
+      <div role="note" className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-[10px] leading-4 text-blue-900"><b>Field access guide:</b> {isProcurementRole ? "Only procurement fields are editable for your role." : isAccountantRole ? "Only accounting and disbursement fields are editable for your role." : (isBudgetRole || ["administration", "administrator", "admin"].includes(normalizedRole)) ? "Budget fields are editable; procurement and accounting fields are locked, including for Administrator." : "Fields outside your assigned permissions are locked."} Red outlines indicate locked/system-generated fields or missing/invalid required values.</div>
+      <fieldset disabled={["procurement", "accountant"].includes(normalizedRole)} className="igp-role-locked rounded-xl border border-blue-100 bg-blue-50/40 p-4">
         <p className="mb-3 text-[10px] font-extrabold uppercase tracking-wide text-blue-700">
           Registry Information
         </p>
@@ -487,11 +729,30 @@ function TransactionForm({ form, setForm, programs, references, saving, onSubmit
             <Input
               value={form.registry_no || "Will be generated on save"}
               readOnly
-              className="bg-slate-50 font-bold text-slate-500"
+              className="!border-2 !border-red-500 !bg-red-50/50 !font-mono !font-extrabold !text-[#17135f] !ring-1 !ring-red-200 read-only:cursor-not-allowed"
+              title="System-generated and locked. This number is assigned when the transaction is saved."
             />
+            <p className="mt-1 text-[10px] text-amber-700">System-generated • locked</p>
           </Field>
           <Field label="Date" required>
-            <Input required type="date" value={form.transaction_date} onChange={(e) => set("transaction_date", e.target.value)} />
+            <Input
+              required
+              type="date"
+              value={form.transaction_date}
+              onChange={(e) => {
+                const value = e.target.value;
+                if (!value) { set("transaction_date", ""); return; }
+                const selectedDate = new Date(`${value}T00:00:00`);
+                const month = selectedDate.getMonth() + 1;
+                setForm((current) => ({
+                  ...current,
+                  transaction_date: value,
+                  fiscal_year: String(selectedDate.getFullYear()),
+                  month: String(month),
+                  quarter: String(Math.ceil(month / 3)),
+                }));
+              }}
+            />
           </Field>
           <RefSelect label="Fund Cluster" value={form.fund_cluster_id} onChange={(e) => set("fund_cluster_id", e.target.value)} items={references.fund_clusters} required />
           <Field label="Fund Code">
@@ -517,9 +778,9 @@ function TransactionForm({ form, setForm, programs, references, saving, onSubmit
             </Select>
           </Field>
         </div>
-      </div>
+      </fieldset>
 
-      <div className="rounded-xl border border-slate-200 bg-white p-4">
+      <fieldset disabled={["procurement", "accountant"].includes(normalizedRole)} className="igp-role-locked rounded-xl border border-slate-200 bg-white p-4">
         <p className="mb-3 text-[10px] font-extrabold uppercase tracking-wide text-slate-600">Transaction / Classification</p>
         <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
           <Field label="Transaction Type" required>
@@ -547,16 +808,19 @@ function TransactionForm({ form, setForm, programs, references, saving, onSubmit
             const item = references.uacs_codes.find((x) => String(x.id) === String(e.target.value));
             set("uacs_code_id", e.target.value);
             set("account_title", item?.account_title || "");
-          }} items={references.uacs_codes} />
-          <RefSelect label="Allotment Class" value={form.allotment_class_id} onChange={(e) => set("allotment_class_id", e.target.value)} items={references.allotment_classes} />
+          }} items={references.uacs_codes} displayKey="name" />
+          <RefSelect label="Allotment Class" value={form.allotment_class_id} onChange={(e) => set("allotment_class_id", e.target.value)} items={references.allotment_classes} displayKey="name" />
           <Field label="UACS Funding Source Code">
             <Input value={form.uacs_funding_source_code} onChange={(e) => set("uacs_funding_source_code", e.target.value)} />
           </Field>
-          <Field label="Year">
-            <Input value={form.fiscal_year || 2026} readOnly className="bg-slate-50 font-bold" />
-          </Field>
-          <Field label="Month">
-            <Input type="number" min="1" max="12" value={form.month} onChange={(e) => set("month", e.target.value)} />
+          <Field label="Month (Automatic from Date)">
+            <Input
+              value={form.month ? new Date(2000, Number(form.month) - 1, 1).toLocaleString("en-US", { month: "long" }) : "—"}
+              readOnly
+              disabled
+              className="!font-extrabold !text-[#17135f]"
+              title="Automatically determined by the transaction date above"
+            />
           </Field>
           <Field label="Series">
             <Input value={form.series} onChange={(e) => set("series", e.target.value)} />
@@ -564,13 +828,14 @@ function TransactionForm({ form, setForm, programs, references, saving, onSubmit
           <Field label="Series2">
             <Input value={form.series2} onChange={(e) => set("series2", e.target.value)} />
           </Field>
-          <Field label="Quarter">
-            <Select value={form.quarter} onChange={(e) => set("quarter", e.target.value)}>
-              <option value="1">Q1</option>
-              <option value="2">Q2</option>
-              <option value="3">Q3</option>
-              <option value="4">Q4</option>
-            </Select>
+          <Field label="Quarter (Automatic from Date)">
+            <Input
+              value={form.quarter ? `Q${form.quarter}` : "—"}
+              readOnly
+              disabled
+              className="!font-extrabold !text-[#17135f]"
+              title="Automatically determined by the transaction date above"
+            />
           </Field>
           <RefSelect label="MFO" value={form.mfo_id} onChange={(e) => set("mfo_id", e.target.value)} items={references.mfo} />
           <RefSelect
@@ -578,22 +843,23 @@ function TransactionForm({ form, setForm, programs, references, saving, onSubmit
             value={form.old_uacs_code_id}
             onChange={(e) => set("old_uacs_code_id", e.target.value)}
             items={references.old_uacs_codes}
-            displayKey="old_code"
+            displayKey="name"
           />
           <Field label="Account Title">
             <Input value={form.account_title} onChange={(e) => set("account_title", e.target.value)} />
           </Field>
         </div>
-      </div>
+      </fieldset>
 
       <div className="rounded-xl border border-emerald-100 bg-emerald-50/40 p-4">
         <p className="mb-3 text-[10px] font-extrabold uppercase tracking-wide text-emerald-700">Utilization / Accounting</p>
         <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+          <fieldset disabled={["procurement", "accountant"].includes(normalizedRole)} className="contents igp-role-locked">
           <Field label="Income / Collection">
             <Input type="number" min="0" step="0.01" value={form.income_amount} onChange={(e) => set("income_amount", e.target.value)} disabled={!allowedTransactionTypes.includes("Income")} />
           </Field>
           <Field label="Utilization">
-            <Input type="number" min="0" step="0.01" value={form.utilization_amount} onChange={(e) => set("utilization_amount", e.target.value)} disabled={!(allowedTransactionTypes.includes("Utilization") || role === "Budget")} />
+            <Input type="number" min="0" step="0.01" value={form.utilization_amount} onChange={(e) => set("utilization_amount", e.target.value)} disabled={!(allowedTransactionTypes.includes("Utilization") || isBudgetRole || ["administration", "administrator", "admin"].includes(normalizedRole))} />
           </Field>
           <Field label="PS">
             <Input type="number" min="0" step="0.01" value={form.ps_utilization} onChange={(e) => set("ps_utilization", e.target.value)} />
@@ -608,7 +874,7 @@ function TransactionForm({ form, setForm, programs, references, saving, onSubmit
             const item = references.wfp_sources.find((x) => String(x.id) === String(e.target.value));
             set("wfp_source_id", e.target.value);
             set("wfp_source_code", item?.code || "");
-          }} items={references.wfp_sources} />
+          }} items={references.wfp_sources} displayKey="name" />
           <Field label="WFP Source Code">
             <Input value={form.wfp_source_code} onChange={(e) => set("wfp_source_code", e.target.value)} />
           </Field>
@@ -621,6 +887,13 @@ function TransactionForm({ form, setForm, programs, references, saving, onSubmit
           <Field label="Remarks" className="md:col-span-2">
             <Input value={form.remarks} onChange={(e) => set("remarks", e.target.value)} />
           </Field>
+          </fieldset>
+          <div className="office-fields procurement-fields md:col-span-3 rounded-lg border border-blue-200 bg-blue-50/50 p-3"><p className="mb-2 text-[10px] font-extrabold uppercase text-blue-800">Procurement Details</p><fieldset disabled={!(isProcurementRole || isAdminRole)} className="contents igp-role-locked"><div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+            {[["PO No.","po_no"],["PO Date","po_date"],["Supplier / Payee","supplier_payee"],["PO Amount","po_amount"],["AIR / FAR Reference","air_far_reference"],["IAR No.","iar_no"],["PAR No.","par_no"],["ICS No.","ics_no"],["IRS / RIS Reference","ris_no"],["Procurement Status","po_status"],["Procurement Remarks","procurement_remarks"]].map(([label,key])=><Field key={key} label={label}>{key === "po_status" ? <Select disabled={!isProcurementRole} value={form[key] || ""} onChange={e=>set(key,e.target.value)}><option value="">Select</option><option value="PENDING">PENDING</option><option value="APPROVED">APPROVED</option><option value="ISSUED">ISSUED</option><option value="PARTIALLY DELIVERED">PARTIALLY DELIVERED</option><option value="COMPLETED">COMPLETED</option><option value="CANCELLED">CANCELLED</option></Select> : <Input disabled={!isProcurementRole} required={isProcurementRole && ["po_no", "po_date", "supplier_payee", "po_amount"].includes(key)} min={key === "po_amount" ? "0" : undefined} step={key === "po_amount" ? "0.01" : undefined} type={key==="po_date"?"date":key==="po_amount"?"number":"text"} value={form[key]||""} onChange={e=>set(key,e.target.value)}/>}</Field>)}
+          </div></fieldset></div>
+          <div className="office-fields accounting-fields md:col-span-3 rounded-lg border border-violet-200 bg-violet-50/50 p-3"><p className="mb-2 text-[10px] font-extrabold uppercase text-violet-800">Accounting / Disbursement Review</p><fieldset disabled={!(isAccountantRole || isAdminRole)} className="contents igp-role-locked"><div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+            {[["DB No.","db_no"],["DV / Payroll No.","dv_payroll_no"],["BURS Serial No.","burs_serial_no"],["Disbursement Date","disbursement_date"],["Disbursement Amount","disbursement_amount"],["Notice of Adjustment","notice_of_adjustment"],["Adjustment Reason","adjustment_reason"],["Accounting Status","accounting_status"],["Reviewed By","reviewed_by"],["Review Date and Time","review_datetime"],["Accounting Remarks","accounting_remarks"]].map(([label,key])=><Field key={key} label={label}>{key === "accounting_status" ? <Select disabled={!isAccountantRole} required={isAccountantRole} value={form[key] || ""} onChange={e=>set(key,e.target.value)}><option value="">Select status</option><option value="Pending">Pending</option><option value="Reviewed">Reviewed</option><option value="Approved">Approved</option><option value="Returned">Returned</option></Select> : <Input disabled={!isAccountantRole} required={isAccountantRole && key === "disbursement_date"} min={key === "disbursement_amount" ? "0" : undefined} step={key === "disbursement_amount" ? "0.01" : undefined} type={key==="disbursement_date"?"date":key==="review_datetime"?"datetime-local":key==="disbursement_amount"?"number":"text"} value={form[key]||""} onChange={e=>set(key,e.target.value)}/>}</Field>)}
+          </div></fieldset></div>
         </div>
       </div>
 
@@ -649,7 +922,6 @@ function BalancePanel({ title, beginning, projected, income, utilization, unpaid
         <div className="rounded-lg bg-blue-50 p-3"><p className="text-[9px] text-blue-500">Projected Income</p><p className="mt-1 text-sm font-extrabold text-blue-700">{money(projected)}</p></div>
         <div className="rounded-lg bg-emerald-50 p-3"><p className="text-[9px] text-emerald-500">Actual Collection</p><p className="mt-1 text-sm font-extrabold text-emerald-700">{money(income)}</p></div>
         <div className="rounded-lg bg-orange-50 p-3"><p className="text-[9px] text-orange-500">Utilization</p><p className="mt-1 text-sm font-extrabold text-orange-700">{money(utilization)}</p></div>
-        <div className="rounded-lg bg-red-50 p-3"><p className="text-[9px] text-red-500">Unpaid Utilization</p><p className="mt-1 text-sm font-extrabold text-red-600">{money(unpaid)}</p></div>
       </div>
       <div className="mt-4 rounded-lg border border-emerald-100 bg-emerald-50 p-3">
         <p className="text-[9px] font-bold uppercase tracking-wide text-emerald-600">Available Balance</p>
@@ -661,25 +933,50 @@ function BalancePanel({ title, beginning, projected, income, utilization, unpaid
 
 export default function IGPRegistry({ user, onLogout, onNavigate, activePath }) {
   const role = user?.role || "";
-  const isAdmin = role === "Administration";
+  const isAdmin = ["Administration", "Administrator", "Admin"].includes(role);
   const isBudget = role === "Budget";
-  // IGP is a Budget + Administration module only.
-  // Procurement and Accountant belong to RAOD Registry, not IGP.
-  const canViewIgp = isAdmin || isBudget;
+  const isProcurement = role === "Procurement";
+  const isAccountant = role === "Accountant";
+  const canEditOfficeTransactions = isProcurement || isAccountant;
+  // Procurement and Accountant can view transactions to update only their office fields.
+  const canViewIgp = isAdmin || isBudget || canEditOfficeTransactions;
   const canManagePrograms = isAdmin || isBudget;
   const canDelete = isAdmin;
   const canManageTransactions = isAdmin || isBudget;
-  const allowedTransactionTypes = isAdmin
-    ? ["Income", "Utilization", "Adjustment"]
-    : isBudget
-      ? ["Adjustment"]
-      : [];
+  // Administrator has the same transaction-form access as Budget; no full form access.
+  const allowedTransactionTypes = (isAdmin || isBudget)
+    ? ["Adjustment"]
+    : [];
   const defaultTransactionType = allowedTransactionTypes[0] || "Income";
 
-  const [view, setView] = useState("module");
+  const [view, setView] = useState(canEditOfficeTransactions ? "transactions" : "budget");
+  useEffect(() => {
+    const handleIgpOpenView = (event) => {
+      const nextView = event?.detail?.view;
+      if (canEditOfficeTransactions) {
+        // Office roles can open Transactions and Reports only.
+        if (nextView === "transactions" || nextView === "reports") {
+          setView(nextView);
+        } else if (nextView) {
+          setView("transactions");
+        }
+        return;
+      }
+      const allowedViews = ["module", "budget", "programs", "transactions", "monitoring", "reports"];
+      if (allowedViews.includes(nextView)) setView(nextView === "module" ? "budget" : nextView);
+    };
+    window.addEventListener("bmas-igp-open-view", handleIgpOpenView);
+    return () => window.removeEventListener("bmas-igp-open-view", handleIgpOpenView);
+  }, [canEditOfficeTransactions]);
+
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent("bmas-igp-open-view", { detail: { view, source: "content" } }));
+  }, [view]);
   const [activeTab, setActiveTab] = useState("all");
   const [fiscalYear, setFiscalYear] = useState(DEFAULT_FISCAL_YEAR);
   const [overview, setOverview] = useState({});
+  const [recentTransactions, setRecentTransactions] = useState([]);
+  const [recentPagination, setRecentPagination] = useState({ page: 1, limit: RECENT_TRANSACTIONS_LIMIT, totalItems: 0, totalPages: 1 });
   const [programs, setPrograms] = useState([]);
   const [transactions, setTransactions] = useState([]);
   const [references, setReferences] = useState({
@@ -696,6 +993,8 @@ export default function IGPRegistry({ user, onLogout, onNavigate, activePath }) 
 
   const [search, setSearch] = useState("");
   const [programSearch, setProgramSearch] = useState("");
+  const [programPage, setProgramPage] = useState(1);
+  const [monitoringPage, setMonitoringPage] = useState(1);
   const [page, setPage] = useState(1);
   const [pagination, setPagination] = useState({ page: 1, limit: LIMIT, totalItems: 0, totalPages: 1 });
   const [programModal, setProgramModal] = useState(null);
@@ -703,12 +1002,18 @@ export default function IGPRegistry({ user, onLogout, onNavigate, activePath }) 
   const [programForm, setProgramForm] = useState(emptyProgram);
   const [transactionForm, setTransactionForm] = useState(emptyTransaction);
   const [selectedProgram, setSelectedProgram] = useState(null);
+  const [selectedTransaction, setSelectedTransaction] = useState(null);
+  const [transactionView, setTransactionView] = useState(null);
+  const [programView, setProgramView] = useState(null);
+  const [auditModal, setAuditModal] = useState(null);
+  const [auditRows, setAuditRows] = useState([]);
+  const [auditLoading, setAuditLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [confirmDialog, setConfirmDialog] = useState(null);
   const [confirmBusy, setConfirmBusy] = useState(false);
   const [toast, setToast] = useState(null);
-  const [reportType, setReportType] = useState("registry");
+  const [reportType, setReportType] = useState(canEditOfficeTransactions ? "office" : "registry");
   const [reportRows, setReportRows] = useState([]);
   const [reportLoading, setReportLoading] = useState(false);
 
@@ -733,6 +1038,25 @@ export default function IGPRegistry({ user, onLogout, onNavigate, activePath }) 
     try {
       const data = await api(`/igp/overview?year=${fiscalYear}`);
       setOverview(data.data || {});
+    } catch (e) { setError(e.message); }
+  };
+
+  // Dashboard Recent IGP Transactions has its own server-side pagination (10 rows per page).
+  const loadRecentTransactions = async (nextPage = 1) => {
+    try {
+      const q = new URLSearchParams({
+        year: String(fiscalYear),
+        page: String(nextPage),
+        limit: String(RECENT_TRANSACTIONS_LIMIT),
+      });
+      const data = await api(`/igp/transactions?${q.toString()}`);
+      setRecentTransactions(data.data || []);
+      setRecentPagination(data.pagination || {
+        page: nextPage,
+        limit: RECENT_TRANSACTIONS_LIMIT,
+        totalItems: (data.data || []).length,
+        totalPages: 1,
+      });
     } catch (e) { setError(e.message); }
   };
 
@@ -782,11 +1106,21 @@ export default function IGPRegistry({ user, onLogout, onNavigate, activePath }) 
     loadReferences();
     loadPrograms();
     loadTransactions(1);
+    loadRecentTransactions(1);
   }, [fiscalYear]);
 
   useEffect(() => {
+    setProgramPage(1);
     if (view === "programs") loadPrograms();
   }, [programSearch]);
+
+  useEffect(() => {
+    setProgramPage(1);
+  }, [fiscalYear, programs.length]);
+
+  useEffect(() => {
+    setMonitoringPage(1);
+  }, [fiscalYear]);
 
   useEffect(() => {
     if (view === "transactions") loadTransactions(1);
@@ -800,7 +1134,7 @@ export default function IGPRegistry({ user, onLogout, onNavigate, activePath }) 
 
   const refreshAll = async () => {
     setError("");
-    await Promise.all([loadOverview(), loadReferences(), loadPrograms(), loadTransactions(page)]);
+    await Promise.all([loadOverview(), loadReferences(), loadPrograms(), loadTransactions(page), loadRecentTransactions(recentPagination.page)]);
   };
 
   const openAddProgram = () => {
@@ -853,16 +1187,63 @@ export default function IGPRegistry({ user, onLogout, onNavigate, activePath }) 
     finally { setSaving(false); }
   };
 
+  const openViewTransaction = (row) => setTransactionView(row);
+
+  const openAuditTrail = async (row) => {
+    setAuditModal(row);
+    setAuditRows([]);
+    setAuditLoading(true);
+    try {
+      const result = await api("/igp/audit-log?limit=200");
+      const all = result.data || [];
+      const isProgram = row.program_code !== undefined || row.program_name !== undefined;
+      const tablePattern = isProgram ? /igp_programs|program/i : /igp_transactions|transaction/i;
+      const matches = all.filter((item) =>
+        String(item.record_id ?? "") === String(row.id ?? "") &&
+        (!item.table_name || tablePattern.test(item.table_name))
+      );
+      setAuditRows(matches);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setAuditLoading(false);
+    }
+  };
+
+  const openEditTransaction = (row) => {
+    if (!canManageTransactions && !canEditOfficeTransactions) return;
+    setSelectedTransaction(row);
+    setTransactionForm({ ...emptyTransaction, ...row,
+      transaction_date: row.transaction_date ? String(row.transaction_date).slice(0, 10) : emptyTransaction.transaction_date,
+      fiscal_year: String(row.transaction_date ? new Date(`${String(row.transaction_date).slice(0, 10)}T00:00:00`).getFullYear() : new Date().getFullYear()),
+      month: String(new Date(`${String(row.transaction_date || emptyTransaction.transaction_date).slice(0, 10)}T00:00:00`).getMonth() + 1),
+      quarter: String(Math.ceil((new Date(`${String(row.transaction_date || emptyTransaction.transaction_date).slice(0, 10)}T00:00:00`).getMonth() + 1) / 3)),
+      transaction_type: row.transaction_type || defaultTransactionType,
+    });
+    setTransactionModal("edit");
+  };
+
   const submitTransaction = async (event) => {
     event.preventDefault();
     setSaving(true);
     setError("");
     try {
-      await api("/igp/transactions", {
-        method: "POST",
-        body: JSON.stringify({ ...transactionForm, fiscal_year: fiscalYear }),
-      });
+      const isEdit = transactionModal === "edit";
+      if (canEditOfficeTransactions) {
+        if (!isEdit || !selectedTransaction?.id) throw new Error("Procurement and Accountant may update existing IGP transactions only.");
+        const allowedFields = isProcurement
+          ? ["po_no","po_date","supplier_payee","po_amount","air_far_reference","iar_no","par_no","ics_no","ris_no","po_status","procurement_remarks"]
+          : ["db_no","dv_payroll_no","burs_serial_no","disbursement_date","disbursement_amount","notice_of_adjustment","adjustment_reason","accounting_status","reviewed_by","review_datetime","accounting_remarks"];
+        const officePayload = Object.fromEntries(allowedFields.map((field) => [field, transactionForm[field] ?? ""]));
+        await api(`/igp/transactions/${selectedTransaction.id}/office-details`, { method: "PUT", body: JSON.stringify(officePayload) });
+      } else {
+        await api(isEdit ? `/igp/transactions/${selectedTransaction?.id}` : "/igp/transactions", {
+          method: isEdit ? "PUT" : "POST",
+          body: JSON.stringify({ ...transactionForm, fiscal_year: transactionForm.fiscal_year || fiscalYear }),
+        });
+      }
       setTransactionModal(null);
+      setSelectedTransaction(null);
       await refreshAll();
     } catch (e) { setError(e.message); }
     finally { setSaving(false); }
@@ -934,14 +1315,14 @@ export default function IGPRegistry({ user, onLogout, onNavigate, activePath }) 
   };
 
   // IGP Registry quick modules.
-  // Dashboard remains the landing view, but it is NOT listed as a separate module
-  // because Dashboard is already available in the main sidebar.
+  // The existing IGP dashboard design is shown inside WFP / Budget & Allocation.
+  // There is no separate Overview submodule in IGP.
   const cards = [
-    ["budget", "1. WFP / Budget & Allocation", "Manage beginning balance, projected income, approved IGP budget and available Fund 161 balance.", "bg-emerald-500", BarChart3],
-    ["programs", "2. IGP Programs / Projects", "Manage IGP programs, fund clusters, WFP sources and project details.", "bg-orange-500", Landmark],
-    ["transactions", "3. IGP Transactions", "Record Fund 161 income, utilization and adjustment transactions.", "bg-teal-500", FileText],
-    ["monitoring", "4. Monitoring", "Monitor collection, utilization, unpaid utilization and available balance.", "bg-violet-600", TrendingUp],
-    ["reports", "5. Reports / Export", "Print and export IGP registry and financial information.", "bg-indigo-600", FileBarChart],
+    ["budget", "WFP / Budget & Allocation", "Manage beginning balance, projected income, approved IGP budget and available Fund 161 balance.", "bg-emerald-500", BarChart3],
+    ["programs", "IGP Programs / Projects", "Manage IGP programs, fund clusters, WFP sources and project details.", "bg-orange-500", Landmark],
+    ["transactions", "IGP Transactions", "Record Fund 161 income, utilization and adjustment transactions.", "bg-teal-500", FileText],
+    ["monitoring", "Monitoring", "Monitor collection, utilization, unpaid utilization and available balance.", "bg-violet-600", TrendingUp],
+    ["reports", "Reports / Export", "Print and export IGP registry and financial information.", "bg-indigo-600", FileBarChart],
   ];
 
   const programColumns = [
@@ -960,40 +1341,91 @@ export default function IGPRegistry({ user, onLogout, onNavigate, activePath }) 
     { key: "status", label: "STATUS", render: r => <StatusBadge value={r.status} /> },
     { key: "created_by_name", label: "ENTERED BY", render: r => r.created_by_name ? `${r.created_by_name} (${r.created_by_role || "User"})` : "—" },
     { key: "updated_by_name", label: "UPDATED BY", render: r => r.updated_by_name ? `${r.updated_by_name} (${r.updated_by_role || "User"})` : "—" },
-    ...(canManagePrograms ? [{
-      key: "actions", label: "ACTION", render: r => (
-        <div className="flex gap-1">
-          <button type="button" onClick={() => openEditProgram(r)} className="rounded-md bg-blue-50 p-1.5 text-blue-700" title="Edit"><Pencil className="h-3.5 w-3.5" /></button>
-          {isAdmin && <button type="button" onClick={() => deleteProgram(r.id)} className="rounded-md bg-red-50 p-1.5 text-red-600" title="Delete"><Trash2 className="h-3.5 w-3.5" /></button>}
+    {
+      key: "actions", label: "ACTIONS", render: r => (
+        <div className="flex items-center gap-1">
+          <button type="button" onClick={() => setProgramView(r)} className="inline-flex h-8 w-8 min-w-[2rem] shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white p-1.5 text-slate-700 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700" title="View program" aria-label="View program"><Eye className="h-4 w-4 shrink-0" /></button>
+          <button type="button" onClick={() => openAuditTrail(r)} className="inline-flex h-8 w-8 min-w-[2rem] shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white p-1.5 text-violet-700 hover:border-violet-300 hover:bg-violet-50 hover:text-violet-800" title="Audit trail" aria-label="Audit trail"><History className="h-4 w-4 shrink-0" /></button>
+          {canManagePrograms && <button type="button" onClick={() => openEditProgram(r)} className="inline-flex h-8 w-8 min-w-[2rem] shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white p-1.5 text-slate-700 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700" title="Edit program" aria-label="Edit program"><Pencil className="h-4 w-4 shrink-0" /></button>}
+          {isAdmin && <button type="button" onClick={() => deleteProgram(r.id)} className="inline-flex h-8 w-8 min-w-[2rem] shrink-0 items-center justify-center rounded-md border border-red-200 bg-white p-1.5 text-red-600 hover:bg-red-50" title="Delete program" aria-label="Delete program"><Trash2 className="h-4 w-4 shrink-0" /></button>}
         </div>
       )
-    }] : []),
+    },
   ];
 
+  // Show every field from the Add/Edit IGP Transaction form in the registry table.
+  // The Table wrapper is horizontally scrollable so all columns remain accessible.
   const transactionColumns = [
-    { key: "registry_no", label: "REGISTRY NO." },
+    { key: "registry_no", label: "REGISTRY NO.", render: r => r.registry_no || r.transaction_no || "—" },
     { key: "transaction_date", label: "DATE", render: r => dateText(r.transaction_date) },
-    { key: "fund_cluster_code", label: "FUND CLUSTER" },
-    { key: "program_code", label: "FUND CODE / IGP" },
-    { key: "campus_code", label: "CAMPUS" },
-    { key: "burs_serial_no", label: "BURS" },
+    { key: "fiscal_year", label: "FISCAL YEAR", render: r => r.fiscal_year || fiscalYear },
+    { key: "fund_cluster_code", label: "FUND CLUSTER", render: r => r.fund_cluster_code || "161" },
+    { key: "fund_code", label: "FUND CODE", render: r => r.fund_code || "161" },
+    { key: "campus_name", label: "CAMPUS", render: r => r.campus_name || r.campus_code },
+    { key: "burs_serial_no", label: "BURS SERIAL NO." },
+    { key: "serial_no_transferred", label: "SERIAL TRANSFERRED FROM / TO" },
+    { key: "program_code", label: "PROGRAM CODE" },
+    { key: "program_name", label: "PROGRAM / PROJECT", render: r => r.program_name || r.program_code },
+    { key: "transaction_type", label: "TRANSACTION TYPE", render: r => <StatusBadge value={r.transaction_type} /> },
     { key: "payee", label: "PAYEE / NAME" },
-    { key: "particulars", label: "PARTICULARS" },
-    { key: "responsibility_center_code", label: "RC" },
     { key: "reference_no", label: "REF. NO." },
-    { key: "transaction_type", label: "TYPE", render: r => <StatusBadge value={r.transaction_type} /> },
-    { key: "income_amount", label: "INCOME", render: r => money(r.income_amount) },
-    { key: "utilization_amount", label: "UTILIZATION", render: r => money(r.utilization_amount) },
-    { key: "unpaid_utilization", label: "UNPAID", render: r => money(r.unpaid_utilization) },
-    { key: "running_balance", label: "BALANCE", render: r => money(r.running_balance) },
+    { key: "particulars", label: "PARTICULARS / DESCRIPTION", render: r => r.particulars || r.description || r.remarks },
+    { key: "responsibility_center_name", label: "RESPONSIBILITY CENTER", render: r => r.responsibility_center_name || r.responsibility_center_code },
+    { key: "pap_name", label: "PAP", render: r => r.pap_name || r.pap_code },
+    { key: "uacs_code", label: "UACS CODE", render: r => r.uacs_code || r.uacs_account_title },
+    { key: "allotment_class_name", label: "ALLOTMENT CLASS", render: r => r.allotment_class_name || r.allotment_class_code },
+    { key: "uacs_funding_source_code", label: "UACS FUNDING SOURCE CODE" },
+    { key: "month", label: "MONTH" },
+    { key: "series", label: "SERIES" },
+    { key: "series2", label: "SERIES 2" },
+    { key: "quarter", label: "QUARTER", render: r => r.quarter ? `Q${String(r.quarter).replace(/^Q/i, "")}` : "—" },
+    { key: "mfo_name", label: "MFO", render: r => r.mfo_name || r.mfo_code },
+    { key: "old_uacs_code", label: "OLD UACS CODE", render: r => r.old_uacs_code || r.old_uacs_master_code },
+    { key: "account_title", label: "ACCOUNT TITLE", render: r => r.account_title || r.uacs_account_title },
+    { key: "income_amount", label: "INCOME / COLLECTION", render: r => money(r.income_amount ?? r.income) },
+    { key: "utilization_amount", label: "UTILIZATION", render: r => money(r.utilization_amount ?? r.utilization) },
+    { key: "ps_utilization", label: "PS", render: r => money(r.ps_utilization) },
+    { key: "mooe_utilization", label: "MOOE", render: r => money(r.mooe_utilization) },
+    { key: "co_utilization", label: "CO", render: r => money(r.co_utilization) },
+    { key: "wfp_source_name", label: "WFP SOURCE", render: r => r.wfp_source_name || r.wfp_source_code },
+    { key: "wfp_source_code", label: "WFP SOURCE CODE" },
+    { key: "running_balance", label: "RUNNING BALANCE", render: r => money(r.running_balance ?? r.balance) },
+    { key: "unpaid_utilization", label: "UNPAID UTILIZATION", render: r => money(r.unpaid_utilization) },
+    { key: "remarks", label: "REMARKS" },
+    { key: "po_no", label: "PO NO." },
+    { key: "po_date", label: "PO DATE", render: r => dateText(r.po_date) },
+    { key: "supplier_payee", label: "SUPPLIER / PAYEE" },
+    { key: "po_amount", label: "PO AMOUNT", render: r => money(r.po_amount) },
+    { key: "air_far_reference", label: "AIR / FAR REFERENCE" },
+    { key: "iar_no", label: "IAR NO." },
+    { key: "par_no", label: "PAR NO." },
+    { key: "ics_no", label: "ICS NO." },
+    { key: "ris_no", label: "IRS / RIS REFERENCE", render: r => r.ris_no || r.irs_ris_reference },
+    { key: "po_status", label: "PROCUREMENT STATUS", render: r => r.po_status || r.procurement_status },
+    { key: "procurement_remarks", label: "PROCUREMENT REMARKS" },
+    { key: "db_no", label: "DB NO." },
+    { key: "dv_payroll_no", label: "DV / PAYROLL NO." },
+    { key: "disbursement_date", label: "DISBURSEMENT DATE", render: r => dateText(r.disbursement_date) },
+    { key: "disbursement_amount", label: "DISBURSEMENT AMOUNT", render: r => money(r.disbursement_amount ?? r.disbursement) },
+    { key: "notice_of_adjustment", label: "NOTICE OF ADJUSTMENT" },
+    { key: "adjustment_reason", label: "ADJUSTMENT REASON" },
+    { key: "accounting_status", label: "ACCOUNTING STATUS" },
+    { key: "reviewed_by", label: "REVIEWED BY" },
+    { key: "review_datetime", label: "REVIEW DATE / TIME", render: r => r.review_datetime ? dateText(r.review_datetime) : "—" },
+    { key: "accounting_remarks", label: "ACCOUNTING REMARKS" },
     { key: "status", label: "STATUS", render: r => <StatusBadge value={r.status} /> },
-    ...(canDelete ? [{
+    { key: "created_by_name", label: "ENTERED BY", render: r => r.created_by_name ? `${r.created_by_name}${r.created_by_role ? ` (${r.created_by_role})` : ""}` : "—" },
+    { key: "updated_by_name", label: "UPDATED BY", render: r => r.updated_by_name ? `${r.updated_by_name}${r.updated_by_role ? ` (${r.updated_by_role})` : ""}` : "—" },
+    {
       key: "actions", label: "ACTION", render: r => (
-        <button type="button" onClick={() => deleteTransaction(r.id)} className="rounded-md bg-red-50 p-1.5 text-red-600" title="Delete draft">
-          <Trash2 className="h-3.5 w-3.5" />
-        </button>
+        <div className="flex items-center gap-1">
+          <button type="button" onClick={() => openViewTransaction(r)} className="inline-flex h-8 w-8 min-w-[2rem] shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white p-1.5 text-slate-700 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700" title="View transaction" aria-label="View transaction"><Eye className="h-4 w-4 shrink-0" /></button>
+          <button type="button" onClick={() => openAuditTrail(r)} className="inline-flex h-8 w-8 min-w-[2rem] shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white p-1.5 text-violet-700 hover:border-violet-300 hover:bg-violet-50 hover:text-violet-800" title="Audit trail" aria-label="Audit trail"><History className="h-4 w-4 shrink-0" /></button>
+          {(canManageTransactions || canEditOfficeTransactions) && <button type="button" onClick={() => openEditTransaction(r)} className="inline-flex h-8 w-8 min-w-[2rem] shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white p-1.5 text-slate-700 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700" title="Edit transaction" aria-label="Edit transaction"><Pencil className="h-4 w-4 shrink-0" /></button>}
+          {canDelete && <button type="button" onClick={() => deleteTransaction(r.id)} className="inline-flex h-8 w-8 min-w-[2rem] shrink-0 items-center justify-center rounded-md border border-red-200 bg-red-50 p-1.5 text-red-700 hover:bg-red-100" title="Delete transaction" aria-label="Delete transaction"><Trash2 className="h-4 w-4 shrink-0" /></button>}
+        </div>
       )
-    }] : []),
+    },
   ];
 
   const backHome = () => setView("module");
@@ -1117,13 +1549,6 @@ export default function IGPRegistry({ user, onLogout, onNavigate, activePath }) 
           </div>
         </section>
 
-        <section className="mb-5">
-          <SectionTitle title="MODULES" text="Quick access to IGP functions." />
-          <div className="grid w-full grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-            {cards.map((item) => <CardButton key={item[0]} item={item} onClick={setView} />)}
-          </div>
-        </section>
-
         <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
           <div className="flex flex-col gap-3 border-b border-slate-100 p-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
@@ -1134,27 +1559,29 @@ export default function IGPRegistry({ user, onLogout, onNavigate, activePath }) 
               View Registry <ArrowRight className="h-3.5 w-3.5" />
             </button>
           </div>
-          <div className="overflow-x-auto">
-            <table className="min-w-[900px] w-full text-left">
-              <thead>
-                <tr className="bg-slate-50 text-[9px] font-extrabold uppercase tracking-wide text-[#10245b]">
-                  <th className="px-3 py-3">Registry No.</th><th className="px-3 py-3">Date</th><th className="px-3 py-3">IGP Project</th><th className="px-3 py-3">Type</th><th className="px-3 py-3">Payee</th><th className="px-3 py-3 text-right">Amount</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {(overview.recent_transactions || []).slice(0, 5).map((row, i) => (
-                  <tr key={row.id || i} className="text-[10px] text-slate-700 hover:bg-slate-50">
-                    <td className="px-3 py-3 font-semibold">{row.registry_no || row.transaction_no || "—"}</td>
-                    <td className="px-3 py-3">{dateText(row.transaction_date)}</td>
-                    <td className="px-3 py-3">{row.program_code || row.program_name || "—"}</td>
-                    <td className="px-3 py-3"><StatusBadge value={row.transaction_type} /></td>
-                    <td className="px-3 py-3">{row.payee || "—"}</td>
-                    <td className="px-3 py-3 text-right font-bold">{money(row.amount)}</td>
-                  </tr>
-                ))}
-                {!overview.recent_transactions?.length && <tr><td colSpan={6} className="px-4 py-8 text-center text-[11px] text-slate-400">No IGP transactions yet.</td></tr>}
-              </tbody>
-            </table>
+          <div className="mb-2 px-4 pt-3 text-[9px] text-slate-400">
+            All transaction form fields are shown below. Scroll horizontally to view the remaining columns.
+          </div>
+          <div className="px-0 pb-0">
+            <Table columns={transactionColumns} rows={recentTransactions} empty="No IGP transactions yet." />
+          </div>
+          <div className="flex flex-col gap-3 border-t border-slate-100 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-[10px] text-slate-500">
+              Showing {recentPagination.totalItems === 0 ? 0 : ((recentPagination.page - 1) * RECENT_TRANSACTIONS_LIMIT) + 1} to {Math.min(recentPagination.page * RECENT_TRANSACTIONS_LIMIT, recentPagination.totalItems)} of {recentPagination.totalItems} entries
+            </p>
+            <div className="flex items-center justify-end gap-1">
+              <button type="button" onClick={() => loadRecentTransactions(Math.max(1, recentPagination.page - 1))} disabled={recentPagination.page <= 1} className="inline-flex h-8 min-w-8 items-center justify-center rounded-md border border-slate-200 bg-white px-2 text-[10px] font-bold text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40" aria-label="Previous recent transactions page">
+                <ArrowLeft className="h-3.5 w-3.5" />
+              </button>
+              {Array.from({ length: Math.max(1, recentPagination.totalPages || 1) }, (_, i) => i + 1).map((pageNumber) => (
+                <button key={pageNumber} type="button" onClick={() => loadRecentTransactions(pageNumber)} aria-current={recentPagination.page === pageNumber ? "page" : undefined} className={`inline-flex h-8 min-w-8 items-center justify-center rounded-md border px-2 text-[10px] font-bold ${recentPagination.page === pageNumber ? "border-[#174fd1] bg-[#174fd1] text-white" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`}>
+                  {pageNumber}
+                </button>
+              ))}
+              <button type="button" onClick={() => loadRecentTransactions(Math.min(recentPagination.totalPages || 1, recentPagination.page + 1))} disabled={recentPagination.page >= (recentPagination.totalPages || 1)} className="inline-flex h-8 min-w-8 items-center justify-center rounded-md border border-slate-200 bg-white px-2 text-[10px] font-bold text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40" aria-label="Next recent transactions page">
+                <ArrowRight className="h-3.5 w-3.5" />
+              </button>
+            </div>
           </div>
         </section>
       </>
@@ -1163,7 +1590,7 @@ export default function IGPRegistry({ user, onLogout, onNavigate, activePath }) 
 
   const renderBudget = () => (
     <>
-      <BackBar title="1. WFP / Budget & Allocation" onBack={backHome} />
+      <BackBar title="WFP / Budget & Allocation" onBack={backHome} />
       <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
         <Metric label="Beginning Balance" value={money(beginning)} icon={WalletCards} />
         <Metric label="Projected Income FY" value={money(projected)} icon={TrendingUp} className="bg-blue-50 text-blue-700" />
@@ -1192,24 +1619,39 @@ export default function IGPRegistry({ user, onLogout, onNavigate, activePath }) 
     </>
   );
 
+  const programTotalPages = Math.max(1, Math.ceil(programs.length / PROGRAMS_LIMIT));
+  const visiblePrograms = programs.slice((programPage - 1) * PROGRAMS_LIMIT, programPage * PROGRAMS_LIMIT);
+
   const renderPrograms = () => (
     <>
-      <BackBar title="2. IGP Programs / Projects" onBack={backHome} />
+      <BackBar title="IGP Programs / Projects" onBack={backHome} />
       <div className="mb-4 grid grid-cols-1 gap-2 md:grid-cols-12">
-        <div className="relative md:col-span-7"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><Input value={programSearch} onChange={e => setProgramSearch(e.target.value)} placeholder="Search program, project, WFP, campus or RC..." className="pl-9" /></div>
-        <button type="button" onClick={loadPrograms} className="flex h-9 items-center justify-center gap-1 rounded-lg border border-slate-200 bg-white text-[10px] font-bold text-slate-600"><RefreshCw className="h-3.5 w-3.5" />Refresh</button>
+        <div className="relative md:col-span-7"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><Input value={programSearch} onChange={e => { setProgramSearch(e.target.value); setProgramPage(1); }} placeholder="Search program, project, WFP, campus or RC..." className="pl-9" /></div>
+        <button type="button" onClick={loadPrograms} className="flex h-9 items-center justify-center gap-1 rounded-lg border border-slate-200 bg-white text-[10px] font-bold text-slate-600"><RefreshCw className="h-4 w-4 shrink-0" />Refresh</button>
         {canManagePrograms && <button type="button" onClick={openAddProgram} className="flex h-9 items-center justify-center gap-1 rounded-lg bg-[#174fd1] text-[10px] font-bold text-white md:col-span-4"><Plus className="h-3.5 w-3.5" />Add IGP Program / Project</button>}
       </div>
-      <Table columns={programColumns} rows={programs} empty="No IGP programs / projects found." />
+      <Table columns={programColumns} rows={visiblePrograms} empty="No IGP programs / projects found." />
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-[10px] text-slate-500">
+        <span>Showing {programs.length ? (programPage - 1) * PROGRAMS_LIMIT + 1 : 0} to {Math.min(programPage * PROGRAMS_LIMIT, programs.length)} of {programs.length} entries</span>
+        <div className="flex items-center gap-1">
+          <button type="button" aria-label="Previous programs page" disabled={programPage <= 1} onClick={() => setProgramPage(p => Math.max(1, p - 1))} className="rounded border border-slate-200 bg-white p-1.5 disabled:opacity-30"><ArrowLeft className="h-3 w-3" /></button>
+          {Array.from({ length: Math.min(5, programTotalPages) }, (_, i) => {
+            const start = Math.max(1, Math.min(programPage - 2, programTotalPages - 4));
+            const number = start + i;
+            return number <= programTotalPages ? <button key={number} type="button" onClick={() => setProgramPage(number)} className={`rounded px-2.5 py-1.5 ${programPage === number ? "bg-[#174fd1] text-white" : "border border-slate-200 bg-white text-slate-500"}`}>{number}</button> : null;
+          })}
+          <button type="button" aria-label="Next programs page" disabled={programPage >= programTotalPages} onClick={() => setProgramPage(p => Math.min(programTotalPages, p + 1))} className="rounded border border-slate-200 bg-white p-1.5 disabled:opacity-30"><ArrowRight className="h-3 w-3" /></button>
+        </div>
+      </div>
     </>
   );
 
   const renderTransactions = () => (
     <>
-      <BackBar title="3. IGP Transactions — Fund 161" onBack={backHome} />
+      <BackBar title="IGP Transactions — Fund 161" onBack={backHome} />
       <div className="mb-4 grid grid-cols-1 gap-2 md:grid-cols-12">
         <div className="relative md:col-span-7"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><Input value={search} onChange={e => setSearch(e.target.value)} onKeyDown={e => e.key === "Enter" && loadTransactions(1)} placeholder="Search registry, BURS, payee, program, PO..." className="pl-9" /></div>
-        <button type="button" onClick={() => loadTransactions(1)} className="flex h-9 items-center justify-center gap-1 rounded-lg border border-slate-200 bg-white text-[10px] font-bold text-slate-600"><RefreshCw className="h-3.5 w-3.5" />Refresh</button>
+        <button type="button" onClick={() => loadTransactions(1)} className="flex h-9 items-center justify-center gap-1 rounded-lg border border-slate-200 bg-white text-[10px] font-bold text-slate-600"><RefreshCw className="h-4 w-4 shrink-0" />Refresh</button>
         {canManageTransactions && <button type="button" onClick={openAddTransaction} className="flex h-9 items-center justify-center gap-1 rounded-lg bg-[#174fd1] text-[10px] font-bold text-white md:col-span-4"><Plus className="h-3.5 w-3.5" />Add IGP Transaction</button>}
       </div>
       <div className="mb-3 flex gap-1 overflow-x-auto rounded-lg border border-slate-100 bg-white p-1 shadow-sm">
@@ -1217,6 +1659,7 @@ export default function IGPRegistry({ user, onLogout, onNavigate, activePath }) 
           <button key={id} type="button" onClick={() => { setActiveTab(id); setPage(1); }} className={`whitespace-nowrap rounded-md px-3 py-2 text-[9px] font-bold ${activeTab === id ? "bg-[#174fd1] text-white" : "text-slate-500 hover:bg-slate-50"}`}>{label}</button>
         ))}
       </div>
+      <div className="mb-2 text-[9px] text-slate-400">All transaction form fields are shown in the table. Scroll horizontally to view the remaining columns.</div>
       <Table columns={transactionColumns} rows={transactions} empty="No IGP registry transactions found." />
       <div className="mt-3 flex items-center justify-between text-[10px] text-slate-400">
         <span>Showing {transactions.length ? (page - 1) * LIMIT + 1 : 0} to {Math.min(page * LIMIT, pagination.totalItems)} of {pagination.totalItems || 0} entries</span>
@@ -1229,14 +1672,18 @@ export default function IGPRegistry({ user, onLogout, onNavigate, activePath }) 
     </>
   );
 
+  const monitoringRows = overview.by_fund_cluster || [];
+  const monitoringTotalPages = Math.max(1, Math.ceil(monitoringRows.length / MONITORING_LIMIT));
+  const visibleMonitoringRows = monitoringRows.slice((monitoringPage - 1) * MONITORING_LIMIT, monitoringPage * MONITORING_LIMIT);
+
   const renderMonitoring = () => (
     <>
-      <BackBar title="4. Income, Utilization & Disbursement Monitoring" onBack={backHome} />
+      <BackBar title="Income, Utilization & Disbursement Monitoring" onBack={backHome} />
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <Metric label="Actual Collection" value={money(income)} icon={TrendingUp} className="bg-emerald-50 text-emerald-700" />
-        <Metric label="Utilization" value={money(utilization)} icon={ArrowDownToLine} className="bg-orange-50 text-orange-700" />
-        <Metric label="Disbursement" value={money(disbursement)} icon={Download} className="bg-violet-50 text-violet-700" />
-        <Metric label="Unpaid Utilization" value={money(unpaid)} icon={CheckCircle2} className="bg-red-50 text-red-600" />
+        <Metric label="Actual Collection" value={money(income)} icon={TrendingUp} className="bg-emerald-600 text-white" />
+        <Metric label="Utilization" value={money(utilization)} icon={ArrowDownToLine} className="bg-orange-500 text-white" />
+        <Metric label="Disbursement" value={money(disbursement)} icon={Download} className="bg-violet-600 text-white" />
+        <Metric label="Unpaid Utilization" value={money(unpaid)} icon={CheckCircle2} className="bg-red-500 text-white" />
       </div>
       <div className="mt-4"><BalancePanel title={`Fund 161 Monitoring — FY ${fiscalYear}`} beginning={beginning} projected={projected} income={income} utilization={utilization} disbursement={disbursement} unpaid={unpaid} balance={balance} /></div>
       <div className="mt-4">
@@ -1252,21 +1699,35 @@ export default function IGPRegistry({ user, onLogout, onNavigate, activePath }) 
             { key: "unpaid_utilization", label: "UNPAID", render: r => money(r.unpaid_utilization) },
             { key: "available_balance", label: "BALANCE", render: r => money(r.available_balance) },
           ]}
-          rows={overview.by_fund_cluster || []}
+          rows={visibleMonitoringRows}
           empty="No monitoring records found."
         />
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-[10px] text-slate-500">
+          <span>Showing {monitoringRows.length ? (monitoringPage - 1) * MONITORING_LIMIT + 1 : 0} to {Math.min(monitoringPage * MONITORING_LIMIT, monitoringRows.length)} of {monitoringRows.length} entries</span>
+          <div className="flex items-center gap-1">
+            <button type="button" aria-label="Previous monitoring page" disabled={monitoringPage <= 1} onClick={() => setMonitoringPage(p => Math.max(1, p - 1))} className="rounded border border-slate-200 bg-white p-1.5 disabled:opacity-30"><ArrowLeft className="h-3 w-3" /></button>
+            {Array.from({ length: Math.min(5, monitoringTotalPages) }, (_, i) => {
+              const start = Math.max(1, Math.min(monitoringPage - 2, monitoringTotalPages - 4));
+              const number = start + i;
+              return number <= monitoringTotalPages ? <button key={number} type="button" onClick={() => setMonitoringPage(number)} className={`rounded px-2.5 py-1.5 ${monitoringPage === number ? "bg-[#174fd1] text-white" : "border border-slate-200 bg-white text-slate-500"}`}>{number}</button> : null;
+            })}
+            <button type="button" aria-label="Next monitoring page" disabled={monitoringPage >= monitoringTotalPages} onClick={() => setMonitoringPage(p => Math.min(monitoringTotalPages, p + 1))} className="rounded border border-slate-200 bg-white p-1.5 disabled:opacity-30"><ArrowRight className="h-3 w-3" /></button>
+          </div>
+        </div>
       </div>
     </>
   );
 
-  const reportDefinitions = [
-    ["registry", "IGP Registry Report", "Complete Fund 161 transaction registry.", FileText],
-    ["wfp", "IGP WFP / Budget Report", "WFP, approved budget and available balance by fund cluster.", BarChart3],
-    ["income", "IGP Income / Collection Report", "Actual IGP income and collection transactions.", TrendingUp],
-    ["utilization", "IGP Utilization Report", "IGP utilization transactions, including PS, MOOE and CO.", ArrowDownToLine],
-    ["disbursement", "IGP Disbursement Report", "Disbursement and unpaid utilization transactions.", Download],
-    ["financial", "IGP Program Financial Report", "Program/project financial status and balances.", FileBarChart],
-  ];
+  const reportDefinitions = canEditOfficeTransactions
+    ? [["office", isProcurement ? "IGP Procurement Report" : "IGP Accounting Report", isProcurement ? "Procurement fields entered for Fund 161 transactions." : "Accounting and disbursement fields entered for Fund 161 transactions.", FileText]]
+    : [
+      ["registry", "IGP Registry Report", "Complete Fund 161 transaction registry.", FileText],
+      ["wfp", "IGP WFP / Budget Report", "WFP, approved budget and available balance by fund cluster.", BarChart3],
+      ["income", "IGP Income / Collection Report", "Actual IGP income and collection transactions.", TrendingUp],
+      ["utilization", "IGP Utilization Report", "IGP utilization transactions, including PS, MOOE and CO.", ArrowDownToLine],
+      ["disbursement", "IGP Disbursement Report", "Disbursement and unpaid utilization transactions.", Download],
+      ["financial", "IGP Program Financial Report", "Program/project financial status and balances.", FileBarChart],
+    ];
 
   const loadReport = async (type) => {
     setReportType(type);
@@ -1277,13 +1738,13 @@ export default function IGPRegistry({ user, onLogout, onNavigate, activePath }) 
         setReportRows(overview.by_fund_cluster || []);
       } else if (type === "financial") {
         setReportRows(programs || []);
-      } else if (type === "registry" || type === "income" || type === "utilization" || type === "disbursement") {
+      } else if (type === "office" || type === "registry" || type === "income" || type === "utilization" || type === "disbursement") {
         const q = new URLSearchParams({
           year: String(fiscalYear),
           page: "1",
           limit: "10000",
           search: "",
-          type: type === "registry" ? "" : type,
+          type: ["registry", "office"].includes(type) ? "" : type,
         });
         const data = await api(`/igp/transactions?${q.toString()}`);
         let rows = data.data || [];
@@ -1300,6 +1761,10 @@ export default function IGPRegistry({ user, onLogout, onNavigate, activePath }) 
     }
   };
 
+  useEffect(() => {
+    if (view === "reports") loadReport(reportType);
+  }, [view]);
+
   const reportTitle = reportDefinitions.find(r => r[0] === reportType)?.[1] || "IGP Report";
 
   const printSelectedReport = async () => {
@@ -1314,17 +1779,17 @@ export default function IGPRegistry({ user, onLogout, onNavigate, activePath }) 
   const renderReportTable = () => {
     if (reportType === "wfp") {
       return (
-        <table className="w-full border-collapse text-[10px]">
-          <thead><tr className="bg-slate-100">
-            <th className="border border-slate-300 p-2 text-left">FUND CLUSTER</th>
-            <th className="border border-slate-300 p-2 text-left">DESCRIPTION</th>
-            <th className="border border-slate-300 p-2 text-right">BEGINNING</th>
-            <th className="border border-slate-300 p-2 text-right">PROJECTED</th>
-            <th className="border border-slate-300 p-2 text-right">APPROVED</th>
-            <th className="border border-slate-300 p-2 text-right">COLLECTION</th>
-            <th className="border border-slate-300 p-2 text-right">BALANCE</th>
-            <th className="border border-slate-300 p-2 text-left">ENTERED BY</th>
-            <th className="border border-slate-300 p-2 text-left">UPDATED BY</th>
+        <table className="w-full border-collapse whitespace-nowrap text-[9px]">
+          <thead><tr className="bg-[#102b67] text-white">
+            <th className="!text-white border border-slate-300 p-2 text-left">FUND CLUSTER</th>
+            <th className="!text-white border border-slate-300 p-2 text-left">DESCRIPTION</th>
+            <th className="!text-white border border-slate-300 p-2 text-right">BEGINNING</th>
+            <th className="!text-white border border-slate-300 p-2 text-right">PROJECTED</th>
+            <th className="!text-white border border-slate-300 p-2 text-right">APPROVED</th>
+            <th className="!text-white border border-slate-300 p-2 text-right">COLLECTION</th>
+            <th className="!text-white border border-slate-300 p-2 text-right">BALANCE</th>
+            <th className="!text-white border border-slate-300 p-2 text-left">ENTERED BY</th>
+            <th className="!text-white border border-slate-300 p-2 text-left">UPDATED BY</th>
           </tr></thead>
           <tbody>{reportRows.map((r, i) => <tr key={i}>
             <td className="border border-slate-300 p-2">{r.code || "—"}</td>
@@ -1343,19 +1808,19 @@ export default function IGPRegistry({ user, onLogout, onNavigate, activePath }) 
 
     if (reportType === "financial") {
       return (
-        <table className="w-full border-collapse text-[10px]">
-          <thead><tr className="bg-slate-100">
-            <th className="border border-slate-300 p-2 text-left">PROGRAM CODE</th>
-            <th className="border border-slate-300 p-2 text-left">PROGRAM / PROJECT</th>
-            <th className="border border-slate-300 p-2 text-left">FUND CLUSTER</th>
-            <th className="border border-slate-300 p-2 text-right">BEGINNING</th>
-            <th className="border border-slate-300 p-2 text-right">PROJECTED</th>
-            <th className="border border-slate-300 p-2 text-right">APPROVED</th>
-            <th className="border border-slate-300 p-2 text-right">COLLECTION</th>
-            <th className="border border-slate-300 p-2 text-right">UTILIZATION</th>
-            <th className="border border-slate-300 p-2 text-right">BALANCE</th>
-            <th className="border border-slate-300 p-2 text-left">ENTERED BY</th>
-            <th className="border border-slate-300 p-2 text-left">UPDATED BY</th>
+        <table className="w-full border-collapse whitespace-nowrap text-[9px]">
+          <thead><tr className="bg-[#102b67] text-white">
+            <th className="!text-white border border-slate-300 p-2 text-left">PROGRAM CODE</th>
+            <th className="!text-white border border-slate-300 p-2 text-left">PROGRAM / PROJECT</th>
+            <th className="!text-white border border-slate-300 p-2 text-left">FUND CLUSTER</th>
+            <th className="!text-white border border-slate-300 p-2 text-right">BEGINNING</th>
+            <th className="!text-white border border-slate-300 p-2 text-right">PROJECTED</th>
+            <th className="!text-white border border-slate-300 p-2 text-right">APPROVED</th>
+            <th className="!text-white border border-slate-300 p-2 text-right">COLLECTION</th>
+            <th className="!text-white border border-slate-300 p-2 text-right">UTILIZATION</th>
+            <th className="!text-white border border-slate-300 p-2 text-right">BALANCE</th>
+            <th className="!text-white border border-slate-300 p-2 text-left">ENTERED BY</th>
+            <th className="!text-white border border-slate-300 p-2 text-left">UPDATED BY</th>
           </tr></thead>
           <tbody>{reportRows.map((r, i) => <tr key={i}>
             <td className="border border-slate-300 p-2">{r.program_code || "—"}</td>
@@ -1374,97 +1839,190 @@ export default function IGPRegistry({ user, onLogout, onNavigate, activePath }) 
       );
     }
 
-    return (
-      <table className="w-full border-collapse text-[10px]">
-        <thead><tr className="bg-slate-100">
-          <th className="border border-slate-300 p-2 text-left">REGISTRY NO.</th>
-          <th className="border border-slate-300 p-2 text-left">DATE</th>
-          <th className="border border-slate-300 p-2 text-left">FUND / IGP</th>
-          <th className="border border-slate-300 p-2 text-left">PROGRAM</th>
-          <th className="border border-slate-300 p-2 text-left">PAYEE / NAME</th>
-          <th className="border border-slate-300 p-2 text-left">PARTICULARS</th>
-          <th className="border border-slate-300 p-2 text-right">INCOME</th>
-          <th className="border border-slate-300 p-2 text-right">UTILIZATION</th>
-          <th className="border border-slate-300 p-2 text-right">DISBURSEMENT</th>
-          <th className="border border-slate-300 p-2 text-right">BALANCE</th>
-          <th className="border border-slate-300 p-2 text-left">ENTERED BY</th>
-          <th className="border border-slate-300 p-2 text-left">UPDATED BY</th>
-        </tr></thead>
-        <tbody>{reportRows.map((r, i) => <tr key={i}>
-          <td className="border border-slate-300 p-2">{r.registry_no || "—"}</td>
-          <td className="border border-slate-300 p-2">{dateText(r.transaction_date)}</td>
-          <td className="border border-slate-300 p-2">{r.fund_cluster_code || "161"}</td>
-          <td className="border border-slate-300 p-2">{r.program_code || "—"}</td>
-          <td className="border border-slate-300 p-2">{r.payee || "—"}</td>
-          <td className="border border-slate-300 p-2">{r.particulars || r.description || r.remarks || r.account_title || "—"}</td>
-          <td className="border border-slate-300 p-2 text-right">{reportMoney(r.income)}</td>
-          <td className="border border-slate-300 p-2 text-right">{reportMoney(r.utilization)}</td>
-          <td className="border border-slate-300 p-2 text-right">{reportMoney(r.disbursement)}</td>
-          <td className="border border-slate-300 p-2 text-right">{reportMoney(r.balance)}</td>
-          <td className="border border-slate-300 p-2">{r.created_by_name ? `${r.created_by_name} (${r.created_by_role || "User"})` : "—"}</td>
-          <td className="border border-slate-300 p-2">{r.updated_by_name ? `${r.updated_by_name} (${r.updated_by_role || "User"})` : "—"}</td>
-        </tr>)}</tbody>
-      </table>
-    );
+    const allColumns = [
+      ["REGISTRY NO.", r => r.registry_no || r.transaction_no], ["DATE", r => dateText(r.transaction_date)],
+      ["FISCAL YEAR", r => r.fiscal_year], ["FUND CLUSTER", r => r.fund_cluster_code || "161"], ["CAMPUS", r => r.campus_name || r.campus_code],
+      ["PROGRAM CODE", r => r.program_code], ["PROGRAM / PROJECT", r => r.program_name], ["TRANSACTION TYPE", r => r.transaction_type],
+      ["BURS SERIAL NO.", r => r.burs_serial_no], ["SERIAL TRANSFERRED", r => r.serial_no_transferred], ["PAYEE / NAME", r => r.payee],
+      ["PARTICULARS", r => r.particulars || r.description || r.remarks || r.account_title], ["RESPONSIBILITY CENTER", r => r.responsibility_center_name || r.responsibility_center_code],
+      ["PAP", r => r.pap_name || r.pap_code], ["UACS CODE", r => r.uacs_code || r.uacs_account_title], ["REFERENCE NO.", r => r.reference_no],
+      ["ALLOTMENT CLASS", r => r.allotment_class_name || r.allotment_class_code], ["MFO", r => r.mfo_name || r.mfo_code], ["OLD UACS CODE", r => r.old_uacs_code || r.old_uacs_master_code], ["ACCOUNT TITLE", r => r.account_title || r.uacs_account_title], ["UACS FUNDING SOURCE CODE", r => r.uacs_funding_source_code], ["MONTH", r => r.month], ["SERIES", r => r.series], ["SERIES 2", r => r.series2], ["QUARTER", r => r.quarter], ["WFP SOURCE", r => r.wfp_source_name || r.wfp_source_code],
+      ["INCOME", r => reportMoney(r.income_amount ?? r.income)], ["UTILIZATION", r => reportMoney(r.utilization_amount ?? r.utilization)],
+      ["PS UTILIZATION", r => reportMoney(r.ps_utilization)], ["MOOE UTILIZATION", r => reportMoney(r.mooe_utilization)], ["CO UTILIZATION", r => reportMoney(r.co_utilization)],
+      ["DISBURSEMENT", r => reportMoney(r.disbursement_amount ?? r.disbursement)], ["UNPAID UTILIZATION", r => reportMoney(r.unpaid_utilization)], ["RUNNING BALANCE", r => reportMoney(r.running_balance ?? r.balance)],
+      ["PO NO.", r => r.po_no], ["PO DATE", r => dateText(r.po_date)], ["SUPPLIER / PAYEE", r => r.supplier_payee], ["PO AMOUNT", r => reportMoney(r.po_amount)],
+      ["AIR / FAR REFERENCE", r => r.air_far_reference], ["IAR NO.", r => r.iar_no], ["PAR NO.", r => r.par_no], ["ICS NO.", r => r.ics_no], ["RIS NO.", r => r.ris_no],
+      ["PROCUREMENT STATUS", r => r.po_status], ["PROCUREMENT REMARKS", r => r.procurement_remarks], ["DB NO.", r => r.db_no], ["DV / PAYROLL NO.", r => r.dv_payroll_no],
+      ["NOTICE OF ADJUSTMENT", r => r.notice_of_adjustment], ["ADJUSTMENT REASON", r => r.adjustment_reason], ["ACCOUNTING STATUS", r => r.accounting_status],
+      ["REVIEWED BY", r => r.reviewed_by], ["REVIEW DATE / TIME", r => r.review_datetime ? dateText(r.review_datetime) : "—"], ["ACCOUNTING REMARKS", r => r.accounting_remarks],
+      ["STATUS", r => r.status], ["ENTERED BY", r => r.created_by_name ? `${r.created_by_name} (${r.created_by_role || "User"})` : "—"], ["UPDATED BY", r => r.updated_by_name ? `${r.updated_by_name} (${r.updated_by_role || "User"})` : "—"]
+    ];
+    return <table className="w-full border-collapse whitespace-nowrap text-[9px]"><thead><tr className="bg-[#102b67] text-white">{allColumns.map(([label]) => <th key={label} className="!text-white border border-slate-300 p-2 text-left">{label}</th>)}</tr></thead><tbody>{reportRows.map((r, i) => <tr key={i}>{allColumns.map(([label, value]) => <td key={label} className="border border-slate-300 p-2">{value(r) ?? "—"}</td>)}</tr>)}</tbody></table>;
+  };
+
+  const renderOfficePrintTable = () => {
+    const columns = isProcurement ? [
+      ["REGISTRY NO.", r => r.registry_no || r.transaction_no], ["DATE", r => dateText(r.transaction_date)], ["PROGRAM / PROJECT", r => r.program_name || r.program_code], ["CAMPUS", r => r.campus_name || r.campus_code], ["PAYEE / NAME", r => r.payee], ["PARTICULARS", r => r.particulars || r.description], ["PO NO.", r => r.po_no], ["PO DATE", r => dateText(r.po_date)], ["SUPPLIER / PAYEE", r => r.supplier_payee], ["PO AMOUNT", r => reportMoney(r.po_amount)], ["AIR / FAR REFERENCE", r => r.air_far_reference], ["IAR NO.", r => r.iar_no], ["PAR NO.", r => r.par_no], ["ICS NO.", r => r.ics_no], ["RIS NO.", r => r.ris_no], ["PO STATUS", r => r.po_status], ["PROCUREMENT REMARKS", r => r.procurement_remarks]
+    ] : [
+      ["REGISTRY NO.", r => r.registry_no || r.transaction_no], ["DATE", r => dateText(r.transaction_date)], ["PROGRAM / PROJECT", r => r.program_name || r.program_code], ["PAYEE / NAME", r => r.payee], ["PARTICULARS", r => r.particulars || r.description], ["BURS SERIAL NO.", r => r.burs_serial_no], ["DB NO.", r => r.db_no], ["DV / PAYROLL NO.", r => r.dv_payroll_no], ["DISBURSEMENT DATE", r => dateText(r.disbursement_date)], ["DISBURSEMENT AMOUNT", r => reportMoney(r.disbursement_amount)], ["NOTICE OF ADJUSTMENT", r => r.notice_of_adjustment], ["ADJUSTMENT REASON", r => r.adjustment_reason], ["ACCOUNTING STATUS", r => r.accounting_status], ["REVIEWED BY", r => r.reviewed_by], ["REVIEW DATE / TIME", r => r.review_datetime ? dateText(r.review_datetime) : "—"], ["ACCOUNTING REMARKS", r => r.accounting_remarks]
+    ];
+    return <table className="w-full border-collapse whitespace-nowrap text-[9px]"><thead><tr>{columns.map(([label]) => <th key={label} className="border border-slate-300 p-2 text-left">{label}</th>)}</tr></thead><tbody>{reportRows.map((r, i) => <tr key={i}>{columns.map(([label, value]) => <td key={label} className="border border-slate-300 p-2">{value(r) ?? "—"}</td>)}</tr>)}</tbody></table>;
   };
 
   const renderReports = () => (
     <>
-      <style>{`@media print {
-        body * { visibility: hidden !important; }
-        .igp-print-area, .igp-print-area * { visibility: visible !important; }
-        .igp-print-area {
-          position: absolute !important;
-          left: 0 !important;
-          top: 0 !important;
-          width: 100% !important;
-          padding: 20px !important;
-          background: white !important;
+      <style>{`
+        /* Keep the on-screen report preview at normal responsive size. */
+        .igp-report-preview { image-rendering: auto; -webkit-font-smoothing: antialiased; }
+        .igp-report-preview .igp-print-table table { width: 100%; border-collapse: collapse; }
+        @media print {
+          @page { size: A4 landscape; margin: 8mm; }
+          html, body, #root { width: 100% !important; min-width: 0 !important; margin: 0 !important; padding: 0 !important; background: #fff !important; }
+          body { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+          body * { visibility: hidden !important; }
+          .igp-print-area, .igp-print-area * { visibility: visible !important; }
+          .igp-print-area {
+            display: block !important;
+            position: fixed !important;
+            inset: 0 !important;
+            width: 100% !important;
+            max-width: none !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            overflow: visible !important;
+            background: #fff !important;
+            color: #111827 !important;
+            font-family: Arial, Helvetica, sans-serif !important;
+            font-size: 9pt !important;
+            line-height: 1.25 !important;
+            box-sizing: border-box !important;
+          }
+          .igp-print-area header { margin-bottom: 7mm !important; padding-bottom: 3mm !important; }
+          .igp-print-area header img { width: 15mm !important; height: 15mm !important; object-fit: contain !important; }
+          .igp-print-area header p { font-size: 9pt !important; line-height: 1.25 !important; }
+          .igp-print-area header p.font-extrabold { font-size: 11pt !important; }
+          .igp-print-area header h1 { font-size: 13pt !important; line-height: 1.3 !important; }
+          .igp-print-table { display: block !important; width: 100% !important; max-width: 100% !important; overflow: visible !important; }
+          .igp-print-table table { width: 100% !important; max-width: 100% !important; table-layout: auto !important; border-collapse: collapse !important; font-size: 6pt !important; }
+          .igp-print-table thead { display: table-header-group !important; }
+          .igp-print-table tr { break-inside: avoid !important; page-break-inside: avoid !important; }
+          .igp-print-table th, .igp-print-table td {
+            font-size: 6pt !important;
+            line-height: 1.15 !important;
+            padding: 1mm 0.7mm !important;
+            vertical-align: middle !important;
+            border: 0.5pt solid #aab6c8 !important;
+            color: #111827 !important;
+            background: #fff !important;
+          }
+          /* Keep every printed data cell on a single line, matching the other BMAS reports. */
+          .igp-print-table tbody td {
+            white-space: nowrap !important;
+            word-break: keep-all !important;
+            overflow-wrap: normal !important;
+          }
+          /* Column headings may wrap when needed, but remain bold and plain white. */
+          .igp-print-table thead th {
+            white-space: normal !important;
+            word-break: normal !important;
+            overflow-wrap: normal !important;
+            font-size: 6pt !important;
+          }
+          /* Printed report uses a plain white table header; only the column labels are bold. */
+          .igp-print-table thead,
+          .igp-print-table thead tr,
+          .igp-print-table th,
+          .igp-print-table th[class] {
+            background: #fff !important;
+            background-color: #fff !important;
+            color: #111827 !important;
+            -webkit-text-fill-color: #111827 !important;
+            font-weight: 700 !important;
+          }
+          .igp-print-table td,
+          .igp-print-table td[class] {
+            background: #fff !important;
+            background-color: #fff !important;
+            color: #111827 !important;
+            -webkit-text-fill-color: #111827 !important;
+            font-weight: 400 !important;
+          }
+          /* Audit columns remain visible in the application but are excluded from printed reports. */
+          .igp-print-table:not(.igp-office-print-table) th:nth-last-child(-n+2),
+          .igp-print-table:not(.igp-office-print-table) td:nth-last-child(-n+2) { display: none !important; }
+          .igp-print-area .grid { display: grid !important; grid-template-columns: 1fr 1fr !important; gap: 12mm !important; }
+          .igp-print-area .mt-10 { margin-top: 12mm !important; }
+          .igp-print-area .pt-5 { padding-top: 5mm !important; }
+          * { box-shadow: none !important; text-shadow: none !important; }
         }
-        .igp-print-table { overflow: visible !important; }
-        /* Audit fields are for the on-screen report only. Do not print them. */
-        .igp-print-table th:nth-last-child(-n+2),
-        .igp-print-table td:nth-last-child(-n+2) {
-          display: none !important;
-        }
-        @page { size: landscape; margin: 10mm; }
-      }`}</style>
-      <BackBar title="5. IGP Reports / Export" onBack={backHome} />
-      <div className="igp-screen-only grid grid-cols-1 items-start gap-4 lg:grid-cols-[280px_minmax(0,1fr)]">
-        <div className="rounded-xl border border-slate-100 bg-white p-4 shadow-sm">
-          <p className="mb-3 text-[10px] font-extrabold uppercase tracking-wide text-slate-500">Available Reports</p>
-          {reportDefinitions.map(([key, title, desc, Icon]) => (
-            <button key={key} type="button" onClick={() => loadReport(key)} className={`mb-2 w-full rounded-lg border p-2.5 text-left transition ${reportType === key ? "border-blue-200 bg-blue-50" : "border-slate-100 bg-white hover:bg-slate-50"}`}>
-              <div className="flex items-center gap-2"><Icon className={`h-4 w-4 ${reportType === key ? "text-blue-600" : "text-slate-500"}`} /><span className="text-[10px] font-extrabold text-slate-700">{title}</span></div>
-              <p className="mt-1 pl-6 text-[9px] leading-4 text-slate-400">{desc}</p>
-            </button>
-          ))}
+      `}</style>
+      <BackBar title="IGP Reports / Export" onBack={backHome} />
+      <div className="igp-screen-only space-y-3">
+        {/* Filters are placed above the report, matching the full-width RBUD Reports & Export layout. */}
+        <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+            <label className="block min-w-0">
+              <span className="mb-1 block text-[10px] font-semibold text-slate-500">Report Type</span>
+              <select
+                value={reportType}
+                onChange={e => loadReport(e.target.value)}
+                className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-[10px] text-slate-700 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+              >
+                {reportDefinitions.map(([key, title]) => <option key={key} value={key}>{title}</option>)}
+              </select>
+            </label>
+            <label className="block min-w-0">
+              <span className="mb-1 block text-[10px] font-semibold text-slate-500">Fund</span>
+              <div className="flex min-h-[34px] w-full items-center rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-[10px] text-slate-600">IGP Fund 161</div>
+            </label>
+            <label className="block min-w-0">
+              <span className="mb-1 block text-[10px] font-semibold text-slate-500">Fiscal Year</span>
+              <div className="flex min-h-[34px] w-full items-center rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-[10px] text-slate-600">FY {fiscalYear}</div>
+            </label>
+          </div>
+          <p className="mt-2 text-[9px] text-slate-400">{reportDefinitions.find(r => r[0] === reportType)?.[2] || "Select a report to preview or export."}</p>
         </div>
-        <div className="h-fit self-start rounded-xl border border-slate-100 bg-white p-5 shadow-sm">
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-4">
+        <div className="w-full min-w-0 rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-4">
             <div><p className="text-[9px] font-bold uppercase text-slate-400">FY {fiscalYear} • FUND 161</p><h3 className="mt-1 text-lg font-extrabold text-[#10245b]">{reportTitle}</h3><p className="mt-1 text-[10px] text-slate-400">{reportRows.length.toLocaleString()} record{reportRows.length === 1 ? "" : "s"} in this report.</p></div>
             <div className="flex gap-2">
               <button type="button" onClick={printSelectedReport} disabled={reportLoading} className="rounded-lg bg-[#174fd1] px-4 py-2 text-[10px] font-bold text-white disabled:opacity-50"><Printer className="mr-1 inline h-3.5 w-3.5" />{reportLoading ? "Loading..." : "Print Report"}</button>
               <button type="button" onClick={exportCsv} className="rounded-lg border border-slate-200 px-4 py-2 text-[10px] font-bold text-slate-600"><Download className="mr-1 inline h-3.5 w-3.5" />Export CSV</button>
             </div>
           </div>
-          <div className="mt-4 w-full overflow-x-auto rounded-lg border border-slate-100">
-            {reportLoading ? <div className="p-8 text-center text-[10px] text-slate-400">Preparing report...</div> : reportRows.length ? renderReportTable() : <div className="p-8 text-center text-[10px] text-slate-400">No records found for this report.</div>}
+          <div className="igp-report-preview w-full min-w-0 rounded-md bg-white px-1 py-2 text-slate-900">
+            <header className="mb-4 border-b border-slate-300 pb-3 text-center">
+              <img src={`${window.location.origin}/UA_logo.jpg`} alt="University of Abra Logo" className="mx-auto mb-1 h-12 w-12 object-contain" />
+              <p className="text-[10px]">Republic of the Philippines</p>
+              <p className="mt-0.5 text-xs font-extrabold">UNIVERSITY OF ABRA</p>
+              <p className="mt-0.5 text-[10px]">BUDGET MONITORING AND ALLOCATION SYSTEM</p>
+              <h2 className="mt-2 text-sm font-extrabold">{reportTitle}</h2>
+              <p className="mt-1 text-[10px] text-slate-600">Fiscal Year {fiscalYear} • IGP Fund 161</p>
+            </header>
+            <div className="igp-print-table w-full overflow-x-auto">
+              {reportLoading ? <div className="p-8 text-center text-[10px] text-slate-400">Preparing report...</div> : reportRows.length ? renderReportTable() : <div className="p-8 text-center text-[10px] text-slate-400">No records found for this report.</div>}
+            </div>
+            <div className="mt-10 grid grid-cols-2 gap-8 px-2 text-center text-[9px] text-slate-800">
+              <div className="pt-5"><div className="border-t border-slate-600 pt-2 font-bold">Prepared by</div><p className="mt-0.5 text-[8px]">Signature over printed name / Date</p></div>
+              <div className="pt-5"><div className="border-t border-slate-600 pt-2 font-bold">Certified Correct / Approved by</div><p className="mt-0.5 text-[8px]">Signature over printed name / Date</p></div>
+            </div>
           </div>
         </div>
       </div>
 
       <div className="igp-print-area hidden print:block">
-        <div className="mb-5 text-center">
-          <h1 className="text-base font-extrabold uppercase">Budget Monitoring and Allocation System</h1>
-          <h2 className="mt-1 text-sm font-bold uppercase">{reportTitle}</h2>
-          <p className="mt-1 text-[10px]">Fiscal Year {fiscalYear} • IGP Fund 161</p>
-        </div>
-        <div className="igp-print-table">{renderReportTable()}</div>
-        <div className="mt-10 grid grid-cols-3 gap-8 text-[9px]">
-          <div className="border-t border-slate-500 pt-2">Prepared by</div>
-          <div className="border-t border-slate-500 pt-2">Checked by</div>
-          <div className="border-t border-slate-500 pt-2">Approved by</div>
+        <header className="mb-4 border-b border-slate-400 pb-3 text-center">
+          <img src={`${window.location.origin}/UA_logo.jpg`} alt="University of Abra Logo" className="mx-auto mb-1 h-12 w-12 object-contain" />
+          <p className="text-[9px]">Republic of the Philippines</p>
+          <p className="mt-0.5 text-[11px] font-extrabold">UNIVERSITY OF ABRA</p>
+          <p className="mt-0.5 text-[9px]">BUDGET MONITORING AND ALLOCATION SYSTEM</p>
+          <h1 className="mt-2 text-sm font-extrabold">{reportTitle}</h1>
+          <p className="mt-1 text-[9px]">Fiscal Year {fiscalYear} • IGP Fund 161</p>
+        </header>
+        <div className={`igp-print-table ${canEditOfficeTransactions ? "igp-office-print-table" : ""}`}>{canEditOfficeTransactions ? renderOfficePrintTable() : renderReportTable()}</div>
+        <div className="mt-10 grid grid-cols-2 gap-8 text-center text-[9px]">
+          <div className="pt-5"><div className="border-t border-slate-500 pt-2 font-bold">Prepared by</div><p className="mt-0.5 text-[8px]">Signature over printed name / Date</p></div>
+          <div className="pt-5"><div className="border-t border-slate-500 pt-2 font-bold">Certified Correct / Approved by</div><p className="mt-0.5 text-[8px]">Signature over printed name / Date</p></div>
         </div>
       </div>
     </>
@@ -1473,6 +2031,15 @@ export default function IGPRegistry({ user, onLogout, onNavigate, activePath }) 
   if (!canViewIgp) {
     return (
       <Layout user={user} onLogout={onLogout} onNavigate={onNavigate} activePath={activePath || "/igp/overview"}>
+      <style>{`
+        .registry-action-buttons { display:flex; flex-wrap:nowrap; align-items:center; gap:6px; width:max-content; min-width:max-content; }
+        .registry-action-buttons > button { display:inline-flex; flex:0 0 32px; width:32px; min-width:32px; height:32px; align-items:center; justify-content:center; visibility:visible; opacity:1; }
+        .registry-action-buttons > button svg { display:block; flex:0 0 16px; width:16px; height:16px; min-width:16px; min-height:16px; visibility:visible; opacity:1; }
+        @media (max-width: 768px) {
+          .registry-action-buttons { gap:5px; padding:2px 0; }
+          .registry-action-buttons > button { flex-basis:34px; width:34px; min-width:34px; height:34px; }
+        }
+      `}</style>
         <div className="min-h-full bg-[#f7f9fc] p-5">
           <div className="rounded-xl border border-red-100 bg-red-50 p-6 text-center">
             <h2 className="text-sm font-extrabold text-red-700">IGP Access Restricted</h2>
@@ -1488,12 +2055,29 @@ export default function IGPRegistry({ user, onLogout, onNavigate, activePath }) 
       <div className="min-h-full bg-[#f7faff] pb-8">
         {error && <div className="mb-4 flex items-center justify-between rounded-lg border border-red-100 bg-red-50 px-4 py-3 text-[10px] text-red-700"><span>{error}</span><button type="button" onClick={() => setError("")}><X className="h-4 w-4" /></button></div>}
 
-        {view === "module" && renderModuleHome()}
-        {view === "budget" && renderBudget()}
-        {view === "programs" && renderPrograms()}
-        {view === "transactions" && renderTransactions()}
-        {view === "monitoring" && renderMonitoring()}
-        {view === "reports" && renderReports()}
+        {canEditOfficeTransactions ? (
+          <>
+            {view === "reports" ? (
+              renderReports()
+            ) : (
+              <>
+                <div className="mb-3 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-[10px] font-semibold text-blue-800">
+                  Role access: {role} — IGP Transactions and Reports / Export. You can update only the transaction fields assigned to your role.
+                </div>
+                {renderTransactions()}
+              </>
+            )}
+          </>
+        ) : (
+          <>
+            {view === "module" && renderModuleHome()}
+            {view === "budget" && renderModuleHome()}
+            {view === "programs" && renderPrograms()}
+            {view === "transactions" && renderTransactions()}
+            {view === "monitoring" && renderMonitoring()}
+            {view === "reports" && renderReports()}
+          </>
+        )}
 
         {toast && (
           <div className="fixed right-5 top-5 z-[80] w-full max-w-sm">
@@ -1528,15 +2112,92 @@ export default function IGPRegistry({ user, onLogout, onNavigate, activePath }) 
           />
         )}
 
+        {programView && (
+          <Modal title={`View IGP Program / Project — ${programView.program_code || "Fund 161"}`} onClose={() => setProgramView(null)} wide>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {[
+                ["Program Code", programView.program_code],
+                ["Program / Project", programView.program_name],
+                ["Description", programView.description],
+                ["Fund Cluster", programView.fund_cluster_code],
+                ["WFP Source", programView.wfp_source_code_master || programView.wfp_source_code],
+                ["Campus", programView.campus_name || programView.campus_code],
+                ["Responsibility Center", programView.responsibility_center_code],
+                ["Beginning Balance", money(programView.beginning_balance)],
+                ["Projected Income", money(programView.projected_income)],
+                ["Approved Budget", money(programView.approved_budget ?? programView.allocation_amount)],
+                ["Collection", money(programView.income)],
+                ["Utilization", money(programView.utilization)],
+                ["Balance", money(programView.balance)],
+                ["Status", programView.status],
+                ["Entered By", programView.created_by_name ? `${programView.created_by_name}${programView.created_by_role ? ` (${programView.created_by_role})` : ""}` : "—"],
+                ["Updated By", programView.updated_by_name ? `${programView.updated_by_name}${programView.updated_by_role ? ` (${programView.updated_by_role})` : ""}` : "—"],
+              ].map(([label, value]) => <div key={label} className="rounded-lg border border-slate-200 bg-slate-50 p-3"><p className="text-[9px] font-bold uppercase tracking-wide text-slate-400">{label}</p><p className="mt-1 break-words text-[11px] font-semibold text-slate-700">{value ?? "—"}</p></div>)}
+            </div>
+          </Modal>
+        )}
+
         {programModal && (
           <Modal title={programModal === "edit" ? "Edit IGP Program / Project" : "Add IGP Program / Project"} onClose={() => setProgramModal(null)} wide>
-            <ProgramForm form={programForm} setForm={setProgramForm} references={references} saving={saving} onSubmit={submitProgram} onClose={() => setProgramModal(null)} />
+            <ProgramForm form={programForm} setForm={setProgramForm} references={references} saving={saving} onSubmit={submitProgram} onClose={() => setProgramModal(null)} error={error} />
+          </Modal>
+        )}
+
+        {transactionView && (
+          <Modal title="View IGP Transaction" onClose={() => setTransactionView(null)} wide>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {[
+                ["Registry No.", transactionView.registry_no || transactionView.transaction_no],
+                ["Date", dateText(transactionView.transaction_date)],
+                ["IGP Program / Project", transactionView.program_name || transactionView.program_code],
+                ["Transaction Type", transactionView.transaction_type],
+                ["Fund Cluster", transactionView.fund_cluster_code],
+                ["Fund Code / IGP", transactionView.program_code],
+                ["Campus", transactionView.campus_code || transactionView.campus_name],
+                ["BURS Serial No.", transactionView.burs_serial_no],
+                ["Payee / Name", transactionView.payee],
+                ["Particulars", transactionView.particulars],
+                ["Responsibility Center", transactionView.responsibility_center_code],
+                ["Reference No.", transactionView.reference_no],
+                ["Income", money(transactionView.income_amount)],
+                ["Utilization", money(transactionView.utilization_amount)],
+                ["Unpaid", money(transactionView.unpaid_utilization)],
+                ["Balance", money(transactionView.running_balance)],
+                ["Status", transactionView.status],
+                ["Entered By", transactionView.created_by_name || transactionView.entered_by || "—"],
+                ["Updated By", transactionView.updated_by_name || transactionView.updated_by || "—"],
+              ].map(([label, value]) => <div key={label} className="rounded-lg border border-slate-200 bg-slate-50 p-3"><p className="text-[9px] font-bold uppercase tracking-wide text-slate-400">{label}</p><p className="mt-1 break-words text-[11px] font-semibold text-slate-700">{value ?? "—"}</p></div>)}
+            </div>
+            <div className="mt-5 flex justify-end"><button type="button" onClick={() => setTransactionView(null)} className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-[10px] font-bold text-slate-600 hover:bg-slate-50">Close</button></div>
+          </Modal>
+        )}
+
+        {auditModal && (
+          <Modal title={`Audit Trail — ${auditModal.registry_no || auditModal.program_code || "IGP Record"}`} onClose={() => setAuditModal(null)} wide>
+            <p className="mb-3 text-[10px] text-slate-500">History of recorded actions, including who made changes and the previous and new values when available.</p>
+            {auditLoading ? <div className="py-10 text-center text-[11px] text-slate-500">Loading audit trail…</div> : auditRows.length ? <div className="space-y-3">
+              {auditRows.map((item) => {
+                const oldValues = item.old_values && typeof item.old_values === "object" ? item.old_values : {};
+                const newValues = item.new_values && typeof item.new_values === "object" ? item.new_values : {};
+                const explicitFields = Array.isArray(item.changed_fields) ? item.changed_fields : [];
+                const fields = explicitFields.length ? explicitFields : [...new Set([...Object.keys(oldValues), ...Object.keys(newValues)])];
+                const fieldLabel = (key) => ({ registry_no: "Registry No.", transaction_date: "Date", program_code: "Fund Code / IGP", program_name: "IGP Program / Project", fund_cluster_code: "Fund Cluster", campus_code: "Campus", burs_serial_no: "BURS Serial No.", payee: "Payee / Name", particulars: "Particulars", responsibility_center_code: "Responsibility Center", reference_no: "Reference No.", income_amount: "Income", utilization_amount: "Utilization", unpaid_utilization: "Unpaid Utilization", running_balance: "Balance", status: "Status", beginning_balance: "Beginning Balance", projected_income: "Projected Income", approved_budget: "Approved Budget" }[key] || String(key || "").replaceAll("_", " ").replace(/\b\w/g, c => c.toUpperCase()));
+                const actionLabel = ({ CREATE: "Record Created", INSERT: "Record Created", UPDATE: "Record Updated", DELETE: "Record Deleted" })[String(item.action || "").toUpperCase()] || String(item.action || "Audit Activity").replaceAll("_", " ");
+                const actor = item.performed_by_name || item.full_name || item.username || item.user_name || "System Administrator";
+                const actorRole = item.performed_by_role || item.role || "—";
+                return <div key={item.id || `${item.created_at}-${item.action}`} className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+                  <div className="flex items-start justify-between gap-4 border-b border-slate-100 pb-2"><div><p className="text-[11px] font-extrabold text-[#102b67]">{actionLabel}</p><p className="text-[9px] text-slate-500">{item.created_at ? new Date(item.created_at).toLocaleString() : "—"}</p></div><div className="text-right"><p className="text-[10px] font-bold text-slate-700">{actor}</p><p className="text-[9px] text-slate-500">{actorRole}</p></div></div>
+                  {fields.length ? <div className="mt-2 space-y-1">{fields.map((key) => { const oldValue = oldValues[key]; const newValue = newValues[key]; const show = value => value == null || value === "" ? "—" : typeof value === "object" ? JSON.stringify(value, null, 2) : String(value); return <div key={key} className="grid grid-cols-1 gap-2 rounded-lg bg-slate-50 p-2 md:grid-cols-3"><div><p className="text-[8px] font-bold uppercase tracking-wide text-slate-400">Field</p><p className="break-words text-[9px] font-bold text-[#102b67]">{fieldLabel(key)}</p></div><div><p className="text-[8px] font-bold uppercase tracking-wide text-slate-400">Previous Value</p><p className="whitespace-pre-wrap break-words text-[9px] text-slate-700">{show(oldValue)}</p></div><div><p className="text-[8px] font-bold uppercase tracking-wide text-slate-400">New Value</p><p className="whitespace-pre-wrap break-words text-[9px] font-semibold text-slate-800">{show(newValue)}</p></div></div>; })}</div> : <p className="mt-2 text-[9px] text-slate-400">No field-level changes recorded.</p>}
+                </div>;
+              })}
+            </div> : <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-8 text-center text-[11px] text-slate-500">No audit records were found for this record. Only actions recorded in the audit log can be shown here.</div>}
+            <div className="mt-5 flex justify-end"><button type="button" onClick={() => setAuditModal(null)} className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-[10px] font-bold text-slate-600 hover:bg-slate-50">Close</button></div>
           </Modal>
         )}
 
         {transactionModal && (
-          <Modal title="Add IGP RBUD Transaction — Fund 161" onClose={() => setTransactionModal(null)} wide>
-            <TransactionForm form={transactionForm} setForm={setTransactionForm} programs={programs} references={references} saving={saving} onSubmit={submitTransaction} onClose={() => setTransactionModal(null)} allowedTransactionTypes={allowedTransactionTypes} role={role} />
+          <Modal title={transactionModal === "edit" ? "Edit IGP Transaction — Fund 161" : "Add IGP RBUD Transaction — Fund 161"} onClose={() => { setTransactionModal(null); setSelectedTransaction(null); }} wide>
+            <TransactionForm form={transactionForm} setForm={setTransactionForm} programs={programs} references={references} saving={saving} onSubmit={submitTransaction} onClose={() => setTransactionModal(null)} allowedTransactionTypes={allowedTransactionTypes} role={role} error={error} />
           </Modal>
         )}
       </div>

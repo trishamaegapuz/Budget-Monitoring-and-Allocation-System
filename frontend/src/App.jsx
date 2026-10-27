@@ -33,10 +33,12 @@ import NoticesView from './components/NoticesView';
 const ROLE_ACCESS = {
   '/': ['Administration', 'Budget', 'Procurement', 'Accountant'],
   '/budget-proposals': ['Administration', 'Budget'],
-  '/rbud': ['Administration', 'Budget'],
-  '/rbud-registry': ['Administration', 'Budget'],
-  '/igp': ['Administration', 'Budget'],
-  '/igp-registry': ['Administration', 'Budget'],
+  // Procurement and Accountant may open the RBUD/IGP modules;
+  // their allowed subviews are restricted inside each registry component.
+  '/rbud': ['Administration', 'Budget', 'Procurement', 'Accountant'],
+  '/rbud-registry': ['Administration', 'Budget', 'Procurement', 'Accountant'],
+  '/igp': ['Administration', 'Budget', 'Procurement', 'Accountant'],
+  '/igp-registry': ['Administration', 'Budget', 'Procurement', 'Accountant'],
   '/raod': ['Administration', 'Budget', 'Procurement', 'Accountant'],
   '/raod-registry': ['Administration', 'Budget', 'Procurement', 'Accountant'],
   '/user-management': ['Administration'],
@@ -53,10 +55,19 @@ const ROLE_ACCESS = {
 
 const normalizePath = (path) => {
   if (!path || path === '/') return '/';
+
   const clean = path.split('?')[0].split('#')[0];
-  return clean.endsWith('/') && clean.length > 1
+  const normalized = clean.endsWith('/') && clean.length > 1
     ? clean.slice(0, -1)
     : clean;
+
+  // Keep registry overview pages on their canonical URLs.
+  // Old overview links will resolve to the corresponding registry URL.
+  if (normalized === '/rbud/overview') return '/rbud-registry';
+  if (normalized === '/raod/overview') return '/raod-registry';
+  if (normalized === '/igp/overview') return '/igp-registry';
+
+  return normalized;
 };
 
 const isPathUnder = (path, base) =>
@@ -336,16 +347,17 @@ function App() {
 
   const handleLogout = () => {
 
+    // Clear the authenticated session.
     localStorage.removeItem('token');
-
     localStorage.removeItem('user');
-
     localStorage.removeItem('rememberMe');
 
+    // Reset application state and replace the current URL with the login route.
+    // replaceState avoids leaving the logged-out page as the current history entry.
+    window.history.replaceState({}, '', '/');
+
     setUser(null);
-
     setCurrentPage('login');
-
     setActivePath('/');
 
   };
