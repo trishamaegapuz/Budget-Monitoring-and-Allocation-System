@@ -1375,10 +1375,34 @@ export default function BudgetProposals({
       height: 15px !important;
       flex: 0 0 auto !important;
     }
+    /* Keep the proposal registry action cell above neighboring cells and scroll overlays. */
+    .bp-budget-table.bp-table-records tbody tr > td:last-child {
+      position: relative !important;
+      z-index: 5 !important;
+      overflow: visible !important;
+      isolation: isolate;
+    }
+    .bp-budget-table.bp-table-records tbody tr > td:last-child,
+    .bp-budget-table.bp-table-records .bp-row-actions,
+    .bp-budget-table.bp-table-records .bp-row-workflow-actions,
+    .bp-budget-table.bp-table-records .bp-row-actions button {
+      pointer-events: auto !important;
+    }
+    .bp-budget-table.bp-table-records .bp-row-workflow-actions {
+      display: inline-flex !important;
+      position: relative !important;
+      z-index: 7 !important;
+      gap: 6px !important;
+    }
+    .bp-budget-table.bp-table-records .bp-row-actions button {
+      touch-action: manipulation;
+      user-select: none;
+    }
+
     /* Keep action controls above table/tooltip layers and reliably clickable. */
     .bp-row-actions,
-    .bp-row-workflow-actions { position: relative; z-index: 20; pointer-events: auto; isolation: isolate; }
-    .bp-row-actions .bp-small-button { position: relative; z-index: 21; pointer-events: auto !important; cursor: pointer; touch-action: manipulation; }
+    .bp-row-workflow-actions { position: relative; z-index: 2; pointer-events: auto; }
+    .bp-row-actions .bp-small-button { position: relative; z-index: 3; pointer-events: auto; cursor: pointer; }
     .bp-row-actions .bp-small-button svg { pointer-events: none; }
     .bp-row-actions .bp-small-button:disabled { cursor: wait; }
     @media (max-width: 768px) {

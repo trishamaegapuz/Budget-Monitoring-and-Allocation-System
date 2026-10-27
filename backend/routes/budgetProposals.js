@@ -2672,7 +2672,7 @@ router.patch(
 
     await client.query('BEGIN');
 
-    const current = await client.query(`SELECT status FROM budget_proposals WHERE "${idColumn}" = $1 FOR UPDATE`, [id]);
+    const current = await client.query(`SELECT "${statusColumn}" AS status FROM budget_proposals WHERE "${idColumn}" = $1 FOR UPDATE`, [id]);
 
     if (!current.rows.length) { await client.query('ROLLBACK'); return res.status(404).json({ success:false, error:'Budget proposal not found.' }); }
 
@@ -2758,7 +2758,11 @@ router.patch(
 
     console.error('Update Proposal Status Error:', error);
 
-    res.status(500).json({success:false,error:error.message});
+    if (error.code === '23505') {
+      return res.status(409).json({ success: false, error: 'This status update conflicts with an existing record. Please refresh and try again.' });
+    }
+
+    res.status(500).json({ success: false, error: 'Unable to update the proposal status. Please refresh and try again.' });
 
   } finally { client.release(); }
 
