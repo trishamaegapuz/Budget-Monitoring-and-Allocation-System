@@ -1232,8 +1232,23 @@ export default function RbudFundRegistry({
       }
     } else {
       const roleRequired = role === "Procurement"
-        ? [["PO No.", form.po_no], ["Supplier / Payee", form.supplier_payee], ["PO Amount", form.po_amount]]
-        : [["Disbursement Date", form.disbursement_date], ["Accounting Status", form.accounting_status]];
+        ? [
+            ["PO No.", form.po_no],
+            ["Supplier / Payee", form.supplier_payee],
+            ["PO Amount", form.po_amount],
+          ]
+        : [
+            ["DB No.", form.db_no],
+            ["DV / Payroll No.", form.dv_payroll_no],
+            ["Disbursement Date", form.disbursement_date],
+            ["Disbursement Amount", form.disbursement_amount],
+            ["Notice of Adjustment", form.notice_of_adjustment],
+            ["Adjustment Reason", form.adjustment_reason],
+            ["Accounting Status", form.accounting_status],
+            ["Reviewed By", form.reviewed_by],
+            ["Review Date and Time", form.review_datetime],
+            ["Accounting Remarks", form.accounting_remarks],
+          ];
       const missing = roleRequired.find(([, value]) => String(value ?? "").trim() === "");
       if (missing) {
         setError(`${missing[0]} is required for the ${role} role.`);
@@ -5084,8 +5099,25 @@ function RecordModal({ mode, record, form, setForm, references, role, onClose, o
         ["UACS Code", "uacs_code_id"], ["MFO", "mfo_id"],
         ["Allotment Class", "allotment_class_id"], ["WFP Source", "wfp_source_id"],
       ],
-      Procurement: [["PO No.", "po_no"], ["Supplier / Payee", "supplier_payee"], ["PO Amount", "po_amount"]],
-      Accountant: [["Disbursement Date", "disbursement_date"], ["Accounting Status", "accounting_status"]],
+      Procurement: [
+        ["PO No.", "po_no"],
+        ["Supplier / Payee", "supplier_payee"],
+        ["PO Amount", "po_amount"],
+      ],
+      // Require every editable accounting field. BURS Serial No. is system-managed
+      // and intentionally excluded because users cannot edit it.
+      Accountant: [
+        ["DB No.", "db_no"],
+        ["DV / Payroll No.", "dv_payroll_no"],
+        ["Disbursement Date", "disbursement_date"],
+        ["Disbursement Amount", "disbursement_amount"],
+        ["Notice of Adjustment", "notice_of_adjustment"],
+        ["Adjustment Reason", "adjustment_reason"],
+        ["Accounting Status", "accounting_status"],
+        ["Reviewed By", "reviewed_by"],
+        ["Review Date and Time", "review_datetime"],
+        ["Accounting Remarks", "accounting_remarks"],
+      ],
     };
 
     const controls = Array.from(formElement.querySelectorAll("input, select, textarea"));

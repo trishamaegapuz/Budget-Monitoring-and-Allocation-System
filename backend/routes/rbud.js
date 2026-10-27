@@ -3697,13 +3697,67 @@ router.put("/:id", async (req, res) => {
       }
     }
 
-    const fundValidation = await validateFundClusterCode(
-      body.fund_cluster_id,
-      body.fund_code
-    );
+    // Procurement and Accountant only update their own office fields. Do not
+    // block those updates because an existing legacy Budget record has a missing
+    // or outdated Fund Cluster/Fund Code combination; these roles cannot edit it.
+    if (role === "Administration" || role === "Budget") {
+      const fundValidation = await validateFundClusterCode(
+        body.fund_cluster_id,
+        body.fund_code
+      );
 
-    if (!fundValidation.valid) {
-      return res.status(400).json({ error: fundValidation.reason });
+      if (!fundValidation.valid) {
+        return res.status(400).json({ error: fundValidation.reason });
+      }
+    }
+
+    // Server-side role-specific required-field validation mirrors the frontend.
+    // Keep this on the API as well so an incomplete form cannot be saved by
+    // bypassing browser validation.
+    const requiredFieldsByRole = {
+      Procurement: [
+        ["PO No.", "po_no"],
+        ["Supplier / Payee", "supplier_payee"],
+        ["PO Amount", "po_amount"],
+      ],
+      Accountant: [
+        ["DB No.", "db_no"],
+        ["DV / Payroll No.", "dv_payroll_no"],
+        ["Disbursement Date", "disbursement_date"],
+        ["Disbursement Amount", "disbursement_amount"],
+        ["Notice of Adjustment", "notice_of_adjustment"],
+        ["Adjustment Reason", "adjustment_reason"],
+        ["Accounting Status", "accounting_status"],
+        ["Reviewed By", "reviewed_by"],
+        ["Review Date and Time", "review_datetime"],
+        ["Accounting Remarks", "accounting_remarks"],
+      ],
+    };
+    const requiredForRole = requiredFieldsByRole[role] || [];
+    const missingRequired = requiredForRole.find(([, field]) =>
+      body[field] === null ||
+      body[field] === undefined ||
+      String(body[field]).trim() === ""
+    );
+    if (missingRequired) {
+      return res.status(400).json({
+        error: `${missingRequired[0]} is required for the ${role} role.`,
+        field: missingRequired[1],
+      });
+    }
+
+    if (role === "Procurement" && (!Number.isFinite(Number(body.po_amount)) || Number(body.po_amount) <= 0)) {
+      return res.status(400).json({
+        error: "PO Amount must be a valid amount greater than zero.",
+        field: "po_amount",
+      });
+    }
+
+    if (role === "Accountant" && (!Number.isFinite(Number(body.disbursement_amount)) || Number(body.disbursement_amount) < 0)) {
+      return res.status(400).json({
+        error: "Disbursement Amount must be a valid non-negative amount.",
+        field: "disbursement_amount",
+      });
     }
 
     // Generated/system-derived values remain immutable or recalculated by the server.
