@@ -1623,27 +1623,36 @@ async function insertProposal(body, status, user) {
 
 
 
+  // Generate the next proposal number from the existing proposal_no values,
+  // not COUNT(*) + 1. COUNT can reuse an existing number when rows have been
+  // deleted, imported, or the database contains gaps.
   let nextNumber = 1;
+  const proposalNoColumn = columns.find(name =>
+    ['proposal_no', 'budget_proposal_no', 'reference_no'].includes(name)
+  );
 
-  if (columns.includes('fiscal_year')) {
-
-    const countResult = await pool.query(
-
-      `SELECT COUNT(\*)::int AS count
-
+  if (proposalNoColumn) {
+    const prefix = `BP-${year}-`;
+    const existingResult = await pool.query(
+      `SELECT \"${proposalNoColumn.replace(/\"/g, '\"\"')}\" AS proposal_no
        FROM budget_proposals
-
-       WHERE fiscal_year = $1`,
-
-      [year]
-
+       WHERE \"${proposalNoColumn.replace(/\"/g, '\"\"')}\" LIKE $1`,
+      [`${prefix}%`]
     );
 
+    const usedNumbers = new Set();
+    for (const row of existingResult.rows) {
+      const match = String(row.proposal_no || '').match(new RegExp(`^BP-${year}-(\\d+)$`));
+      if (match) usedNumbers.add(Number(match[1]));
+    }
+    while (usedNumbers.has(nextNumber)) nextNumber += 1;
+  } else if (columns.includes('fiscal_year')) {
+    const countResult = await pool.query(
+      `SELECT COUNT(*)::int AS count FROM budget_proposals WHERE fiscal_year = $1`,
+      [year]
+    );
     nextNumber = Number(countResult.rows[0].count || 0) + 1;
-
   }
-
-
 
   const proposalNo = `BP-${year}-${String(nextNumber).padStart(5, '0')}`;
 
@@ -2331,7 +2340,22 @@ router.post(
 
     console.error('Create Budget Proposal Error:', error);
 
-    res.status(500).json({ success: false, error: error.message });
+    if (error.code === '23505' && (error.constraint || '').includes('proposal_no')) {
+      return res.status(409).json({
+        success: false,
+        code: 'DUPLICATE_PROPOSAL_NUMBER',
+        error: 'A proposal number conflict occurred. Please try saving again. If the problem continues, contact the system administrator.'
+      });
+    }
+
+    if (error.code === '23505') {
+      return res.status(409).json({
+        success: false,
+        error: 'This record conflicts with an existing unique value. Please review the information and try again.'
+      });
+    }
+
+    res.status(500).json({ success: false, error: 'Unable to save the budget proposal right now. Please try again. If the problem continues, contact the system administrator.' });
 
   }
 
@@ -2601,7 +2625,19 @@ router.put(
 
     console.error('Update Budget Proposal Error:', error);
 
-    res.status(500).json({ success: false, error: error.message });
+    if (error.code === '23505' && (error.constraint || '').includes('proposal_no')) {
+      return res.status(409).json({
+        success: false,
+        code: 'DUPLICATE_PROPOSAL_NUMBER',
+        error: 'This proposal number is already in use. Please try again or contact the system administrator.'
+      });
+    }
+
+    if (error.code === '23505') {
+      return res.status(409).json({ success: false, error: 'This update conflicts with an existing unique value. Please review the information and try again.' });
+    }
+
+    res.status(500).json({ success: false, error: 'Unable to update the budget proposal right now. Please try again.' });
 
   }
 

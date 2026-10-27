@@ -669,7 +669,13 @@ export default function BudgetProposals({
       }
     } catch (error) {
       console.error('Budget Proposal save error:', error);
-      setProposalError(error.message || 'Unable to save budget proposal.');
+      const rawMessage = String(error?.message || '');
+      const friendlyMessage = /duplicate key value|unique constraint|budget_proposals_proposal_no_key|DUPLICATE_PROPOSAL_NUMBER/i.test(rawMessage)
+        ? 'The system encountered a proposal-number conflict. Your proposal was not saved. Please try again. If this happens again, contact the system administrator.'
+        : /failed to fetch|networkerror|network request failed/i.test(rawMessage)
+          ? 'Unable to connect to the server. Please check your internet connection and try again.'
+          : rawMessage || 'Unable to save the budget proposal. Please review the highlighted fields and try again.';
+      setProposalError(friendlyMessage);
     }
   };
 
