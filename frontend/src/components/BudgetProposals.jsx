@@ -75,11 +75,14 @@ export default function BudgetProposals({
   // ROLE-BASED ACCESS
   // ==========================================================
 
-  const currentRole = user?.role || '';
-  const isAdministration = currentRole === 'Administration';
-  const isBudget = currentRole === 'Budget';
-  const isAccountant = currentRole === 'Accountant';
-  const isProcurement = currentRole === 'Procurement';
+  // Normalize role labels from different auth/profile payloads. Some deployed
+  // accounts return 'Administrator' or 'Admin' instead of 'Administration'.
+  const currentRole = String(user?.role || user?.user_role || user?.account_role || '').trim();
+  const normalizedRole = currentRole.toLowerCase().replace(/[\s_-]+/g, '');
+  const isAdministration = ['administration', 'administrator', 'admin'].includes(normalizedRole);
+  const isBudget = normalizedRole === 'budget' || normalizedRole === 'budgetofficer';
+  const isAccountant = normalizedRole === 'accountant';
+  const isProcurement = normalizedRole === 'procurement';
 
   // Budget creates/edits/submits proposals. Administration alone processes statuses.
   // Budget and Accountant can still view proposal records and their current status.
@@ -408,6 +411,7 @@ export default function BudgetProposals({
       });
     } catch (error) {
       console.error('Budget Proposal details error:', error);
+      setProposalError(error.message || 'Unable to load proposal details. Please try again.');
     }
   };
 
@@ -765,8 +769,13 @@ export default function BudgetProposals({
           actor_name: user?.name || user?.username || 'System User'
         })
       });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || data.message || 'Unable to update proposal status.');
+      const responseText = await response.text();
+      let data = {};
+      try { data = responseText ? JSON.parse(responseText) : {}; } catch { data = { message: responseText }; }
+      if (!response.ok) {
+        const detail = data.error || data.message;
+        throw new Error(detail || `Unable to update proposal status (HTTP ${response.status}).`);
+      }
 
       const updatedProposal = data.proposal || { ...targetProposal, status };
       setSelectedProposal(updatedProposal);
@@ -1366,6 +1375,12 @@ export default function BudgetProposals({
       height: 15px !important;
       flex: 0 0 auto !important;
     }
+    /* Keep action controls above table/tooltip layers and reliably clickable. */
+    .bp-row-actions,
+    .bp-row-workflow-actions { position: relative; z-index: 2; pointer-events: auto; }
+    .bp-row-actions .bp-small-button { position: relative; z-index: 3; pointer-events: auto; cursor: pointer; }
+    .bp-row-actions .bp-small-button svg { pointer-events: none; }
+    .bp-row-actions .bp-small-button:disabled { cursor: wait; }
     @media (max-width: 768px) {
       .bp-row-actions,
       .bp-row-workflow-actions {
