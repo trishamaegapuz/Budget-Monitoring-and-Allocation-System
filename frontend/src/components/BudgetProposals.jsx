@@ -1375,30 +1375,6 @@ export default function BudgetProposals({
       height: 15px !important;
       flex: 0 0 auto !important;
     }
-    /* Keep the proposal registry action cell above neighboring cells and scroll overlays. */
-    .bp-budget-table.bp-table-records tbody tr > td:last-child {
-      position: relative !important;
-      z-index: 5 !important;
-      overflow: visible !important;
-      isolation: isolate;
-    }
-    .bp-budget-table.bp-table-records tbody tr > td:last-child,
-    .bp-budget-table.bp-table-records .bp-row-actions,
-    .bp-budget-table.bp-table-records .bp-row-workflow-actions,
-    .bp-budget-table.bp-table-records .bp-row-actions button {
-      pointer-events: auto !important;
-    }
-    .bp-budget-table.bp-table-records .bp-row-workflow-actions {
-      display: inline-flex !important;
-      position: relative !important;
-      z-index: 7 !important;
-      gap: 6px !important;
-    }
-    .bp-budget-table.bp-table-records .bp-row-actions button {
-      touch-action: manipulation;
-      user-select: none;
-    }
-
     /* Keep action controls above table/tooltip layers and reliably clickable. */
     .bp-row-actions,
     .bp-row-workflow-actions { position: relative; z-index: 2; pointer-events: auto; }
@@ -6421,35 +6397,35 @@ export default function BudgetProposals({
 
                     <td>
                       <div className="bp-row-actions">
-                        <button type="button" className="bp-small-button" title="View proposal details" onClick={(event) => { event.preventDefault(); event.stopPropagation(); openProposalDetails(proposal); }}>
+                        <button type="button" className="bp-small-button" title="View proposal details" onClick={() => openProposalDetails(proposal)}>
                           <Eye aria-hidden="true" /><span className="bp-sr-only">View proposal details</span>
                         </button>
                         {isAdministration && (
                           <div className="bp-row-workflow-actions">
                             {proposal.status === 'Submitted' && (
-                              <button type="button" className="bp-small-button bp-row-start-review" title="Start Review" aria-label="Start Review" disabled={statusActionLoading} onClick={(event) => { event.preventDefault(); event.stopPropagation(); changeProposalStatus('Under Review', proposal); }}>
+                              <button type="button" className="bp-small-button bp-row-start-review" title="Start Review" aria-label="Start Review" disabled={statusActionLoading} onClick={() => changeProposalStatus('Under Review', proposal)}>
                                 <Clock3 aria-hidden="true" /><span className="bp-sr-only">Start Review</span>
                               </button>
                             )}
                             {proposal.status === 'Under Review' && (
                               <>
-                                <button type="button" className="bp-small-button bp-row-revision" title="For Revision" aria-label="For Revision" disabled={statusActionLoading} onClick={(event) => { event.preventDefault(); event.stopPropagation(); changeProposalStatus('For Revision', proposal); }}>
+                                <button type="button" className="bp-small-button bp-row-revision" title="For Revision" aria-label="For Revision" disabled={statusActionLoading} onClick={() => changeProposalStatus('For Revision', proposal)}>
                                   <RotateCcw aria-hidden="true" /><span className="bp-sr-only">For Revision</span>
                                 </button>
-                                <button type="button" className="bp-small-button bp-row-endorse" title="Endorse" aria-label="Endorse" disabled={statusActionLoading} onClick={(event) => { event.preventDefault(); event.stopPropagation(); changeProposalStatus('Endorsed', proposal); }}>
+                                <button type="button" className="bp-small-button bp-row-endorse" title="Endorse" aria-label="Endorse" disabled={statusActionLoading} onClick={() => changeProposalStatus('Endorsed', proposal)}>
                                   <CheckCircle2 aria-hidden="true" /><span className="bp-sr-only">Endorse</span>
                                 </button>
-                                <button type="button" className="bp-small-button bp-row-reject" title="Reject" aria-label="Reject" disabled={statusActionLoading} onClick={(event) => { event.preventDefault(); event.stopPropagation(); changeProposalStatus('Rejected', proposal); }}>
+                                <button type="button" className="bp-small-button bp-row-reject" title="Reject" aria-label="Reject" disabled={statusActionLoading} onClick={() => changeProposalStatus('Rejected', proposal)}>
                                   <XCircle aria-hidden="true" /><span className="bp-sr-only">Reject</span>
                                 </button>
                               </>
                             )}
                             {proposal.status === 'Endorsed' && (
                               <>
-                                <button type="button" className="bp-small-button bp-row-approve" title="Approve" aria-label="Approve" disabled={statusActionLoading} onClick={(event) => { event.preventDefault(); event.stopPropagation(); changeProposalStatus('Approved', proposal); }}>
+                                <button type="button" className="bp-small-button bp-row-approve" title="Approve" aria-label="Approve" disabled={statusActionLoading} onClick={() => changeProposalStatus('Approved', proposal)}>
                                   <CheckCircle2 aria-hidden="true" /><span className="bp-sr-only">Approve</span>
                                 </button>
-                                <button type="button" className="bp-small-button bp-row-reject" title="Reject" aria-label="Reject" disabled={statusActionLoading} onClick={(event) => { event.preventDefault(); event.stopPropagation(); changeProposalStatus('Rejected', proposal); }}>
+                                <button type="button" className="bp-small-button bp-row-reject" title="Reject" aria-label="Reject" disabled={statusActionLoading} onClick={() => changeProposalStatus('Rejected', proposal)}>
                                   <XCircle aria-hidden="true" /><span className="bp-sr-only">Reject</span>
                                 </button>
                               </>
@@ -8418,7 +8394,7 @@ export default function BudgetProposals({
                     </td>
                     <td>
                       <div className="bp-action-icon-group" style={{ display:'flex', alignItems:'center', gap:5, flexWrap:'nowrap' }}>
-                        <button type="button" title="View proposal" aria-label="View proposal" className="bp-action-icon" onClick={(event) => { event.preventDefault(); event.stopPropagation(); openProposalDetails(proposal); }}><Eye /></button>
+                        <button type="button" title="View proposal" aria-label="View proposal" className="bp-action-icon" onClick={() => openProposalDetails(proposal)}><Eye /></button>
                         <button type="button" title={(isAdministration || isBudget) && statusLabel(proposal) === 'Draft' ? 'Delete proposal' : 'Only Draft proposals can be deleted'} aria-label="Delete proposal" className="bp-action-icon bp-action-delete" disabled={!((isAdministration || isBudget) && statusLabel(proposal) === 'Draft')} onClick={() => setDeleteTarget(proposal)}><Trash2 /></button>
                       </div>
                     </td>
@@ -8519,8 +8495,23 @@ export default function BudgetProposals({
 
       <style>
         {styles}
-      
-</style>
+      </style>
+      {/* Keep Budget Proposal table actions above table/scroll layers. */}
+      <style>{`
+        .bp-budget-table-wrap { position: relative; isolation: isolate; }
+        .bp-table-records { position: relative; }
+        .bp-table-records tbody tr { position: relative; }
+        .bp-table-records tbody td:last-child { position: relative !important; z-index: 20 !important; overflow: visible !important; }
+        .bp-table-records .bp-row-actions,
+        .bp-table-records .bp-row-workflow-actions { position: relative !important; z-index: 30 !important; display: flex !important; align-items: center; gap: 6px; pointer-events: auto !important; }
+        .bp-table-records .bp-row-actions button,
+        .bp-table-records .bp-row-workflow-actions button { position: relative !important; z-index: 31 !important; pointer-events: auto !important; cursor: pointer !important; touch-action: manipulation; }
+        .bp-table-records .bp-row-actions button:disabled,
+        .bp-table-records .bp-row-workflow-actions button:disabled { opacity: .65; cursor: wait !important; }
+        .bp-table-records .bp-row-actions button svg,
+        .bp-table-records .bp-row-workflow-actions button svg { pointer-events: none !important; }
+        .bp-table-records .bp-row-actions button span { pointer-events: none; }
+      `}</style>
 
       {renderContent()}
 
