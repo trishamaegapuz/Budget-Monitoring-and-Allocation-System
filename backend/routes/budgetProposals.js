@@ -94,43 +94,39 @@ const normalizeStatus = (value) => {
 
 
 
-const requireProposalRoles = (...allowedRoles) => {
-
-  return (req, res, next) => {
-
-    const role = String(req.user?.role || '').trim();
-
-
-
-    if (!allowedRoles.includes(role)) {
-
-      return res.status(403).json({
-
-        success: false,
-
-        error: 'You are not authorized to perform this Budget Proposal action.'
-
-      });
-
-    }
-
-
-
-    next();
-
-  };
-
+// Normalize role labels consistently across frontend and backend.
+// Some login/profile payloads use Administrator/Admin while the workflow
+// permissions are defined using the canonical role name Administration.
+const normalizeProposalRole = (value) => {
+  const role = String(value || '').trim().toLowerCase().replace(/[\\s_-]+/g, '');
+  if (['administration', 'administrator', 'admin'].includes(role)) return 'Administration';
+  if (['budget', 'budgetofficer'].includes(role)) return 'Budget';
+  if (role === 'accountant') return 'Accountant';
+  if (role === 'procurement') return 'Procurement';
+  if (role === 'staff') return 'Staff';
+  return String(value || '').trim();
 };
 
+const requireProposalRoles = (...allowedRoles) => {
+  return (req, res, next) => {
+    const role = normalizeProposalRole(req.user?.role || req.user?.user_role || req.user?.account_role);
+    const normalizedAllowedRoles = allowedRoles.map(normalizeProposalRole);
 
+    if (!normalizedAllowedRoles.includes(role)) {
+      return res.status(403).json({
+        success: false,
+        error: 'You are not authorized to perform this Budget Proposal action.'
+      });
+    }
+
+    next();
+  };
+};
 
 const requireProposalStatusRole = (req, res, next) => {
-
-  const role = String(req.user?.role || '').trim();
-
+  const rawRole = req.user?.role || req.user?.user_role || req.user?.account_role;
+  const role = normalizeProposalRole(rawRole);
   const requestedStatus = normalizeStatus(req.body?.status);
-
-
 
   const roleByStatus = {
     // Budget may submit proposals; Administration alone controls review decisions.
@@ -142,42 +138,23 @@ const requireProposalStatusRole = (req, res, next) => {
     Rejected: ['Administration']
   };
 
-
-
   const allowedRoles = roleByStatus[requestedStatus];
 
-
-
   if (!allowedRoles) {
-
     return res.status(400).json({
-
       success: false,
-
       error: 'Invalid workflow status.'
-
     });
-
   }
-
-
 
   if (!allowedRoles.includes(role)) {
-
     return res.status(403).json({
-
       success: false,
-
-      error: `The ${role || 'current user'} role is not authorized to change a proposal to "${requestedStatus}".`
-
+      error: `The ${String(rawRole || 'current user').trim()} role is not authorized to change a proposal to "${requestedStatus}".`
     });
-
   }
 
-
-
   next();
-
 };
 
 
