@@ -3716,17 +3716,14 @@ router.put("/:id", async (req, res) => {
     // bypassing browser validation.
     const requiredFieldsByRole = {
       Procurement: [
-        ["PO No.", "po_no"],
-        ["Supplier / Payee", "supplier_payee"],
-        ["PO Amount", "po_amount"],
+        ["PO No.", "po_no"], ["PO Date", "po_date"], ["Supplier / Payee", "supplier_payee"],
+        ["PO Amount", "po_amount"], ["Procurement Status", "po_status"], ["Procurement Remarks", "procurement_remarks"],
       ],
       Accountant: [
         ["DB No.", "db_no"],
         ["DV / Payroll No.", "dv_payroll_no"],
         ["Disbursement Date", "disbursement_date"],
         ["Disbursement Amount", "disbursement_amount"],
-        ["Notice of Adjustment", "notice_of_adjustment"],
-        ["Adjustment Reason", "adjustment_reason"],
         ["Accounting Status", "accounting_status"],
         ["Reviewed By", "reviewed_by"],
         ["Review Date and Time", "review_datetime"],

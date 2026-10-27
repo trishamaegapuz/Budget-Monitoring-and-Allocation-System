@@ -425,6 +425,8 @@ function TransactionForm({ refs, form, setForm, budgetInfo, editing, role, onSub
       .filter((field) => !field.disabled && !field.readOnly && !field.type?.includes("button"));
     // These RAOD reference/serial fields are optional and must not block submission.
     const optionalLabels = new Set([
+      "Notice of Adjustment",
+      "Adjustment Reason",
       "Serial No. Transferred From/To",
       "Ref. No.",
       "Series",
@@ -499,6 +501,8 @@ function TransactionForm({ refs, form, setForm, budgetInfo, editing, role, onSub
     }
     const formElement = event.currentTarget;
     const optionalLabels = new Set([
+      "Notice of Adjustment",
+      "Adjustment Reason",
       "Serial No. Transferred From/To",
       "Ref. No.",
       "Series",

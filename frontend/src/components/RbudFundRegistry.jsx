@@ -326,6 +326,8 @@ const initialForm = (year) => {
   uacs_code_id: "",
   ref_no: "",
   allotment_class_id: "",
+  series: "",
+  series2: "",
   mfo_id: "",
   utilization_amount: "",
   ps_utilization: "",
@@ -355,6 +357,8 @@ const RBUD_FORM_FIELDS = [
   "uacs_code_id",
   "ref_no",
   "allotment_class_id",
+  "series",
+  "series2",
   "mfo_id",
   "utilization_amount",
   "ps_utilization",
@@ -389,6 +393,8 @@ const RBUD_BUDGET_FIELDS = [
   "uacs_code_id",
   "ref_no",
   "allotment_class_id",
+  "series",
+  "series2",
   "mfo_id",
   "utilization_amount",
   "ps_utilization",
@@ -1233,17 +1239,14 @@ export default function RbudFundRegistry({
     } else {
       const roleRequired = role === "Procurement"
         ? [
-            ["PO No.", form.po_no],
-            ["Supplier / Payee", form.supplier_payee],
-            ["PO Amount", form.po_amount],
+            ["PO No.", form.po_no], ["PO Date", form.po_date], ["Supplier / Payee", form.supplier_payee],
+            ["PO Amount", form.po_amount], ["Procurement Status", form.po_status], ["Procurement Remarks", form.procurement_remarks],
           ]
         : [
             ["DB No.", form.db_no],
             ["DV / Payroll No.", form.dv_payroll_no],
             ["Disbursement Date", form.disbursement_date],
             ["Disbursement Amount", form.disbursement_amount],
-            ["Notice of Adjustment", form.notice_of_adjustment],
-            ["Adjustment Reason", form.adjustment_reason],
             ["Accounting Status", form.accounting_status],
             ["Reviewed By", form.reviewed_by],
             ["Review Date and Time", form.review_datetime],
@@ -5100,9 +5103,8 @@ function RecordModal({ mode, record, form, setForm, references, role, onClose, o
         ["Allotment Class", "allotment_class_id"], ["WFP Source", "wfp_source_id"],
       ],
       Procurement: [
-        ["PO No.", "po_no"],
-        ["Supplier / Payee", "supplier_payee"],
-        ["PO Amount", "po_amount"],
+        ["PO No.", "po_no"], ["PO Date", "po_date"], ["Supplier / Payee", "supplier_payee"],
+        ["PO Amount", "po_amount"], ["Procurement Status", "po_status"], ["Procurement Remarks", "procurement_remarks"],
       ],
       // Require every editable accounting field. BURS Serial No. is system-managed
       // and intentionally excluded because users cannot edit it.
@@ -5111,8 +5113,6 @@ function RecordModal({ mode, record, form, setForm, references, role, onClose, o
         ["DV / Payroll No.", "dv_payroll_no"],
         ["Disbursement Date", "disbursement_date"],
         ["Disbursement Amount", "disbursement_amount"],
-        ["Notice of Adjustment", "notice_of_adjustment"],
-        ["Adjustment Reason", "adjustment_reason"],
         ["Accounting Status", "accounting_status"],
         ["Reviewed By", "reviewed_by"],
         ["Review Date and Time", "review_datetime"],
@@ -5568,6 +5568,8 @@ function RecordModal({ mode, record, form, setForm, references, role, onClose, o
           <SelectField label="UACS Code" value={form.uacs_code_id} disabled={!isEditable("uacs_code_id")} onChange={v=>update("uacs_code_id",v)} options={selectOptions(references.uacs_codes,"account_title","name")}/>
           <InputField label="Ref. No." value={form.ref_no} disabled={!isEditable("ref_no")} onChange={v=>update("ref_no",v)}/>
           <SelectField label="Allotment Class" value={form.allotment_class_id} disabled={!isEditable("allotment_class_id")} onChange={v=>update("allotment_class_id",v)} options={selectOptions(references.allotment_classes,"name","name")}/>
+          <InputField label="Series" value={form.series || ""} disabled={!isEditable("series")} onChange={v=>update("series",v)}/>
+          <InputField label="Series2" value={form.series2 || ""} disabled={!isEditable("series2")} onChange={v=>update("series2",v)}/>
           <SelectField label="MFO" value={form.mfo_id} disabled={!isEditable("mfo_id")} onChange={v=>update("mfo_id",v)} options={selectOptions(references.mfo)}/>
           <div className="rounded-lg border-2 border-red-400 bg-red-50/50 ring-1 ring-red-200 px-3 py-2"><div className="text-[10px] font-bold text-red-700">Month</div><div className="mt-1 text-sm font-extrabold text-[#17135f]">{form.entry_date ? new Date(`${form.entry_date}T00:00:00`).getMonth() + 1 : "—"}</div><div className="text-[10px] text-slate-400">Auto-filled from Date</div></div>
           <div className="rounded-lg border-2 border-red-400 bg-red-50/50 ring-1 ring-red-200 px-3 py-2"><div className="text-[10px] font-bold text-red-700">Quarter</div><div className="mt-1 text-sm font-extrabold text-[#17135f]">{form.entry_date ? `Q${Math.ceil((new Date(`${form.entry_date}T00:00:00`).getMonth() + 1) / 3)}` : "—"}</div><div className="text-[10px] text-slate-400">Auto-filled from Date</div></div>

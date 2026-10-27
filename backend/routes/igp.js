@@ -1128,7 +1128,15 @@ router.put("/transactions/:id/office-details", (req, res, next) => verifyToken(r
   if (!fields) return res.status(403).json({ success: false, error: "Only Procurement or Accountant may update office details." });
   const id = nullableInt(req.params.id);
   if (!id) return res.status(400).json({ success: false, error: "Invalid transaction ID." });
-  const updates = fields.filter((field) => Object.prototype.hasOwnProperty.call(req.body || {}, field));
+  const body = req.body || {};
+  const requiredFields = role === "Procurement"
+    ? [["PO No.", "po_no"], ["PO Date", "po_date"], ["Supplier / Payee", "supplier_payee"], ["PO Amount", "po_amount"], ["Procurement Status", "po_status"], ["Procurement Remarks", "procurement_remarks"]]
+    : [["DB No.", "db_no"], ["DV / Payroll No.", "dv_payroll_no"], ["Disbursement Date", "disbursement_date"], ["Disbursement Amount", "disbursement_amount"], ["Accounting Status", "accounting_status"], ["Reviewed By", "reviewed_by"], ["Review Date and Time", "review_datetime"], ["Accounting Remarks", "accounting_remarks"]];
+  const missing = requiredFields.find(([label, field]) => body[field] === undefined || body[field] === null || String(body[field]).trim() === "");
+  if (missing) return res.status(400).json({ success: false, error: `${missing[0]} is required for the ${role} role.`, field: missing[1] });
+  if (role === "Procurement" && (!Number.isFinite(Number(body.po_amount)) || Number(body.po_amount) <= 0)) return res.status(400).json({ success: false, error: "PO Amount must be greater than zero.", field: "po_amount" });
+  if (role === "Accountant" && (!Number.isFinite(Number(body.disbursement_amount)) || Number(body.disbursement_amount) < 0)) return res.status(400).json({ success: false, error: "Disbursement Amount must be a valid non-negative amount.", field: "disbursement_amount" });
+  const updates = fields.filter((field) => Object.prototype.hasOwnProperty.call(body, field));
   if (!updates.length) return res.status(400).json({ success: false, error: "No permitted office fields were supplied." });
   const values = [];
   const setSql = updates.map((field) => {

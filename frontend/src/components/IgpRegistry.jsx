@@ -810,9 +810,6 @@ function TransactionForm({ form, setForm, programs, references, saving, onSubmit
             set("account_title", item?.account_title || "");
           }} items={references.uacs_codes} displayKey="name" />
           <RefSelect label="Allotment Class" value={form.allotment_class_id} onChange={(e) => set("allotment_class_id", e.target.value)} items={references.allotment_classes} displayKey="name" />
-          <Field label="UACS Funding Source Code">
-            <Input value={form.uacs_funding_source_code} onChange={(e) => set("uacs_funding_source_code", e.target.value)} />
-          </Field>
           <Field label="Month (Automatic from Date)">
             <Input
               value={form.month ? new Date(2000, Number(form.month) - 1, 1).toLocaleString("en-US", { month: "long" }) : "—"}
@@ -889,10 +886,10 @@ function TransactionForm({ form, setForm, programs, references, saving, onSubmit
           </Field>
           </fieldset>
           <div className="office-fields procurement-fields md:col-span-3 rounded-lg border border-blue-200 bg-blue-50/50 p-3"><p className="mb-2 text-[10px] font-extrabold uppercase text-blue-800">Procurement Details</p><fieldset disabled={!(isProcurementRole || isAdminRole)} className="contents igp-role-locked"><div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-            {[["PO No.","po_no"],["PO Date","po_date"],["Supplier / Payee","supplier_payee"],["PO Amount","po_amount"],["AIR / FAR Reference","air_far_reference"],["IAR No.","iar_no"],["PAR No.","par_no"],["ICS No.","ics_no"],["IRS / RIS Reference","ris_no"],["Procurement Status","po_status"],["Procurement Remarks","procurement_remarks"]].map(([label,key])=><Field key={key} label={label}>{key === "po_status" ? <Select disabled={!isProcurementRole} value={form[key] || ""} onChange={e=>set(key,e.target.value)}><option value="">Select</option><option value="PENDING">PENDING</option><option value="APPROVED">APPROVED</option><option value="ISSUED">ISSUED</option><option value="PARTIALLY DELIVERED">PARTIALLY DELIVERED</option><option value="COMPLETED">COMPLETED</option><option value="CANCELLED">CANCELLED</option></Select> : <Input disabled={!isProcurementRole} required={isProcurementRole && ["po_no", "po_date", "supplier_payee", "po_amount"].includes(key)} min={key === "po_amount" ? "0" : undefined} step={key === "po_amount" ? "0.01" : undefined} type={key==="po_date"?"date":key==="po_amount"?"number":"text"} value={form[key]||""} onChange={e=>set(key,e.target.value)}/>}</Field>)}
+            {[["PO No.","po_no"],["PO Date","po_date"],["Supplier / Payee","supplier_payee"],["PO Amount","po_amount"],["AIR / FAR Reference","air_far_reference"],["IAR No.","iar_no"],["PAR No.","par_no"],["ICS No.","ics_no"],["IRS / RIS Reference","ris_no"],["Procurement Status","po_status"],["Procurement Remarks","procurement_remarks"]].map(([label,key])=><Field key={key} label={label}>{key === "po_status" ? <Select disabled={!isProcurementRole} required={isProcurementRole} value={form[key] || ""} onChange={e=>set(key,e.target.value)}><option value="">Select</option><option value="PENDING">PENDING</option><option value="APPROVED">APPROVED</option><option value="ISSUED">ISSUED</option><option value="PARTIALLY DELIVERED">PARTIALLY DELIVERED</option><option value="COMPLETED">COMPLETED</option><option value="CANCELLED">CANCELLED</option></Select> : <Input disabled={!isProcurementRole} required={isProcurementRole && ["po_no", "po_date", "supplier_payee", "po_amount", "po_status", "procurement_remarks"].includes(key)} min={key === "po_amount" ? "0" : undefined} step={key === "po_amount" ? "0.01" : undefined} type={key==="po_date"?"date":key==="po_amount"?"number":"text"} value={form[key]||""} onChange={e=>set(key,e.target.value)}/>}</Field>)}
           </div></fieldset></div>
           <div className="office-fields accounting-fields md:col-span-3 rounded-lg border border-violet-200 bg-violet-50/50 p-3"><p className="mb-2 text-[10px] font-extrabold uppercase text-violet-800">Accounting / Disbursement Review</p><fieldset disabled={!(isAccountantRole || isAdminRole)} className="contents igp-role-locked"><div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-            {[["DB No.","db_no"],["DV / Payroll No.","dv_payroll_no"],["BURS Serial No.","burs_serial_no"],["Disbursement Date","disbursement_date"],["Disbursement Amount","disbursement_amount"],["Notice of Adjustment","notice_of_adjustment"],["Adjustment Reason","adjustment_reason"],["Accounting Status","accounting_status"],["Reviewed By","reviewed_by"],["Review Date and Time","review_datetime"],["Accounting Remarks","accounting_remarks"]].map(([label,key])=><Field key={key} label={label}>{key === "accounting_status" ? <Select disabled={!isAccountantRole} required={isAccountantRole} value={form[key] || ""} onChange={e=>set(key,e.target.value)}><option value="">Select status</option><option value="Pending">Pending</option><option value="Reviewed">Reviewed</option><option value="Approved">Approved</option><option value="Returned">Returned</option></Select> : <Input disabled={!isAccountantRole} required={isAccountantRole && key === "disbursement_date"} min={key === "disbursement_amount" ? "0" : undefined} step={key === "disbursement_amount" ? "0.01" : undefined} type={key==="disbursement_date"?"date":key==="review_datetime"?"datetime-local":key==="disbursement_amount"?"number":"text"} value={form[key]||""} onChange={e=>set(key,e.target.value)}/>}</Field>)}
+            {[["DB No.","db_no"],["DV / Payroll No.","dv_payroll_no"],["BURS Serial No.","burs_serial_no"],["Disbursement Date","disbursement_date"],["Disbursement Amount","disbursement_amount"],["Notice of Adjustment","notice_of_adjustment"],["Adjustment Reason","adjustment_reason"],["Accounting Status","accounting_status"],["Reviewed By","reviewed_by"],["Review Date and Time","review_datetime"],["Accounting Remarks","accounting_remarks"]].map(([label,key])=><Field key={key} label={label}>{key === "accounting_status" ? <Select disabled={!isAccountantRole} required={isAccountantRole} value={form[key] || ""} onChange={e=>set(key,e.target.value)}><option value="">Select status</option><option value="Pending">Pending</option><option value="Reviewed">Reviewed</option><option value="Approved">Approved</option><option value="Returned">Returned</option></Select> : <Input disabled={!isAccountantRole} required={isAccountantRole && !["burs_serial_no", "notice_of_adjustment", "adjustment_reason"].includes(key)} min={key === "disbursement_amount" ? "0" : undefined} step={key === "disbursement_amount" ? "0.01" : undefined} type={key==="disbursement_date"?"date":key==="review_datetime"?"datetime-local":key==="disbursement_amount"?"number":"text"} value={form[key]||""} onChange={e=>set(key,e.target.value)}/>}</Field>)}
           </div></fieldset></div>
         </div>
       </div>
@@ -1374,7 +1371,6 @@ export default function IGPRegistry({ user, onLogout, onNavigate, activePath }) 
     { key: "pap_name", label: "PAP", render: r => r.pap_name || r.pap_code },
     { key: "uacs_code", label: "UACS CODE", render: r => r.uacs_code || r.uacs_account_title },
     { key: "allotment_class_name", label: "ALLOTMENT CLASS", render: r => r.allotment_class_name || r.allotment_class_code },
-    { key: "uacs_funding_source_code", label: "UACS FUNDING SOURCE CODE" },
     { key: "month", label: "MONTH" },
     { key: "series", label: "SERIES" },
     { key: "series2", label: "SERIES 2" },
@@ -1846,7 +1842,7 @@ export default function IGPRegistry({ user, onLogout, onNavigate, activePath }) 
       ["BURS SERIAL NO.", r => r.burs_serial_no], ["SERIAL TRANSFERRED", r => r.serial_no_transferred], ["PAYEE / NAME", r => r.payee],
       ["PARTICULARS", r => r.particulars || r.description || r.remarks || r.account_title], ["RESPONSIBILITY CENTER", r => r.responsibility_center_name || r.responsibility_center_code],
       ["PAP", r => r.pap_name || r.pap_code], ["UACS CODE", r => r.uacs_code || r.uacs_account_title], ["REFERENCE NO.", r => r.reference_no],
-      ["ALLOTMENT CLASS", r => r.allotment_class_name || r.allotment_class_code], ["MFO", r => r.mfo_name || r.mfo_code], ["OLD UACS CODE", r => r.old_uacs_code || r.old_uacs_master_code], ["ACCOUNT TITLE", r => r.account_title || r.uacs_account_title], ["UACS FUNDING SOURCE CODE", r => r.uacs_funding_source_code], ["MONTH", r => r.month], ["SERIES", r => r.series], ["SERIES 2", r => r.series2], ["QUARTER", r => r.quarter], ["WFP SOURCE", r => r.wfp_source_name || r.wfp_source_code],
+      ["ALLOTMENT CLASS", r => r.allotment_class_name || r.allotment_class_code], ["MFO", r => r.mfo_name || r.mfo_code], ["OLD UACS CODE", r => r.old_uacs_code || r.old_uacs_master_code], ["ACCOUNT TITLE", r => r.account_title || r.uacs_account_title], ["MONTH", r => r.month], ["SERIES", r => r.series], ["SERIES 2", r => r.series2], ["QUARTER", r => r.quarter], ["WFP SOURCE", r => r.wfp_source_name || r.wfp_source_code],
       ["INCOME", r => reportMoney(r.income_amount ?? r.income)], ["UTILIZATION", r => reportMoney(r.utilization_amount ?? r.utilization)],
       ["PS UTILIZATION", r => reportMoney(r.ps_utilization)], ["MOOE UTILIZATION", r => reportMoney(r.mooe_utilization)], ["CO UTILIZATION", r => reportMoney(r.co_utilization)],
       ["DISBURSEMENT", r => reportMoney(r.disbursement_amount ?? r.disbursement)], ["UNPAID UTILIZATION", r => reportMoney(r.unpaid_utilization)], ["RUNNING BALANCE", r => reportMoney(r.running_balance ?? r.balance)],
@@ -2052,7 +2048,18 @@ export default function IGPRegistry({ user, onLogout, onNavigate, activePath }) 
 
   return (
     <Layout user={user} onLogout={onLogout} onNavigate={onNavigate} activePath={activePath || "/igp/overview"}>
-      <div className="min-h-full bg-[#f7faff] pb-8">
+      <style>{`
+        .igp-registry, .igp-registry * { box-sizing: border-box; min-width: 0; }
+        .igp-registry input, .igp-registry select, .igp-registry textarea { max-width: 100%; width: 100%; }
+        .igp-registry .grid > *, .igp-registry fieldset, .igp-registry .office-fields { min-width: 0; max-width: 100%; }
+        .igp-registry { width: 100%; max-width: 100%; overflow-x: clip; }
+        @media (max-width: 768px) {
+          .igp-registry { padding-left: 10px; padding-right: 10px; }
+          .igp-registry .office-fields { padding: 10px; }
+          .igp-registry input, .igp-registry select, .igp-registry textarea { font-size: 14px; }
+        }
+      `}</style>
+      <div className="igp-registry min-h-full bg-[#f7faff] pb-8">
         {error && <div className="mb-4 flex items-center justify-between rounded-lg border border-red-100 bg-red-50 px-4 py-3 text-[10px] text-red-700"><span>{error}</span><button type="button" onClick={() => setError("")}><X className="h-4 w-4" /></button></div>}
 
         {canEditOfficeTransactions ? (

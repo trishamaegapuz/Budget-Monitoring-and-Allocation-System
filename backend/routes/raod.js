@@ -2342,6 +2342,9 @@ router.put("/:id", requireRaodView, async (req, res) => {
      * the situation where PO No. updates but IAR/PAR/ICS/RIS/Status do not.
      */
     if (role === "Procurement") {
+      const required = [["PO No.", "po_no"], ["PO Date", "po_date"], ["Supplier / Payee", "supplier_payee"], ["PO Amount", "po_amount"], ["Procurement Status", "po_status"], ["Procurement Remarks", "procurement_remarks"]];
+      const missing = required.find(([label, key]) => requestBody[key] === undefined || requestBody[key] === null || String(requestBody[key]).trim() === "");
+      if (missing) return res.status(400).json({ error: `${missing[0]} is required for the Procurement role.`, field: missing[1] });
       const fieldMap = {
         // Keep every Procurement form field mapped to its actual database column.
         po_no: "po_no",
@@ -2514,6 +2517,10 @@ router.put("/:id/procurement", requireRaodView, async (req, res) => {
   }
 
   const userId = raodUser(req)?.id ?? raodUser(req)?.user_id ?? raodUser(req)?.userId ?? null;
+  const required = [["PO No.", "po_no"], ["PO Date", "po_date"], ["Supplier / Payee", "supplier_payee"], ["PO Amount", "po_amount"], ["Procurement Status", "po_status"], ["Procurement Remarks", "procurement_remarks"]];
+  const missing = required.find(([label, key]) => req.body?.[key] === undefined || req.body?.[key] === null || String(req.body[key]).trim() === "");
+  if (missing) return res.status(400).json({ error: `${missing[0]} is required for the Procurement role.`, field: missing[1] });
+  if (!Number.isFinite(Number(req.body.po_amount)) || Number(req.body.po_amount) <= 0) return res.status(400).json({ error: "PO Amount must be greater than zero.", field: "po_amount" });
   // Persist every editable field shown in the Procurement form, not only the reference numbers.
   // The database column for PO status is status_of_po; the API/UI uses po_status.
   const fieldMap = {
@@ -2591,9 +2598,21 @@ router.put("/:id/accounting", requireRaodView, async (req, res) => {
   }
 
   const userId = raodUser(req)?.id ?? raodUser(req)?.user_id ?? raodUser(req)?.userId ?? null;
+  const required = [["DB No.", "db_no"], ["DV / Payroll No.", "dv_payroll_no"], ["Disbursement Date", "disbursement_date"], ["Disbursement Amount", "disbursement_amount"], ["Accounting Status", "accounting_status"], ["Reviewed By", "reviewed_by"], ["Review Date and Time", "review_datetime"], ["Accounting Remarks", "accounting_remarks"]];
+  const missing = required.find(([label, key]) => req.body?.[key] === undefined || req.body?.[key] === null || String(req.body[key]).trim() === "");
+  if (missing) return res.status(400).json({ error: `${missing[0]} is required for the Accountant role.`, field: missing[1] });
+  if (!Number.isFinite(Number(req.body.disbursement_amount)) || Number(req.body.disbursement_amount) < 0) return res.status(400).json({ error: "Disbursement Amount must be a valid non-negative amount.", field: "disbursement_amount" });
   const fieldMap = {
+    db_no: "db_no",
     dv_payroll_no: "dv_payroll_no",
+    disbursement_date: "disbursement_date",
     disbursement_amount: "disbursement_amount",
+    notice_of_adjustment: "notice_of_adjustment",
+    adjustment_reason: "adjustment_reason",
+    accounting_status: "accounting_status",
+    reviewed_by: "reviewed_by",
+    review_datetime: "review_datetime",
+    accounting_remarks: "accounting_remarks",
   };
 
   try {
