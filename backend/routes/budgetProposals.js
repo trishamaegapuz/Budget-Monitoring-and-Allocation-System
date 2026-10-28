@@ -109,10 +109,29 @@ const normalizeProposalRole = (value) => {
 
 const requireProposalRoles = (...allowedRoles) => {
   return (req, res, next) => {
-    const role = normalizeProposalRole(req.user?.role || req.user?.user_role || req.user?.account_role);
+    const user = req.user || {};
+
+    const rawRole =
+      user.role ??
+      user.user_role ??
+      user.account_role ??
+      user.role_name ??
+      user.roleName ??
+      user.userRole ??
+      user.accountRole ??
+      '';
+
+    const role = normalizeProposalRole(rawRole);
     const normalizedAllowedRoles = allowedRoles.map(normalizeProposalRole);
 
     if (!normalizedAllowedRoles.includes(role)) {
+      console.error('[Budget Proposals] Authorization denied:', {
+        userId: user.id ?? user.user_id ?? null,
+        receivedRole: rawRole,
+        normalizedRole: role,
+        allowedRoles: normalizedAllowedRoles
+      });
+
       return res.status(403).json({
         success: false,
         error: 'You are not authorized to perform this Budget Proposal action.'
