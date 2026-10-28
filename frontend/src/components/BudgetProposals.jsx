@@ -1234,13 +1234,13 @@ export default function BudgetProposals({
     if (!totalRows) return null;
     return (
       <div className="bp-pagination">
-        <span className="bp-pagination-info">Showing {start}â€“{end} of {totalRows}</span>
+        <span className="bp-pagination-info">Showing {start}-{end} of {totalRows}</span>
         <div className="bp-pagination-controls">
-          <button type="button" className="bp-page-button" disabled={page <= 1} onClick={() => onPageChange(page - 1)}>â€¹</button>
+          <button type="button" className="bp-page-button" disabled={page <= 1} onClick={() => onPageChange(page - 1)}>-</button>
           {Array.from({ length: totalPages }, (_, i) => i + 1).map(n => (
             <button type="button" key={n} className={`bp-page-button ${n === page ? 'active' : ''}`} onClick={() => onPageChange(n)}>{n}</button>
           ))}
-          <button type="button" className="bp-page-button" disabled={page >= totalPages} onClick={() => onPageChange(page + 1)}>â€º</button>
+          <button type="button" className="bp-page-button" disabled={page >= totalPages} onClick={() => onPageChange(page + 1)}>-</button>
         </div>
       </div>
     );
