@@ -143,7 +143,16 @@ const requireProposalRoles = (...allowedRoles) => {
 };
 
 const requireProposalStatusRole = (req, res, next) => {
-  const rawRole = req.user?.role || req.user?.user_role || req.user?.account_role;
+  const user = req.user || {};
+  const rawRole =
+    user.role ??
+    user.user_role ??
+    user.account_role ??
+    user.role_name ??
+    user.roleName ??
+    user.userRole ??
+    user.accountRole ??
+    '';
   const role = normalizeProposalRole(rawRole);
   const requestedStatus = normalizeStatus(req.body?.status);
 
@@ -166,7 +175,15 @@ const requireProposalStatusRole = (req, res, next) => {
     });
   }
 
-  if (!allowedRoles.includes(role)) {
+  const normalizedAllowedRoles = allowedRoles.map(normalizeProposalRole);
+  if (!normalizedAllowedRoles.includes(role)) {
+    console.error('[Budget Proposals] Status action denied:', {
+      userId: user.id ?? user.user_id ?? null,
+      receivedRole: rawRole,
+      normalizedRole: role,
+      requestedStatus,
+      allowedRoles: normalizedAllowedRoles
+    });
     return res.status(403).json({
       success: false,
       error: `The ${String(rawRole || 'current user').trim()} role is not authorized to change a proposal to "${requestedStatus}".`

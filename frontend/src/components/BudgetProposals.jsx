@@ -779,13 +779,15 @@ export default function BudgetProposals({
 
       const updatedProposal = data.proposal || { ...targetProposal, status };
       setSelectedProposal(updatedProposal);
+      setProposals((current) =>
+        current.map((item) =>
+          Number(item.id) === Number(updatedProposal.id)
+            ? { ...item, ...updatedProposal, status: updatedProposal.status || status }
+            : item
+        )
+      );
       setWorkflowAction(status.toLowerCase());
       setReviewMessage('');
-      await Promise.all([
-        loadBudgetProposals(),
-        loadProposalHistory(updatedProposal.id),
-        loadAllHistory()
-      ]);
 
       const actionMessages = {
         'Under Review': 'Review Started Successfully',
@@ -796,6 +798,15 @@ export default function BudgetProposals({
         'Submitted': 'Budget Proposals Submitted Successfully'
       };
       setSuccessNotice({ title: actionMessages[status] || 'Proposal Status Updated Successfully' });
+
+      // The status update has succeeded. Unlock workflow buttons immediately;
+      // history/list refreshes must not leave the action controls disabled.
+      setStatusActionLoading(false);
+      void Promise.allSettled([
+        loadBudgetProposals(),
+        loadProposalHistory(updatedProposal.id),
+        loadAllHistory()
+      ]);
     } catch (error) {
       setProposalError(error.message || 'Unable to update proposal status.');
     } finally {
