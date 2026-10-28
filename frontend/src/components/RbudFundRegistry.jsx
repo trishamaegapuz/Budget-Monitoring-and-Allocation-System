@@ -5549,6 +5549,17 @@ function RecordModal({ mode, record, form, setForm, references, role, onClose, o
   return (
     <Modal title={mode==="edit" ? "Edit RBUD Transaction" : "Add RBUD Transaction"} onClose={onClose} size="wide">
       <style>{`
+        .rbud-role-form input[type="date"],
+        .rbud-role-form input[type="datetime-local"] {
+          display: block; width: 100%; min-width: 0; max-width: 100%; height: 40px; min-height: 40px;
+          box-sizing: border-box; padding-top: 0; padding-bottom: 0; line-height: normal; font-size: 12px;
+        }
+        @media (max-width: 640px) {
+          .rbud-role-form input[type="date"],
+          .rbud-role-form input[type="datetime-local"] {
+            height: 40px; min-height: 40px; padding-left: 10px; padding-right: 6px; font-size: 12px;
+          }
+        }
         .rbud-role-form input:disabled,
         .rbud-role-form select:disabled,
         .rbud-role-form textarea:disabled,

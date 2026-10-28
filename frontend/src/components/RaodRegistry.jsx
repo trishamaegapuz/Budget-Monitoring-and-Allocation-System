@@ -389,13 +389,26 @@ function Modal({ title, children, onClose, wide = false, formWide = false }) {
   const modalWidth = (wide || formWide) ? "max-w-[1400px] w-[95vw]" : "max-w-[1400px] w-[95vw]";
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4">
-      <div className={`max-h-[92vh] w-full overflow-y-auto rounded-2xl bg-white shadow-2xl ${modalWidth}`}>
+      <div className={`raod-modal-panel max-h-[92vh] w-full min-w-0 overflow-x-hidden overflow-y-auto rounded-2xl bg-white shadow-2xl ${modalWidth}`}>
         <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-100 bg-white px-5 py-4">
           <h3 className="text-sm font-extrabold text-[#10245b]">{title}</h3>
           <button type="button" onClick={onClose} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100"><X className="h-4 w-4" /></button>
         </div>
         <div className="p-5">{children}</div>
       </div>
+      <style>{`
+        .raod-modal-panel, .raod-modal-panel * { box-sizing: border-box; }
+        .raod-modal-panel input[type="date"], .raod-modal-panel input[type="datetime-local"] {
+          display: block; width: 100%; min-width: 0; max-width: 100%; height: 36px; min-height: 36px;
+          box-sizing: border-box; padding-top: 0; padding-bottom: 0; line-height: normal; font-size: 10px;
+        }
+        @media (max-width: 640px) {
+          .raod-modal-panel { width: 100%; max-width: 100%; }
+          .raod-modal-panel input[type="date"], .raod-modal-panel input[type="datetime-local"] {
+            height: 36px; min-height: 36px; padding-left: 10px; padding-right: 6px; font-size: 12px;
+          }
+        }
+      `}</style>
     </div>
   );
 }
