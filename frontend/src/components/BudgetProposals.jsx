@@ -415,6 +415,38 @@ export default function BudgetProposals({
     }
   };
 
+  
+  // Normalize proposal status returned by the API.
+  const normalizeProposalStatus = (proposal) => {
+    const rawStatus =
+      proposal?.status ??
+      proposal?.proposal_status ??
+      proposal?.workflow_status ??
+      'Draft';
+
+    const status = String(rawStatus).trim();
+
+    const knownStatuses = {
+      draft: 'Draft',
+      submitted: 'Submitted',
+      'under review': 'Under Review',
+      'for revision': 'For Revision',
+      endorsed: 'Endorsed',
+      approved: 'Approved',
+      rejected: 'Rejected'
+    };
+
+    return {
+      ...proposal,
+      status: knownStatuses[status.toLowerCase()] || status || 'Draft'
+    };
+  };
+
+  const normalizeProposalList = (items) =>
+    Array.isArray(items)
+      ? items.map(normalizeProposalStatus)
+      : [];
+
   const loadBudgetProposals = async () => {
     setLoadingProposals(true);
     setProposalError('');
@@ -431,7 +463,7 @@ export default function BudgetProposals({
         throw new Error(data.error || data.message || 'Unable to load budget proposals.');
       }
 
-      setProposals(Array.isArray(data.proposals) ? data.proposals : []);
+      setProposals(normalizeProposalList(data.proposals));
     } catch (error) {
       console.error('Budget Proposal load error:', error);
       setProposalError(error.message || 'Unable to load budget proposals.');
@@ -440,6 +472,8 @@ export default function BudgetProposals({
       setLoadingProposals(false);
     }
   };
+
+  
 
   useEffect(() => {
     loadBudgetProposals();
@@ -466,22 +500,26 @@ export default function BudgetProposals({
       isRefreshing = true;
 
       try {
-        const response = await fetch(
-          `${API_URL}/budget-proposals?year=${selectedYear}`,
-          {
-            headers: { ...authHeaders() },
-            cache: 'no-store'
-          }
-        );
+        
+  const response = await fetch(
+    `${API_URL}/budget-proposals?year=${selectedYear}&_sync=${Date.now()}`,
+    {
+      headers: {
+        ...authHeaders(),
+        'Cache-Control': 'no-cache',
+        Pragma: 'no-cache'
+      },
+      cache: 'no-store'
+    }
+  );
+
 
         if (!response.ok) return;
 
         const data = await response.json();
         if (!isActive) return;
 
-        const latestProposals = Array.isArray(data.proposals)
-          ? data.proposals
-          : [];
+        const latestProposals = normalizeProposalList(data.proposals);
 
         // Update the table/list in this browser tab.
         setProposals(latestProposals);
@@ -509,12 +547,12 @@ export default function BudgetProposals({
       }
     };
 
-    // Initial synchronization, then check every 3 seconds.
+    // Initial synchronization, then check every 2 seconds.
     syncProposalStatuses();
 
     const intervalId = window.setInterval(
       syncProposalStatuses,
-      3000
+      2000
     );
 
     // Refresh immediately when the user returns to this tab.

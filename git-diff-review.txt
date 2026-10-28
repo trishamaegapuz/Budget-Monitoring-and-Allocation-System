@@ -1,0 +1,166 @@
+﻿diff --git a/backend/routes/rbud.js b/backend/routes/rbud.js
+index 5ae5c75..8eec86c 100644
+--- a/backend/routes/rbud.js
++++ b/backend/routes/rbud.js
+@@ -2665,6 +2665,28 @@ router.post("/fees", async (req, res) => {
+   }
+ });
+ 
++// Only Administration/Administrator may permanently delete fee transaction records.
++router.delete("/fees/:id", async (req, res) => {
++  const authUser = getRbudAuthUser(req);
++  const role = normalizeRbudRoleValue(authUser?.role || authUser?.user_role || authUser?.userRole);
++  if (role !== "Administration") {
++    return res.status(403).json({ error: "Only the Administrator can delete Fee Monitoring records." });
++  }
++  const id = int(req.params.id);
++  if (!id || id < 1) return res.status(400).json({ error: "A valid fee record ID is required." });
++  try {
++    const result = await pool.query(
++      "DELETE FROM rbud_fee_monitoring WHERE id = $1 RETURNING id",
++      [id]
++    );
++    if (!result.rowCount) return res.status(404).json({ error: "Fee record not found." });
++    return res.json({ message: "Fee Monitoring record deleted successfully.", id: result.rows[0].id });
++  } catch (error) {
++    console.error("RBUD fee monitoring delete error:", error);
++    return res.status(500).json({ error: error.message, code: error.code || null });
++  }
++});
++
+ router.put("/fees/:id", async (req, res) => {
+   if (!feeAccessAllowed(req)) return res.status(403).json({ error: "Fee Monitoring is restricted to Administrator and Budget roles." });
+   const b = req.body || {};
+diff --git a/frontend/src/components/RbudFundRegistry.jsx b/frontend/src/components/RbudFundRegistry.jsx
+index 92a6e16..d97b3da 100644
+--- a/frontend/src/components/RbudFundRegistry.jsx
++++ b/frontend/src/components/RbudFundRegistry.jsx
+@@ -587,6 +587,27 @@ export default function RbudFundRegistry({
+ 
+   const editFeeRecord = (row) => { setFeeEditingId(row.id); setFeeForm({ ...row, billing_amount: String(row.billing_amount ?? 0), collected_amount: String(row.collected_amount ?? 0), obligated_amount: String(row.obligated_amount ?? 0), disbursed_amount: String(row.disbursed_amount ?? 0) }); window.scrollTo({ top: 0, behavior: "smooth" }); };
+ 
++  const deleteFeeRecord = async (row) => {
++    if (role !== "Administration") {
++      setFeeError("Only the Administrator can delete Fee Monitoring records.");
++      return;
++    }
++    const confirmed = window.confirm(`Delete the Fee Monitoring record for "${row.particulars}" (${row.campus}, FY ${row.fiscal_year})? This action cannot be undone.`);
++    if (!confirmed) return;
++    setFeeError("");
++    try {
++      await query(`/rbud/fees/${row.id}`, { method: "DELETE" });
++      if (String(feeEditingId) === String(row.id)) {
++        setFeeEditingId(null);
++        setFeeForm({ fiscal_year: String(selectedFiscalYear), fee_category: "Non-Fiduciary Fees", particulars: "", campus: feeCampusOptions[0] || "", billing_amount: "0", collected_amount: "0", obligated_amount: "0", disbursed_amount: "0", billing_period: "", reference_no: "", remarks: "" });
++      }
++      await loadFeeRows();
++      showToast("Fee Monitoring record deleted.");
++    } catch (error) {
++      setFeeError(error.message || "Unable to delete fee record.");
++    }
++  };
++
+   const filterParams = useCallback(() => {
+     const params = new URLSearchParams();
+     params.set("year", selectedFiscalYear);
+@@ -1393,6 +1414,8 @@ export default function RbudFundRegistry({
+                 setForm={setFeeForm}
+                 campusOptions={feeCampusOptions}
+                 editingId={feeEditingId}
++                role={role}
++                onDelete={deleteFeeRecord}
+                 onSubmit={saveFeeRecord}
+                 onEdit={editFeeRecord}
+                 onCancelEdit={() => { setFeeEditingId(null); setFeeForm({ ...feeForm, particulars: "", reference_no: "", remarks: "" }); }}
+@@ -1447,7 +1470,7 @@ const FEE_PARTICULARS = {
+   "Non-Fiduciary Fees": ["Registration Fees", "Laboratory Fee", "Library Fee", "Medical & Dental Fee", "Computer Fee", "Internet Fee", "Student Development Fund", "Athletic Fee", "Cultural Fee", "NSTP", "ID", "Guidance Fee", "School Publication", "Handbook", "Testing Fee", "SCUAA Fee", "Entrance Fee"],
+ };
+ const feeMoney = (value) => new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP" }).format(Number(value || 0));
+-function FeeMonitoringView({ year, rows, loading, error, form, setForm, campusOptions = [], editingId, onSubmit, onEdit, onCancelEdit, onRefresh, enrollmentRows = [], budgetReferences = [], enrollmentForm, setEnrollmentForm, budgetReferenceForm, setBudgetReferenceForm, onSaveEnrollment, onSaveBudgetReference }) {
++function FeeMonitoringView({ year, rows, loading, error, form, setForm, campusOptions = [], editingId, role, onDelete, onSubmit, onEdit, onCancelEdit, onRefresh, enrollmentRows = [], budgetReferences = [], enrollmentForm, setEnrollmentForm, budgetReferenceForm, setBudgetReferenceForm, onSaveEnrollment, onSaveBudgetReference }) {
+   const totals = (rows || []).reduce((a, r) => ({ billing: a.billing + Number(r.billing_amount || 0), collected: a.collected + Number(r.collected_amount || 0), obligated: a.obligated + Number(r.obligated_amount || 0), disbursed: a.disbursed + Number(r.disbursed_amount || 0) }), { billing: 0, collected: 0, obligated: 0, disbursed: 0 });
+   const set = (key, value) => setForm((old) => ({ ...old, [key]: value }));
+   const inputClass = "w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100";
+@@ -1489,7 +1512,7 @@ function FeeMonitoringView({ year, rows, loading, error, form, setForm, campusOp
+         <label className="sm:col-span-2 xl:col-span-4"><span className={labelClass}>Remarks</span><textarea className={inputClass} rows="2" value={form.remarks||""} onChange={e=>set("remarks",e.target.value)} /></label>
+       </div><div className="mt-4 flex justify-end"><button className="rounded-lg bg-blue-700 px-5 py-2.5 text-sm font-bold text-white hover:bg-blue-800" type="submit">{editingId ? "Save Changes" : "Save Fee Record"}</button></div>
+     </form>
+-    <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm"><div className="flex items-center justify-between border-b border-slate-100 px-4 py-3"><h3 className="font-extrabold text-slate-900">Fee Transactions</h3><span className="text-xs text-slate-500">{rows.length} record(s)</span></div><div className="overflow-x-auto"><table className="min-w-[1150px] w-full text-left text-xs"><thead className="bg-slate-50 text-[11px] uppercase tracking-wide text-slate-500"><tr>{["Year / Period","Category / Particulars","Campus","Billing","Collected","Uncollected","Obligated","Disbursed","Unpaid Obligation","Actions"].map(h=><th key={h} className="px-3 py-3 font-extrabold">{h}</th>)}</tr></thead><tbody className="divide-y divide-slate-100">{loading?<tr><td colSpan="10" className="px-4 py-8 text-center text-slate-500">Loading fee recordsΓÇª</td></tr>:rows.length===0?<tr><td colSpan="10" className="px-4 py-8 text-center text-slate-500">No fee records for this fiscal year yet.</td></tr>:rows.map(r=><tr key={r.id} className="hover:bg-slate-50"><td className="px-3 py-3"><b>{r.fiscal_year}</b><p className="mt-1 text-slate-500">{r.billing_period||"ΓÇö"}</p></td><td className="px-3 py-3"><b>{r.fee_category}</b><p className="mt-1 text-slate-500">{r.particulars}</p></td><td className="px-3 py-3">{r.campus}</td><td className="px-3 py-3">{feeMoney(r.billing_amount)}</td><td className="px-3 py-3">{feeMoney(r.collected_amount)}</td><td className="px-3 py-3 font-bold text-amber-700">{feeMoney(Number(r.billing_amount||0)-Number(r.collected_amount||0))}</td><td className="px-3 py-3">{feeMoney(r.obligated_amount)}</td><td className="px-3 py-3">{feeMoney(r.disbursed_amount)}</td><td className="px-3 py-3 font-bold text-rose-700">{feeMoney(Number(r.obligated_amount||0)-Number(r.disbursed_amount||0))}</td><td className="px-3 py-3"><button type="button" onClick={()=>onEdit(r)} className="rounded-md border border-blue-200 px-3 py-1.5 font-bold text-blue-700 hover:bg-blue-50">Edit</button></td></tr>)}</tbody></table></div></div>
++    <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm"><div className="flex items-center justify-between border-b border-slate-100 px-4 py-3"><h3 className="font-extrabold text-slate-900">Fee Transactions</h3><span className="text-xs text-slate-500">{rows.length} record(s)</span></div><div className="overflow-x-auto"><table className="min-w-[1150px] w-full text-left text-xs"><thead className="bg-slate-50 text-[11px] uppercase tracking-wide text-slate-500"><tr>{["Year / Period","Category / Particulars","Campus","Billing","Collected","Uncollected","Obligated","Disbursed","Unpaid Obligation","Actions"].map(h=><th key={h} className="px-3 py-3 font-extrabold">{h}</th>)}</tr></thead><tbody className="divide-y divide-slate-100">{loading?<tr><td colSpan="10" className="px-4 py-8 text-center text-slate-500">Loading fee recordsΓÇª</td></tr>:rows.length===0?<tr><td colSpan="10" className="px-4 py-8 text-center text-slate-500">No fee records for this fiscal year yet.</td></tr>:rows.map(r=><tr key={r.id} className="hover:bg-slate-50"><td className="px-3 py-3"><b>{r.fiscal_year}</b><p className="mt-1 text-slate-500">{r.billing_period||"ΓÇö"}</p></td><td className="px-3 py-3"><b>{r.fee_category}</b><p className="mt-1 text-slate-500">{r.particulars}</p></td><td className="px-3 py-3">{r.campus}</td><td className="px-3 py-3">{feeMoney(r.billing_amount)}</td><td className="px-3 py-3">{feeMoney(r.collected_amount)}</td><td className="px-3 py-3 font-bold text-amber-700">{feeMoney(Number(r.billing_amount||0)-Number(r.collected_amount||0))}</td><td className="px-3 py-3">{feeMoney(r.obligated_amount)}</td><td className="px-3 py-3">{feeMoney(r.disbursed_amount)}</td><td className="px-3 py-3 font-bold text-rose-700">{feeMoney(Number(r.obligated_amount||0)-Number(r.disbursed_amount||0))}</td><td className="px-3 py-3"><div className="flex items-center justify-center gap-2"><button type="button" onClick={()=>onEdit(r)} title="Edit fee record" aria-label="Edit fee record" className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 transition hover:bg-gray-50 hover:text-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-300"><Edit2 className="h-4 w-4" /></button>{role === "Administration" && <button type="button" onClick={()=>onDelete(r)} title="Delete fee record" aria-label="Delete fee record" className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 transition hover:bg-gray-50 hover:text-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-300"><Trash2 className="h-4 w-4" /></button>}</div></td></tr>)}</tbody></table></div></div>
+   </div>;
+ }
+ 
+@@ -3272,15 +3295,12 @@ const fullRbudReportValues = (row) =>
+ 
+ 
+ function ReportDocumentHeader({ title, year, group, fund }) {
+-  // Keep every RBUD report's document heading consistent with Fee Monitoring.
+-  // This heading is part of the report itself, not the surrounding dashboard panel.
+   return (
+-    <div className="rbud-report-document-header text-center border-b border-gray-400 pb-2 mb-3 text-black">
+-      <p className="text-[9px]">Republic of the Philippines</p>
+-      <p className="text-[9px]">UNIVERSITY OF ABRA</p>
+-      <p className="text-[9px]">BUDGET MONITORING AND ALLOCATION SYSTEM</p>
+-      <h3 className="text-sm font-bold mt-1">{title}</h3>
+-      <p className="text-[9px] mt-1">
++    <div className="text-center border-b border-gray-200 pb-4 mb-4">
++      <p className="text-[9px] text-gray-400 font-semibold">UNIVERSITY OF ABRA</p>
++      <p className="text-[9px] text-gray-500">BUDGET MONITORING AND ALLOCATION SYSTEM</p>
++      <h3 className="text-base font-bold text-[#17135f] mt-1">{title}</h3>
++      <p className="text-[10px] text-gray-500 mt-1">
+         Fiscal Year {year} ΓÇó Fund Group: {group} ΓÇó Fund: {fund || "All Funds"}
+       </p>
+     </div>
+@@ -3752,14 +3772,14 @@ function FeeMonitoringReport({ feeRows = [], enrollmentRows = [], budgetReferenc
+     return sum + (key === "collected" ? collected : key === "uncollected" ? billing - collected : key === "billing" ? billing : key === "obligated" ? obligated : key === "disbursed" ? disbursed : obligated - disbursed);
+   }, 0);
+   const signatureBlock = (
+-    <div className="fee-report-signatures grid grid-cols-2 gap-12 mt-6 text-[10px] text-black">
++    <div className="fee-report-signatures grid grid-cols-2 gap-12 mt-10 text-[10px] text-black">
+       <div className="text-center"><div className="border-b border-black h-7"/><p className="font-bold mt-1">Prepared by</p><p>Signature over printed name / Date</p></div>
+       <div className="text-center"><div className="border-b border-black h-7"/><p className="font-bold mt-1">Certified Correct / Approved by</p><p>Signature over printed name / Date</p></div>
+     </div>
+   );
+   return (
+     <div className={`fee-monitoring-report bg-white text-gray-900 ${compact ? "fee-report-preview" : "fee-report-print"}`}>
+-      <div className="rbud-report-document-header text-center border-b border-gray-400 pb-2 mb-3 text-black">
++      <div className="text-center border-b border-gray-400 pb-2 mb-3">
+         <p className="text-[9px]">Republic of the Philippines</p>
+         <p className="text-[9px]">UNIVERSITY OF ABRA</p>
+         <p className="text-[9px]">BUDGET MONITORING AND ALLOCATION SYSTEM</p>
+@@ -3841,7 +3861,7 @@ function FeeMonitoringReport({ feeRows = [], enrollmentRows = [], budgetReferenc
+ }
+ 
+ function ReportSignatureBlock() {
+-  return <div className="rbud-report-signatures grid grid-cols-2 gap-12 mt-6 text-[10px] text-black">
++  return <div className="rbud-report-signatures grid grid-cols-2 gap-12 mt-10 text-[10px] text-black">
+     <div className="text-center"><div className="border-b border-black h-7"/><p className="font-bold mt-1">Prepared by</p><p>Signature over printed name / Date</p></div>
+     <div className="text-center"><div className="border-b border-black h-7"/><p className="font-bold mt-1">Certified Correct / Approved by</p><p>Signature over printed name / Date</p></div>
+   </div>;
+@@ -3974,14 +3994,10 @@ function ReportsExportView({
+       <style>{`
+         @media print {
+           @page { size: legal landscape; margin: 8mm; }
+-          /* Print only the dedicated print document. The on-screen preview panel
+-             also contains a report and signature block, so it must never print. */
+           body * { visibility: hidden !important; }
+-          .rbud-fee-monitoring-panel,
+-          .rbud-fee-monitoring-panel * { display: none !important; }
+-          .rbud-print-report:not(.rbud-fee-monitoring-panel),
+-          .rbud-print-report:not(.rbud-fee-monitoring-panel) * { visibility: visible !important; }
+-          .rbud-print-report:not(.rbud-fee-monitoring-panel) {
++          .rbud-print-report,
++          .rbud-print-report * { visibility: visible !important; }
++          .rbud-print-report {
+             display: block !important;
+             position: absolute !important;
+             left: 0 !important;
+@@ -4002,7 +4018,7 @@ function ReportsExportView({
+           .rbud-print-report .overflow-auto { overflow: visible !important; }
+           .rbud-print-report .min-w-\[3000px\] { min-width: 0 !important; }
+           .rbud-print-report .fee-report-signatures,
+-          .rbud-print-report .rbud-report-signatures { break-inside: avoid !important; margin-top: 6mm !important; }
++          .rbud-print-report .rbud-report-signatures { break-inside: avoid !important; }
+           .fee-report-preview .fee-stat-cards { display: grid; }
+           .rbud-print-report .fee-stat-cards,
+           .rbud-print-report .screen-only,

@@ -1,0 +1,4 @@
+"id","fiscal_year","fee_category","particulars","campus","billing_period","reference_no","billing_amount","collected_amount","obligated_amount","disbursed_amount","remarks","created_by","updated_by","created_at","updated_at"
+3,2026,"Fiduciary Fees","Registration Fees","LAGANGILANG","2nd Sem AY 2025 - 2026","001",10000.00,2000.00,0.00,0.00,"fdhfhf",1,1,"2026-10-22 16:03:45.69594+08","2026-10-22 19:40:23.653433+08"
+4,2026,"Fiduciary Fees","Registration Fees","BANGUED","2nd Sem Ay 2025 - 2026","002",100000.00,10000.00,0.00,0.00,"gg",1,1,"2026-10-22 18:28:37.791286+08","2026-10-22 19:39:57.390017+08"
+5,2026,"Non-Fiduciary Fees","Library Fee","LA PAZ","2nd Sem AY 2025 - 2026","003",20000.00,3000.00,0.00,0.00,NULL,1,NULL,"2026-10-22 19:44:16.404844+08","2026-10-22 19:44:16.404844+08"
