@@ -157,14 +157,14 @@ const requireProposalStatusRole = (req, res, next) => {
   const requestedStatus = normalizeStatus(req.body?.status);
 
   const roleByStatus = {
-    // Budget may submit proposals; Administration alone controls review decisions.
-    Submitted: ['Budget'],
-    'Under Review': ['Administration'],
-    'For Revision': ['Administration'],
-    Endorsed: ['Administration'],
-    Approved: ['Administration'],
-    Rejected: ['Administration']
-  };
+  Draft: ['Administration'],
+  Submitted: ['Budget', 'Administration'],
+  'Under Review': ['Administration'],
+  'For Revision': ['Administration'],
+  Endorsed: ['Administration'],
+  Approved: ['Administration'],
+  Rejected: ['Administration']
+};
 
   const allowedRoles = roleByStatus[requestedStatus];
 
