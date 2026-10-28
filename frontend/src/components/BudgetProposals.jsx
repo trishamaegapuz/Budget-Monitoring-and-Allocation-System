@@ -1211,8 +1211,8 @@ export default function BudgetProposals({
   }, [overviewMode, overviewFundGroup]);
 
   const getDepartment = (proposal) => {
-    if (!proposal) return 'â€”';
-    return proposal.department || proposal.proposing_office || proposal.department_unit || proposal.department_name || proposal.office_name || proposal.pap || 'â€”';
+    if (!proposal) return '-';
+    return proposal.department || proposal.proposing_office || proposal.department_unit || proposal.department_name || proposal.office_name || proposal.pap || '-';
   };
 
   const paginate = (items, page) => {
@@ -4801,7 +4801,7 @@ export default function BudgetProposals({
       html.bmas-dark-mode .bp-page .bp-pagination-info { font-size: 11px !important; }
     }
 
-    /* FINAL TYPOGRAPHY PASS â€” make Budget Proposals match the readable RBUD dashboard */
+    /* FINAL TYPOGRAPHY PASS - make Budget Proposals match the readable RBUD dashboard */
     .bp-page { font-size: 15px !important; line-height: 1.5 !important; }
     .bp-page p,
     .bp-page label,
@@ -6390,7 +6390,7 @@ export default function BudgetProposals({
           <div>
 
             <h3 className="bp-panel-title">
-              Proposal Registry â€” FY {selectedYear}
+              Proposal Registry - FY {selectedYear}
             </h3>
 
             <p className="bp-panel-subtitle">
@@ -6664,11 +6664,11 @@ export default function BudgetProposals({
   const renderWorkflow = () => {
     const activeWorkflow = proposalRecords.filter(item => !['Approved','Rejected'].includes(item.status));
     const workflowPagination = paginate(activeWorkflow, workflowPage);
-    const selectedStatus = selectedProposal?.status || 'â€”';
+    const selectedStatus = selectedProposal?.status || '-';
     return (
       <div className="bp-section-page">
         
-        <div className="bp-screen-heading"><h2>Approval Workflow</h2><p>Process proposals through the actual database workflow: Draft â†’ Submitted â†’ Under Review â†’ For Revision â†’ Submitted â†’ Under Review â†’ Endorsed â†’ Approved.</p></div>
+        <div className="bp-screen-heading"><h2>Approval Workflow</h2><p>Process proposals through the actual database workflow: Draft → Submitted → Under Review → For Revision → Submitted → Under Review → Endorsed → Approved.</p></div>
         <div className="bp-panel"><div className="bp-panel-header"><div><h3 className="bp-panel-title">Workflow Queue</h3><p className="bp-panel-subtitle">Select a proposal to see its allowed next actions</p></div></div>
           <div className="bp-budget-table-wrap"><table className="bp-budget-table bp-table-workflow"><thead><tr><th>Reference</th><th>Department</th><th>Amount</th><th>Status</th><th>Action</th></tr></thead><tbody>
             {workflowPagination.rows.map(p => <tr key={p.id}><td>{p.reference}</td><td>{getDepartment(p)}</td><td className="amount">{formatCurrency(p.amount)}</td><td><span className={`bp-badge ${getStatusClass(p.status)}`}>{p.status}</span></td><td><button className="bp-small-button" onClick={() => setSelectedProposal(p)}><Eye /> Select</button></td></tr>)}
@@ -6709,7 +6709,7 @@ export default function BudgetProposals({
         </div>
         <div className="bp-panel">
           <div className="bp-panel-header">
-            <div><h3 className="bp-panel-title">{selectedProposal ? `History â€” ${selectedProposal.reference}` : 'All Proposal History'}</h3><p className="bp-panel-subtitle">Actual workflow activity from the database</p></div>
+            <div><h3 className="bp-panel-title">{selectedProposal ? `History - ${selectedProposal.reference}` : 'All Proposal History'}</h3><p className="bp-panel-subtitle">Actual workflow activity from the database</p></div>
             <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
               <button type="button" className="bp-secondary-button" onClick={() => { setSelectedProposal(null); setHistoryPage(1); handleSectionClick('auditTrail'); }}><History size={15} /> Open Audit Trail</button>
               {selectedProposal && <button className="bp-secondary-button" onClick={() => { setSelectedProposal(null); setHistoryPage(1); }}>Show All</button>}
@@ -6717,7 +6717,7 @@ export default function BudgetProposals({
           </div>
           <div className="bp-budget-table-wrap">
             <table className="bp-budget-table bp-table-history"><thead><tr><th>Date</th><th>Reference</th><th>Action</th><th>Status</th><th>Remarks</th><th>Actor</th></tr></thead><tbody>
-              {historyPagination.rows.map((row, index) => { const p = proposalRecords.find(x => Number(x.id) === Number(row.proposal_id)); return <tr key={`${row.id || index}-${row.created_at}`}><td>{row.created_at ? new Date(row.created_at).toLocaleString('en-PH') : 'â€”'}</td><td>{p?.reference || `Proposal #${row.proposal_id}`}</td><td>{row.action || 'â€”'}</td><td><span className={`bp-badge ${getStatusClass(row.status)}`}>{row.status || 'â€”'}</span></td><td>{row.remarks || 'â€”'}</td><td>{row.actor_name || 'System User'}</td></tr>; })}
+              {historyPagination.rows.map((row, index) => { const p = proposalRecords.find(x => Number(x.id) === Number(row.proposal_id)); return <tr key={`${row.id || index}-${row.created_at}`}><td>{row.created_at ? new Date(row.created_at).toLocaleString('en-PH') : '-'}</td><td>{p?.reference || `Proposal #${row.proposal_id}`}</td><td>{row.action || '-'}</td><td><span className={`bp-badge ${getStatusClass(row.status)}`}>{row.status || '-'}</span></td><td>{row.remarks || '-'}</td><td>{row.actor_name || 'System User'}</td></tr>; })}
             </tbody></table>
           </div>
           <Pagination {...historyPagination} onPageChange={setHistoryPage} />
@@ -6750,7 +6750,7 @@ export default function BudgetProposals({
         <div className="bp-panel">
           <div className="bp-panel-header">
             <div>
-              <h3 className="bp-panel-title">Proposal Form Entries â€” FY {selectedYear}</h3>
+              <h3 className="bp-panel-title">Proposal Form Entries - FY {selectedYear}</h3>
               <p className="bp-panel-subtitle">Creator details and saved proposal fields. Approval status changes remain in Proposal History.</p>
             </div>
             <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
@@ -6769,9 +6769,9 @@ export default function BudgetProposals({
                     ? { ...storedForm.raw, ...storedForm }
                     : storedForm;
                   const proposal = proposalRecords.find(p => Number(p.id) === Number(item.proposal_id));
-                  const actor = meta.entered_by || item.actor_name || item.performed_by_name || item.user_name || 'â€”';
+                  const actor = meta.entered_by || item.actor_name || item.performed_by_name || item.user_name || '-';
                   const date = item.created_at || item.changed_at || item.timestamp;
-                  const ref = proposal?.reference || meta.reference || `Proposal #${item.proposal_id ?? 'â€”'}`;
+                  const ref = proposal?.reference || meta.reference || `Proposal #${item.proposal_id ?? '-'}`;
                   const readableFields = [
                     ['Proponent', form.proponent || form.prepared_by || form.requested_by],
                     ['Proposal Title', form.title || form.proposal_title],
@@ -6789,10 +6789,10 @@ export default function BudgetProposals({
                     .map(([label, value]) => `${label}: ${typeof value === 'object' ? '[saved value]' : String(value)}`)
                     .join(' â€¢ ');
                   return <tr key={item.id || `${item.proposal_id}-${date}-${index}`}>
-                    <td>{date ? new Date(date).toLocaleString('en-PH') : 'â€”'}</td>
+                    <td>{date ? new Date(date).toLocaleString('en-PH') : '-'}</td>
                     <td>{ref}</td>
                     <td>{actor}</td>
-                    <td>{meta.entered_by_email || item.actor_email || 'â€”'}</td>
+                    <td>{meta.entered_by_email || item.actor_email || '-'}</td>
                     <td>{meta.entered_by_role || item.actor_role || 'Budget'}</td>
                     
                   </tr>;
@@ -6947,7 +6947,7 @@ export default function BudgetProposals({
           @media print{ body{padding:0} }
         
 
-    /* READABILITY PASS â€” slightly larger typography at 100% zoom */
+    /* READABILITY PASS — slightly larger typography at 100% zoom */
     .bp-panel-title { font-size: 15px !important; }
     .bp-panel-subtitle { font-size: 11.5px !important; }
 
@@ -7328,7 +7328,7 @@ export default function BudgetProposals({
               </span>
 
               <span>
-                {reportType.toUpperCase()} â€” FY {selectedYear}
+                {reportType.toUpperCase()} — FY {selectedYear}
               </span>
 
               <span>
@@ -7693,7 +7693,7 @@ export default function BudgetProposals({
                   </div>
 
                   <div className="bp-detail-value">
-                    {selectedProposal.sourceCode || selectedProposal.raw?.source_code || 'â€”'}
+                    {selectedProposal.sourceCode || selectedProposal.raw?.source_code || '-'}
                   </div>
 
                 </div>
@@ -7706,13 +7706,13 @@ export default function BudgetProposals({
                   </div>
 
                   <div className="bp-detail-value">
-                    {selectedProposal.department || selectedProposal.department_unit || 'â€”'}
+                    {selectedProposal.department || selectedProposal.department_unit || '-'}
                   </div>
 
                   <div className="bp-detail-item">
                     <div className="bp-detail-label">P/A/P</div>
                     <div className="bp-detail-value">
-                      {selectedProposal.pap || 'â€”'}
+                      {selectedProposal.pap || '-'}
                     </div>
                   </div>
 
@@ -7726,7 +7726,7 @@ export default function BudgetProposals({
                   </div>
 
                   <div className="bp-detail-value">
-                    {selectedProposal.uacsCode}
+                    {selectedProposal.uacsCode || '-'}
                   </div>
 
                 </div>
@@ -7739,7 +7739,7 @@ export default function BudgetProposals({
                   </div>
 
                   <div className="bp-detail-value">
-                    {selectedProposal.particulars}
+                    {selectedProposal.particulars || '-'}
                   </div>
 
                 </div>
@@ -7853,7 +7853,7 @@ export default function BudgetProposals({
 
                 <div className="bp-detail-amount">
                   {formatCurrency(
-                    selectedProposal.amount
+                    selectedProposal.amount || 0
                   )}
                 </div>
 
@@ -7965,17 +7965,17 @@ export default function BudgetProposals({
   // Keep these at component scope so JSX rendered outside renderModules can access them.
   const referenceOf = (proposal) =>
     proposal?.reference || proposal?.reference_no || proposal?.referenceNo ||
-    proposal?.proposal_reference || proposal?.proposal_no || 'â€”';
+    proposal?.proposal_reference || proposal?.proposal_no || '-';
 
   const titleOf = (proposal) =>
     proposal?.title || proposal?.proposal_title || proposal?.particulars ||
-    proposal?.description || 'â€”';
+    proposal?.description || '-';
 
   const departmentOf = (proposal) => getDepartment(proposal);
 
   const fundOf = (proposal) =>
     proposal?.fundGroup || proposal?.fund_group || proposal?.fund_source ||
-    proposal?.fundCode || 'â€”';
+    proposal?.fundCode || '-';
 
   const amountOf = (proposal) => Number(proposal?.amount || proposal?.proposed_amount || 0);
 
@@ -8001,22 +8001,22 @@ export default function BudgetProposals({
 
     const formatRecentDate = (proposal) => {
       const raw = proposal?.submitted_at || proposal?.date_submitted || proposal?.created_at || proposal?.updated_at;
-      if (!raw) return 'â€”';
+      if (!raw) return '-';
       const date = new Date(raw);
-      if (Number.isNaN(date.getTime())) return 'â€”';
+      if (Number.isNaN(date.getTime())) return '-';
       return date.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
     };
 
     const referenceOf = (proposal) =>
-      proposal?.reference || proposal?.reference_no || proposal?.referenceNo || proposal?.proposal_reference || 'â€”';
+      proposal?.reference || proposal?.reference_no || proposal?.referenceNo || proposal?.proposal_reference || '-';
 
     const titleOf = (proposal) =>
-      proposal?.title || proposal?.proposal_title || proposal?.particulars || proposal?.description || 'â€”';
+      proposal?.title || proposal?.proposal_title || proposal?.particulars || proposal?.description || '-';
 
     const departmentOf = (proposal) => getDepartment(proposal);
 
     const fundOf = (proposal) =>
-      proposal?.fundGroup || proposal?.fund_group || proposal?.fund_source || proposal?.fundCode || 'â€”';
+      proposal?.fundGroup || proposal?.fund_group || proposal?.fund_source || proposal?.fundCode || '-';
 
     const amountOf = (proposal) => Number(proposal?.amount || 0);
 
@@ -8681,7 +8681,7 @@ export default function BudgetProposals({
         <div className="bp-action-modal-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setActionModal(null); }}>
           <section className="bp-action-modal" role="dialog" aria-modal="true" aria-labelledby="bp-action-modal-title">
             <header className="bp-action-modal-header">
-              <h2 id="bp-action-modal-title" className="bp-action-modal-title">{actionModal === 'audit' ? `Audit Trail â€” ${referenceOf(selectedProposal)}` : `Proposal Details â€” ${referenceOf(selectedProposal)}`}</h2>
+              <h2 id="bp-action-modal-title" className="bp-action-modal-title">{actionModal === 'audit' ? `Audit Trail — ${referenceOf(selectedProposal)}` : `Proposal Details — ${referenceOf(selectedProposal)}`}</h2>
               <button type="button" className="bp-action-modal-close" aria-label="Close modal" onClick={() => setActionModal(null)}><span aria-hidden="true">Ã—</span></button>
             </header>
             <div className="bp-action-modal-body">
@@ -8702,7 +8702,7 @@ export default function BudgetProposals({
                     ['Justification', selectedProposal.justification || selectedProposal.raw?.justification],
                     ['Expected Outputs', selectedProposal.expected_outputs || selectedProposal.expectedOutputs || selectedProposal.raw?.expected_outputs],
                     ['Remarks', selectedProposal.remarks || selectedProposal.review_remarks || selectedProposal.raw?.remarks]
-                  ].map(([label, value]) => <div className="bp-action-detail" key={label}><p className="bp-action-detail-label">{label}</p><p className="bp-action-detail-value">{value == null || value === '' ? 'â€”' : String(value)}</p></div>)}
+                  ].map(([label, value]) => <div className="bp-action-detail" key={label}><p className="bp-action-detail-label">{label}</p><p className="bp-action-detail-value">{value == null || value === '' ? '-' : String(value)}</p></div>)}
                 </div>
               ) : (
                 <div>
@@ -8717,7 +8717,7 @@ export default function BudgetProposals({
                   }).map((item, index) => {
                     const action = 'Proposal Form Entry';
                     const auditMeta = item.details && typeof item.details === 'object' ? item.details : null;
-                    const actor = auditMeta?.entered_by || item.actor_name || item.performed_by_name || item.changed_by_name || item.user_name || item.created_by_name || item.performed_by || 'â€”';
+                    const actor = auditMeta?.entered_by || item.actor_name || item.performed_by_name || item.changed_by_name || item.user_name || item.created_by_name || item.performed_by || '-';
                     const when = item.created_at || item.changed_at || item.timestamp;
                     const details = item.details && typeof item.details !== 'object' ? item.details : (item.message || item.remarks || item.comments || '');
                     const formEntry = auditMeta?.form_entry && typeof auditMeta.form_entry === 'object' ? auditMeta.form_entry : null;
