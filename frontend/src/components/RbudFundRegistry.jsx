@@ -1458,6 +1458,62 @@ export default function RbudFundRegistry({
             outline: 2px solid #93c5fd !important;
             outline-offset: 2px !important;
           }
+
+          /* Phone-only layout corrections: keep page titles and Refresh controls
+             inside the viewport without changing desktop spacing. */
+          @media screen and (max-width: 640px) {
+            .rbud-registry-module .rbud-page-header {
+              display: flex !important;
+              flex-direction: column !important;
+              align-items: stretch !important;
+              gap: 10px !important;
+              margin-bottom: 16px !important;
+              min-width: 0 !important;
+            }
+            .rbud-registry-module .rbud-page-header > div {
+              min-width: 0 !important;
+              width: 100% !important;
+            }
+            .rbud-registry-module .rbud-page-header h1 {
+              overflow-wrap: anywhere !important;
+              line-height: 1.25 !important;
+            }
+            .rbud-registry-module .rbud-page-header p {
+              overflow-wrap: anywhere !important;
+              line-height: 1.5 !important;
+            }
+            .rbud-registry-module .rbud-page-header > button {
+              align-self: flex-end !important;
+              flex: 0 0 auto !important;
+              max-width: 100% !important;
+            }
+            .rbud-registry-module .rbud-class-table-scroll {
+              display: block !important;
+              width: 100% !important;
+              max-width: 100% !important;
+              overflow-x: auto !important;
+              overflow-y: hidden !important;
+              -webkit-overflow-scrolling: touch !important;
+              overscroll-behavior-x: contain !important;
+            }
+            .rbud-registry-module .rbud-class-table-scroll table {
+              min-width: 560px !important;
+              width: 560px !important;
+              table-layout: auto !important;
+            }
+            .rbud-registry-module .overflow-x-auto {
+              max-width: 100% !important;
+              -webkit-overflow-scrolling: touch !important;
+              overscroll-behavior-x: contain !important;
+            }
+            .rbud-registry-module .rbud-dashboard-summary-table {
+              min-width: 650px !important;
+            }
+            .rbud-registry-module .rbud-dashboard-summary-table th,
+            .rbud-registry-module .rbud-dashboard-summary-table td {
+              white-space: nowrap !important;
+            }
+          }
         `}</style>
         {toast && (
           <div className="fixed top-5 right-5 z-[120] bg-[#211b79] text-white px-4 py-3 rounded-lg shadow-xl text-xs font-semibold">
@@ -2335,8 +2391,8 @@ function ModuleCard({ item, Icon, onClick }) {
 
 function PageHeader({ title, description, onBack, onRefresh, loading }) {
   return (
-    <div className="flex items-start justify-between gap-4 mb-5">
-      <div>
+    <div className="rbud-page-header flex items-start justify-between gap-4 mb-5">
+      <div className="min-w-0 flex-1">
         <h1 className="text-[21px] font-bold text-[#17135f]">{title}</h1>
         <p className="text-xs text-gray-500 mt-1">{description}</p>
       </div>
@@ -5826,6 +5882,7 @@ function BudgetClassTable({ totals }) {
 function ClassTable({ rows }) {
   const total = rows.reduce((sum, row) => sum + numberValue(row[2]), 0);
   return (
+    <div className="rbud-class-table-scroll w-full max-w-full overflow-x-auto">
     <table className="w-full text-[10px]">
       <thead>
         <tr className="border-b border-white/10 bg-[#102b67] text-white">
@@ -5851,6 +5908,7 @@ function ClassTable({ rows }) {
         </tr>
       </tbody>
     </table>
+    </div>
   );
 }
 

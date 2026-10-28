@@ -410,7 +410,9 @@ function Field({ label, children, className = "" }) {
 }
 
 function Input({ ...props }) {
-  return <input {...props} className={`h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-[10px] text-slate-700 outline-none focus:border-blue-400 ${(props.disabled || props.readOnly) ? "!border-red-500 !bg-red-50 !text-red-900 cursor-not-allowed shadow-inner focus:!border-red-500 focus:ring-0" : ""} ${props.className || ""}`} />;
+  // min-w-0/max-w-full prevent native date and datetime controls from
+  // exceeding their grid column on narrow mobile screens (notably iOS Safari).
+  return <input {...props} className={`box-border h-9 w-full min-w-0 max-w-full rounded-lg border border-slate-200 bg-white px-3 text-[10px] text-slate-700 outline-none focus:border-blue-400 ${(props.disabled || props.readOnly) ? "!border-red-500 !bg-red-50 !text-red-900 cursor-not-allowed shadow-inner focus:!border-red-500 focus:ring-0" : ""} ${props.className || ""}`} />;
 }
 
 function Select({ children, ...props }) {

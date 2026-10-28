@@ -252,16 +252,26 @@ function StatusBadge({ value }) {
 
 function Modal({ title, children, onClose, wide = false }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-3">
-      <div className={`max-h-[92vh] w-full overflow-y-auto rounded-2xl bg-white shadow-2xl ${wide ? "max-w-[1400px] w-[95vw]" : "max-w-3xl"}`}>
-        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-100 bg-white px-5 py-4">
-          <h3 className="text-sm font-extrabold text-[#10245b]">{title}</h3>
-          <button type="button" onClick={onClose} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100">
+    <div className="igp-modal fixed inset-0 z-50 flex items-start sm:items-center justify-center bg-slate-950/40 p-2 sm:p-3">
+      <div className={`igp-modal-panel max-h-[calc(100dvh-1rem)] sm:max-h-[92vh] w-full overflow-x-hidden overflow-y-auto rounded-2xl bg-white shadow-2xl ${wide ? "max-w-[1400px] sm:w-[95vw]" : "max-w-3xl"}`}>
+        <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-slate-100 bg-white px-3 py-3 sm:px-5 sm:py-4">
+          <h3 className="min-w-0 break-words text-sm font-extrabold text-[#10245b]">{title}</h3>
+          <button type="button" onClick={onClose} aria-label="Close dialog" className="shrink-0 rounded-lg p-1.5 text-slate-400 hover:bg-slate-100">
             <X className="h-4 w-4" />
           </button>
         </div>
-        <div className="p-5">{children}</div>
+        <div className="min-w-0 p-3 sm:p-5">{children}</div>
       </div>
+      <style>{`
+        .igp-modal, .igp-modal * { box-sizing: border-box; }
+        .igp-modal-panel { min-width: 0; }
+        .igp-modal-panel input, .igp-modal-panel select, .igp-modal-panel textarea { min-width: 0; max-width: 100%; box-sizing: border-box; }
+        .igp-modal-panel input[type="date"], .igp-modal-panel input[type="datetime-local"] { display: block; width: 100%; min-width: 0; max-width: 100%; }
+        @media (max-width: 640px) {
+          .igp-modal-panel { width: 100%; max-width: 100%; max-height: calc(100dvh - 1rem); }
+          .igp-modal-panel input[type="date"], .igp-modal-panel input[type="datetime-local"] { font-size: 16px; padding-left: 10px; padding-right: 6px; }
+        }
+      `}</style>
     </div>
   );
 }
