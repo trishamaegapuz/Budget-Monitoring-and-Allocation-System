@@ -453,6 +453,93 @@ export default function BudgetProposals({
     setReportPage(1);
   }, [selectedYear]);
 
+  
+  // Automatically synchronize proposal statuses across open browser tabs.
+  // This silently refreshes the list without showing the loading spinner.
+  useEffect(() => {
+    let isActive = true;
+    let isRefreshing = false;
+
+    const syncProposalStatuses = async () => {
+      if (!isActive || isRefreshing || document.hidden) return;
+
+      isRefreshing = true;
+
+      try {
+        const response = await fetch(
+          `${API_URL}/budget-proposals?year=${selectedYear}`,
+          {
+            headers: { ...authHeaders() },
+            cache: 'no-store'
+          }
+        );
+
+        if (!response.ok) return;
+
+        const data = await response.json();
+        if (!isActive) return;
+
+        const latestProposals = Array.isArray(data.proposals)
+          ? data.proposals
+          : [];
+
+        // Update the table/list in this browser tab.
+        setProposals(latestProposals);
+
+        // If a proposal is currently open, synchronize its status too.
+        setSelectedProposal((current) => {
+          if (!current?.id) return current;
+
+          const latest = latestProposals.find(
+            (item) => Number(item.id) === Number(current.id)
+          );
+
+          if (!latest) return current;
+
+          return {
+            ...current,
+            ...latest
+          };
+        });
+      } catch (error) {
+        // A temporary network error should not interrupt normal usage.
+        console.debug('Proposal status sync will retry automatically.');
+      } finally {
+        isRefreshing = false;
+      }
+    };
+
+    // Initial synchronization, then check every 3 seconds.
+    syncProposalStatuses();
+
+    const intervalId = window.setInterval(
+      syncProposalStatuses,
+      3000
+    );
+
+    // Refresh immediately when the user returns to this tab.
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        syncProposalStatuses();
+      }
+    };
+
+    document.addEventListener(
+      'visibilitychange',
+      handleVisibilityChange
+    );
+
+    return () => {
+      isActive = false;
+      window.clearInterval(intervalId);
+      document.removeEventListener(
+        'visibilitychange',
+        handleVisibilityChange
+      );
+    };
+  }, [selectedYear, user]);
+
+
   useEffect(() => {
     loadBudgetProposalReferences();
   }, []);
