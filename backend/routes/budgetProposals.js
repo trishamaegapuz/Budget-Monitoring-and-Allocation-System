@@ -98,7 +98,7 @@ const normalizeStatus = (value) => {
 // Some login/profile payloads use Administrator/Admin while the workflow
 // permissions are defined using the canonical role name Administration.
 const normalizeProposalRole = (value) => {
-  const role = String(value || '').trim().toLowerCase().replace(/[\\s_-]+/g, '');
+  const role = String(value || '').trim().toLowerCase().replace(/[\s_-]+/g, '');
   if (['administration', 'administrator', 'admin'].includes(role)) return 'Administration';
   if (['budget', 'budgetofficer'].includes(role)) return 'Budget';
   if (role === 'accountant') return 'Accountant';
