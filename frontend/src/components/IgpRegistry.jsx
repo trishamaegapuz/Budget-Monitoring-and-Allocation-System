@@ -266,13 +266,10 @@ function Modal({ title, children, onClose, wide = false }) {
         .igp-modal, .igp-modal * { box-sizing: border-box; }
         .igp-modal-panel { min-width: 0; }
         .igp-modal-panel input, .igp-modal-panel select, .igp-modal-panel textarea { min-width: 0; max-width: 100%; box-sizing: border-box; }
-        .igp-modal-panel input[type="date"], .igp-modal-panel input[type="datetime-local"] {
-          display: block; width: 100%; min-width: 0; max-width: 100%; height: 36px; min-height: 36px;
-          box-sizing: border-box; padding-top: 0; padding-bottom: 0; line-height: normal; font-size: 10px;
-        }
+        .igp-modal-panel input[type="date"], .igp-modal-panel input[type="datetime-local"] { display: block; width: 100%; min-width: 0; max-width: 100%; }
         @media (max-width: 640px) {
           .igp-modal-panel { width: 100%; max-width: 100%; max-height: calc(100dvh - 1rem); }
-          .igp-modal-panel input[type="date"], .igp-modal-panel input[type="datetime-local"] { height: 36px; min-height: 36px; padding-left: 10px; padding-right: 6px; font-size: 12px; }
+          .igp-modal-panel input[type="date"], .igp-modal-panel input[type="datetime-local"] { font-size: 16px; padding-left: 10px; padding-right: 6px; }
         }
       `}</style>
     </div>
@@ -344,7 +341,7 @@ function Input(props) {
   return (
     <input
       {...props}
-      className={`h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-[10px] text-slate-700 outline-none focus:border-blue-400 ${disabledStyle} ${props.className || ""}`}
+      className={`box-border block h-9 w-full min-w-0 max-w-full rounded-lg border border-slate-200 bg-white px-3 text-[10px] text-slate-700 outline-none focus:border-blue-400 ${disabledStyle} ${props.className || ""}`}
     />
   );
 }

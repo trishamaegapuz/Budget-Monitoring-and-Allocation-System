@@ -5549,17 +5549,6 @@ function RecordModal({ mode, record, form, setForm, references, role, onClose, o
   return (
     <Modal title={mode==="edit" ? "Edit RBUD Transaction" : "Add RBUD Transaction"} onClose={onClose} size="wide">
       <style>{`
-        .rbud-role-form input[type="date"],
-        .rbud-role-form input[type="datetime-local"] {
-          display: block; width: 100%; min-width: 0; max-width: 100%; height: 40px; min-height: 40px;
-          box-sizing: border-box; padding-top: 0; padding-bottom: 0; line-height: normal; font-size: 12px;
-        }
-        @media (max-width: 640px) {
-          .rbud-role-form input[type="date"],
-          .rbud-role-form input[type="datetime-local"] {
-            height: 40px; min-height: 40px; padding-left: 10px; padding-right: 6px; font-size: 12px;
-          }
-        }
         .rbud-role-form input:disabled,
         .rbud-role-form select:disabled,
         .rbud-role-form textarea:disabled,
@@ -5658,7 +5647,7 @@ function RecordModal({ mode, record, form, setForm, references, role, onClose, o
           <InputField label="PAR No." value={form.par_no || ""} disabled={!isEditable("par_no")} onChange={v=>update("par_no",v)}/>
           <InputField label="ICS No." value={form.ics_no || ""} disabled={!isEditable("ics_no")} onChange={v=>update("ics_no",v)}/>
           <InputField label="IRS / RIS Reference" value={form.ris_no || ""} disabled={!isEditable("ris_no")} onChange={v=>update("ris_no",v)}/>
-          <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Procurement Status</label><select value={form.po_status || ""} disabled={!isEditable("po_status")} onChange={e=>update("po_status",e.target.value)} className={`w-full h-10 border border-gray-200 rounded-lg px-3 text-xs outline-none ${!isEditable("po_status") ? "!border-2 !border-red-500 !bg-red-50/50 !text-red-900 cursor-not-allowed shadow-inner" : "bg-white focus:border-[#211b79]"}`}><option value="">Select</option><option value="PENDING">PENDING</option><option value="APPROVED">APPROVED</option><option value="ISSUED">ISSUED</option><option value="PARTIALLY DELIVERED">PARTIALLY DELIVERED</option><option value="COMPLETED">COMPLETED</option><option value="CANCELLED">CANCELLED</option></select></div>
+          <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Procurement Status</label><select value={form.po_status || ""} disabled={!isEditable("po_status")} onChange={e=>update("po_status",e.target.value)} className={`box-border block w-full min-w-0 max-w-full h-10 border border-gray-200 rounded-lg px-3 text-xs outline-none ${!isEditable("po_status") ? "!border-2 !border-red-500 !bg-red-50/50 !text-red-900 cursor-not-allowed shadow-inner" : "bg-white focus:border-[#211b79]"}`}><option value="">Select</option><option value="PENDING">PENDING</option><option value="APPROVED">APPROVED</option><option value="ISSUED">ISSUED</option><option value="PARTIALLY DELIVERED">PARTIALLY DELIVERED</option><option value="COMPLETED">COMPLETED</option><option value="CANCELLED">CANCELLED</option></select></div>
           <InputField label="DB No." value={form.db_no || ""} disabled={!isEditable("db_no")} onChange={v=>update("db_no",v)}/>
           <InputField label="DV / Payroll No." value={form.dv_payroll_no || ""} disabled={!isEditable("dv_payroll_no")} onChange={v=>update("dv_payroll_no",v)}/>
           <InputField label="Disbursement Date" type="date" value={form.disbursement_date || ""} disabled={!isEditable("disbursement_date")} onChange={v=>update("disbursement_date",v)}/>
