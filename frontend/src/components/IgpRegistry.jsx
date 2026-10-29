@@ -733,30 +733,21 @@ function TransactionForm({ form, setForm, programs, references, saving, onSubmit
           box-shadow: none !important;
           -webkit-text-fill-color: #475569 !important;
         }
-        /* Red outline the actual disabled form controls, not their section containers. */
-        form input:disabled,
-        form select:disabled,
-        form textarea:disabled,
-        form .procurement-fields input:disabled,
-        form .procurement-fields select:disabled,
-        form .procurement-fields textarea:disabled,
-        form .accounting-fields input:disabled,
-        form .accounting-fields select:disabled,
-        form .accounting-fields textarea:disabled,
-        form fieldset[disabled] input,
-        form fieldset[disabled] select,
-        form fieldset[disabled] textarea {
+        /* Red styling is attached to each field locked by role, never the section container. */
+        form .office-fields .role-locked-field,
+        form .office-fields input.role-locked-field:disabled,
+        form .office-fields select.role-locked-field:disabled,
+        form .office-fields textarea.role-locked-field:disabled {
           border: 2px solid #ef4444 !important;
-          background-color: #fef2f2 !important;
+          background: #fef2f2 !important;
           color: #334155 !important;
           cursor: not-allowed !important;
           opacity: 1 !important;
           box-shadow: 0 0 0 1px rgba(239,68,68,.18) !important;
           -webkit-text-fill-color: #334155 !important;
         }
-        /* Do not color the Procurement/Accounting container boxes red. */
         form .office-fields.procurement-fields,
-        form .office-fields.accounting-fields { box-shadow: none; }
+        form .office-fields.accounting-fields { box-shadow: none !important; }
         fieldset[disabled] { pointer-events: none !important; }
         fieldset[disabled] * { cursor: not-allowed !important; }
         .igp-role-locked input:disabled:focus,
@@ -935,10 +926,10 @@ function TransactionForm({ form, setForm, programs, references, saving, onSubmit
           </Field>
           </fieldset>
           <div className="office-fields procurement-fields md:col-span-3 rounded-lg border border-blue-200 bg-blue-50/50 p-3"><p className="mb-2 text-[10px] font-extrabold uppercase text-blue-800">Procurement Details</p><fieldset disabled={!(isProcurementRole || isAdminRole)} className="contents igp-role-locked"><div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-            {[["PO No.","po_no"],["PO Date","po_date"],["Supplier / Payee","supplier_payee"],["PO Amount","po_amount"],["AIR / FAR Reference","air_far_reference"],["IAR No.","iar_no"],["PAR No.","par_no"],["ICS No.","ics_no"],["IRS / RIS Reference","ris_no"],["Procurement Status","po_status"],["Procurement Remarks","procurement_remarks"]].map(([label,key])=><Field key={key} label={label}>{key === "po_status" ? <Select disabled={!isProcurementRole} required={isProcurementRole} value={form[key] || ""} onChange={e=>set(key,e.target.value)}><option value="">Select</option><option value="PENDING">PENDING</option><option value="APPROVED">APPROVED</option><option value="ISSUED">ISSUED</option><option value="PARTIALLY DELIVERED">PARTIALLY DELIVERED</option><option value="COMPLETED">COMPLETED</option><option value="CANCELLED">CANCELLED</option></Select> : <Input disabled={!isProcurementRole} required={isProcurementRole && ["po_no", "po_date", "supplier_payee", "po_amount", "po_status", "procurement_remarks"].includes(key)} min={key === "po_amount" ? "0" : undefined} step={key === "po_amount" ? "0.01" : undefined} type={key==="po_date"?"date":key==="po_amount"?"number":"text"} value={form[key]||""} onChange={e=>set(key,e.target.value)}/>}</Field>)}
+            {[["PO No.","po_no"],["PO Date","po_date"],["Supplier / Payee","supplier_payee"],["PO Amount","po_amount"],["AIR / FAR Reference","air_far_reference"],["IAR No.","iar_no"],["PAR No.","par_no"],["ICS No.","ics_no"],["IRS / RIS Reference","ris_no"],["Procurement Status","po_status"],["Procurement Remarks","procurement_remarks"]].map(([label,key])=><Field key={key} label={label}>{key === "po_status" ? <Select className={!isProcurementRole ? "role-locked-field" : ""} disabled={!isProcurementRole} required={isProcurementRole} value={form[key] || ""} onChange={e=>set(key,e.target.value)}><option value="">Select</option><option value="PENDING">PENDING</option><option value="APPROVED">APPROVED</option><option value="ISSUED">ISSUED</option><option value="PARTIALLY DELIVERED">PARTIALLY DELIVERED</option><option value="COMPLETED">COMPLETED</option><option value="CANCELLED">CANCELLED</option></Select> : <Input className={!isProcurementRole ? "role-locked-field" : ""} disabled={!isProcurementRole} required={isProcurementRole && ["po_no", "po_date", "supplier_payee", "po_amount", "po_status", "procurement_remarks"].includes(key)} min={key === "po_amount" ? "0" : undefined} step={key === "po_amount" ? "0.01" : undefined} type={key==="po_date"?"date":key==="po_amount"?"number":"text"} value={form[key]||""} onChange={e=>set(key,e.target.value)}/>}</Field>)}
           </div></fieldset></div>
           <div className="office-fields accounting-fields md:col-span-3 rounded-lg border border-violet-200 bg-violet-50/50 p-3"><p className="mb-2 text-[10px] font-extrabold uppercase text-violet-800">Accounting / Disbursement Review</p><fieldset disabled={!(isAccountantRole || isAdminRole)} className="contents igp-role-locked"><div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-            {[["DB No.","db_no"],["DV / Payroll No.","dv_payroll_no"],["BURS Serial No.","burs_serial_no"],["Disbursement Date","disbursement_date"],["Disbursement Amount","disbursement_amount"],["Notice of Adjustment","notice_of_adjustment"],["Adjustment Reason","adjustment_reason"],["Accounting Status","accounting_status"],["Reviewed By","reviewed_by"],["Review Date and Time","review_datetime"],["Accounting Remarks","accounting_remarks"]].map(([label,key])=><Field key={key} label={label}>{key === "accounting_status" ? <Select disabled={!isAccountantRole} required={isAccountantRole} value={form[key] || ""} onChange={e=>set(key,e.target.value)}><option value="">Select status</option><option value="Pending">Pending</option><option value="Reviewed">Reviewed</option><option value="Approved">Approved</option><option value="Returned">Returned</option></Select> : <Input disabled={!isAccountantRole} required={isAccountantRole && !["burs_serial_no", "notice_of_adjustment", "adjustment_reason"].includes(key)} min={key === "disbursement_amount" ? "0" : undefined} step={key === "disbursement_amount" ? "0.01" : undefined} type={key==="disbursement_date"?"date":key==="review_datetime"?"datetime-local":key==="disbursement_amount"?"number":"text"} value={form[key]||""} onChange={e=>set(key,e.target.value)}/>}</Field>)}
+            {[["DB No.","db_no"],["DV / Payroll No.","dv_payroll_no"],["BURS Serial No.","burs_serial_no"],["Disbursement Date","disbursement_date"],["Disbursement Amount","disbursement_amount"],["Notice of Adjustment","notice_of_adjustment"],["Adjustment Reason","adjustment_reason"],["Accounting Status","accounting_status"],["Reviewed By","reviewed_by"],["Review Date and Time","review_datetime"],["Accounting Remarks","accounting_remarks"]].map(([label,key])=><Field key={key} label={label}>{key === "accounting_status" ? <Select className={!isAccountantRole ? "role-locked-field" : ""} disabled={!isAccountantRole} required={isAccountantRole} value={form[key] || ""} onChange={e=>set(key,e.target.value)}><option value="">Select status</option><option value="Pending">Pending</option><option value="Reviewed">Reviewed</option><option value="Approved">Approved</option><option value="Returned">Returned</option></Select> : <Input className={!isAccountantRole ? "role-locked-field" : ""} disabled={!isAccountantRole} required={isAccountantRole && !["burs_serial_no", "notice_of_adjustment", "adjustment_reason"].includes(key)} min={key === "disbursement_amount" ? "0" : undefined} step={key === "disbursement_amount" ? "0.01" : undefined} type={key==="disbursement_date"?"date":key==="review_datetime"?"datetime-local":key==="disbursement_amount"?"number":"text"} value={form[key]||""} onChange={e=>set(key,e.target.value)}/>}</Field>)}
           </div></fieldset></div>
         </div>
       </div>
