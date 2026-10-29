@@ -513,6 +513,7 @@ function ProgramForm({ form, setForm, references, saving, onSubmit, onClose, err
               value={form.wfp_source_code || "Auto-filled from WFP Source"}
               readOnly
               className={`bg-slate-50 font-bold text-slate-500 ${["procurement", "accountant"].includes(normalizedRole) ? "role-locked-field" : ""}`}
+              style={["procurement", "accountant"].includes(normalizedRole) ? { border: "2px solid #ef4444", backgroundColor: "#fef2f2", boxShadow: "0 0 0 1px rgba(239,68,68,.22)" } : undefined}
             />
           </Field>
           <Field label="Start Date">
@@ -825,7 +826,8 @@ function TransactionForm({ form, setForm, programs, references, saving, onSubmit
             <Input
               value={form.registry_no || "Will be generated on save"}
               readOnly
-              className={`!border-slate-200 !bg-slate-50 !font-mono !font-extrabold !text-[#17135f] !ring-0 read-only:cursor-not-allowed ${["procurement", "accountant"].includes(normalizedRole) ? "role-locked-field" : ""}`}
+              className={`font-mono font-extrabold text-[#17135f] ring-0 read-only:cursor-not-allowed ${["procurement", "accountant"].includes(normalizedRole) ? "role-locked-field" : ""}`}
+              style={["procurement", "accountant"].includes(normalizedRole) ? { border: "2px solid #ef4444", backgroundColor: "#fef2f2", boxShadow: "0 0 0 1px rgba(239,68,68,.22)" } : undefined}
               title="System-generated and locked. This number is assigned when the transaction is saved."
             />
             <p className="mt-1 text-[10px] text-amber-700">System-generated • locked</p>
@@ -852,7 +854,7 @@ function TransactionForm({ form, setForm, programs, references, saving, onSubmit
           </Field>
           <RefSelect label="Fund Cluster" value={form.fund_cluster_id} onChange={(e) => set("fund_cluster_id", e.target.value)} items={references.fund_clusters} required />
           <Field label="Fund Code">
-            <Input value="161" readOnly className={`bg-slate-50 font-bold ${["procurement", "accountant"].includes(normalizedRole) ? "role-locked-field" : ""}`} />
+            <Input value="161" readOnly className={`bg-slate-50 font-bold ${["procurement", "accountant"].includes(normalizedRole) ? "role-locked-field" : ""}`} style={["procurement", "accountant"].includes(normalizedRole) ? { border: "2px solid #ef4444", backgroundColor: "#fef2f2", boxShadow: "0 0 0 1px rgba(239,68,68,.22)" } : undefined} />
           </Field>
           <RefSelect label="Campus" value={form.campus_id} onChange={(e) => set("campus_id", e.target.value)} items={references.campuses} />
           <Field label="BURS Serial No.">
@@ -911,7 +913,8 @@ function TransactionForm({ form, setForm, programs, references, saving, onSubmit
               value={form.month ? new Date(2000, Number(form.month) - 1, 1).toLocaleString("en-US", { month: "long" }) : "—"}
               readOnly
               disabled
-              className={`!font-extrabold !text-[#17135f] ${["procurement", "accountant"].includes(normalizedRole) ? "role-locked-field" : ""}`}
+              className={`font-extrabold text-[#17135f] ${["procurement", "accountant"].includes(normalizedRole) ? "role-locked-field" : ""}`}
+              style={["procurement", "accountant"].includes(normalizedRole) ? { border: "2px solid #ef4444", backgroundColor: "#fef2f2", boxShadow: "0 0 0 1px rgba(239,68,68,.22)" } : undefined}
               title="Automatically determined by the transaction date above"
             />
           </Field>
@@ -926,7 +929,8 @@ function TransactionForm({ form, setForm, programs, references, saving, onSubmit
               value={form.quarter ? `Q${form.quarter}` : "—"}
               readOnly
               disabled
-              className={`!font-extrabold !text-[#17135f] ${["procurement", "accountant"].includes(normalizedRole) ? "role-locked-field" : ""}`}
+              className={`font-extrabold text-[#17135f] ${["procurement", "accountant"].includes(normalizedRole) ? "role-locked-field" : ""}`}
+              style={["procurement", "accountant"].includes(normalizedRole) ? { border: "2px solid #ef4444", backgroundColor: "#fef2f2", boxShadow: "0 0 0 1px rgba(239,68,68,.22)" } : undefined}
               title="Automatically determined by the transaction date above"
             />
           </Field>
