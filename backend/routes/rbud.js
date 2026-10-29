@@ -3486,6 +3486,26 @@ async function validateFundClusterCode(fundClusterId, fundCode) {
 }
 
 function fieldValue(field, body) {
+  // Normalize optional date/time inputs before sending them to PostgreSQL.
+  // Browsers submit an empty string for an unfilled <input type="date">;
+  // PostgreSQL DATE/TIMESTAMP columns reject "", so persist these as NULL.
+  const dateFields = new Set(["po_date", "disbursement_date"]);
+  if (dateFields.has(field)) {
+    const raw = body[field];
+    if (raw === undefined || raw === null || String(raw).trim() === "") return null;
+    const value = String(raw).trim().slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || Number.isNaN(Date.parse(`${value}T00:00:00Z`))) {
+      throw new Error(`${field.replaceAll("_", " ")} must be a valid date.`);
+    }
+    return value;
+  }
+
+  if (field === "review_datetime") {
+    const raw = body[field];
+    if (raw === undefined || raw === null || String(raw).trim() === "") return null;
+    return raw;
+  }
+
   // PostgreSQL requires month 1-12 and quarter 1-4 when values are provided.
   // Keep them NULL when the form field is blank instead of converting blank to 0.
   if (field === "month" || field === "quarter") {
@@ -3541,9 +3561,10 @@ router.post("/", async (req, res) => {
   const client = await pool.connect();
 
   try {
-    if (!req.body.entry_date) {
+    if (!req.body.entry_date || !/^\d{4}-\d{2}-\d{2}$/.test(String(req.body.entry_date).slice(0, 10)) || Number.isNaN(Date.parse(`${String(req.body.entry_date).slice(0, 10)}T00:00:00Z`))) {
       return res.status(400).json({
-        error: "Entry date is required.",
+        error: "Please enter a valid Entry Date in YYYY-MM-DD format.",
+        field: "entry_date",
       });
     }
 
