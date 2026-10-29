@@ -769,6 +769,23 @@ function TransactionForm({ form, setForm, programs, references, saving, onSubmit
         .igp-role-locked input:not(:disabled):not([readonly]),
         .igp-role-locked select:not(:disabled),
         .igp-role-locked textarea:not(:disabled) { pointer-events: auto; }
+
+        /* Universal rule: every non-clickable form field gets its own red outline,
+           regardless of role or which section it belongs to. Containers are untouched. */
+        form input:disabled,
+        form select:disabled,
+        form textarea:disabled,
+        form input[readonly],
+        form select[readonly],
+        form textarea[readonly] {
+          border: 2px solid #ef4444 !important;
+          background-color: #fef2f2 !important;
+          color: #334155 !important;
+          cursor: not-allowed !important;
+          opacity: 1 !important;
+          box-shadow: 0 0 0 1px rgba(239,68,68,.18) !important;
+          -webkit-text-fill-color: #334155 !important;
+        }
       `}</style>
       {formValidationError && <div role="alert" className="sticky top-0 z-20 rounded-lg border-2 border-red-400 bg-red-50 px-4 py-3 text-xs font-bold text-red-800 shadow-sm"><div className="flex items-start gap-2"><span aria-hidden="true">⚠</span><span>{formValidationError}</span></div></div>}
       {error && <div role="alert" className="rounded-lg border-2 border-red-400 bg-red-50 px-4 py-3 text-xs font-bold text-red-800"><span aria-hidden="true">⚠ </span>{error}</div>}
