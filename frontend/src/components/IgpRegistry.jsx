@@ -562,7 +562,7 @@ function TransactionForm({ form, setForm, programs, references, saving, onSubmit
   const isAdminRole = false;
   const isBudgetRole = normalizedRole === "budget";
   const isProcurementRole = normalizedRole === "procurement";
-  const isAccountantRole = normalizedRole === "accountant";
+  const isAccountantRole = ["accountant", "account"].includes(normalizedRole);
   const getFieldLabel = (field, formElement) => {
     const wrapper = field.closest("label");
     const text = (wrapper?.querySelector("span")?.textContent || wrapper?.innerText ||
@@ -733,24 +733,26 @@ function TransactionForm({ form, setForm, programs, references, saving, onSubmit
           box-shadow: none !important;
           -webkit-text-fill-color: #475569 !important;
         }
-        /* Red outlines indicate fields locked for the current office role. */
-        .igp-role-locked input:disabled,
-        .igp-role-locked select:disabled,
-        .igp-role-locked textarea:disabled,
-        .procurement-fields input:disabled,
-        .procurement-fields select:disabled,
-        .procurement-fields textarea:disabled,
-        .accounting-fields input:disabled,
-        .accounting-fields select:disabled,
-        .accounting-fields textarea:disabled {
+        /* Explicit role-locked section styling: red border and pale red background. */
+        form .office-fields.role-locked-section input:disabled,
+        form .office-fields.role-locked-section select:disabled,
+        form .office-fields.role-locked-section textarea:disabled,
+        form .office-fields.role-locked-section button:disabled,
+        form .igp-role-locked[disabled] input:disabled,
+        form .igp-role-locked[disabled] select:disabled,
+        form .igp-role-locked[disabled] textarea:disabled,
+        form fieldset.igp-role-locked[disabled] input:disabled,
+        form fieldset.igp-role-locked[disabled] select:disabled,
+        form fieldset.igp-role-locked[disabled] textarea:disabled {
           border: 2px solid #ef4444 !important;
           background: #fef2f2 !important;
           color: #334155 !important;
           cursor: not-allowed !important;
           opacity: 1 !important;
-          box-shadow: 0 0 0 1px rgba(239,68,68,.15) !important;
+          box-shadow: 0 0 0 1px rgba(239,68,68,.18) !important;
           -webkit-text-fill-color: #334155 !important;
         }
+        form .office-fields.role-locked-section { border-color: #ef4444 !important; }
         fieldset[disabled] { pointer-events: none !important; }
         fieldset[disabled] * { cursor: not-allowed !important; }
         .igp-role-locked input:disabled:focus,
@@ -762,7 +764,7 @@ function TransactionForm({ form, setForm, programs, references, saving, onSubmit
       `}</style>
       {formValidationError && <div role="alert" className="sticky top-0 z-20 rounded-lg border-2 border-red-400 bg-red-50 px-4 py-3 text-xs font-bold text-red-800 shadow-sm"><div className="flex items-start gap-2"><span aria-hidden="true">⚠</span><span>{formValidationError}</span></div></div>}
       {error && <div role="alert" className="rounded-lg border-2 border-red-400 bg-red-50 px-4 py-3 text-xs font-bold text-red-800"><span aria-hidden="true">⚠ </span>{error}</div>}
-      <div role="note" className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-[10px] leading-4 text-blue-900"><b>Field access guide:</b> {isProcurementRole ? "Only procurement fields are editable for your role." : isAccountantRole ? "Only accounting and disbursement fields are editable for your role." : (isBudgetRole || ["administration", "administrator", "admin"].includes(normalizedRole)) ? "Budget fields are editable; procurement and accounting fields are locked, including for Administrator." : "Fields outside your assigned permissions are locked."} Fields locked for your role have a red outline and cannot be clicked or edited. Read-only system-generated fields stay neutral. Missing required fields are highlighted after submission.</div>
+      <div role="note" className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-[10px] leading-4 text-blue-900"><b>Field access guide:</b> {isProcurementRole ? "Only procurement fields are editable for your role." : isAccountantRole ? "Only accounting and disbursement fields are editable for your role." : (isBudgetRole || ["administration", "administrator", "admin"].includes(normalizedRole)) ? "Budget fields are editable; procurement and accounting fields are locked, including for Administrator." : "Fields outside your assigned permissions are locked."} Procurement and Accounting sections that are locked for your role have red-outlined, non-clickable fields. Read-only system-generated fields outside those locked sections stay neutral. Missing required fields are highlighted after submission.</div>
       <fieldset disabled={["procurement", "accountant"].includes(normalizedRole)} className="igp-role-locked rounded-xl border border-blue-100 bg-blue-50/40 p-4">
         <p className="mb-3 text-[10px] font-extrabold uppercase tracking-wide text-blue-700">
           Registry Information
@@ -928,10 +930,10 @@ function TransactionForm({ form, setForm, programs, references, saving, onSubmit
             <Input value={form.remarks} onChange={(e) => set("remarks", e.target.value)} />
           </Field>
           </fieldset>
-          <div className="office-fields procurement-fields md:col-span-3 rounded-lg border border-blue-200 bg-blue-50/50 p-3"><p className="mb-2 text-[10px] font-extrabold uppercase text-blue-800">Procurement Details</p><fieldset disabled={!(isProcurementRole || isAdminRole)} className="contents igp-role-locked"><div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+          <div className={`office-fields procurement-fields md:col-span-3 rounded-lg border border-blue-200 bg-blue-50/50 p-3 ${!isProcurementRole ? "role-locked-section" : ""}`}><p className="mb-2 text-[10px] font-extrabold uppercase text-blue-800">Procurement Details</p><fieldset disabled={!(isProcurementRole || isAdminRole)} className="contents igp-role-locked"><div className="grid grid-cols-1 gap-3 md:grid-cols-3">
             {[["PO No.","po_no"],["PO Date","po_date"],["Supplier / Payee","supplier_payee"],["PO Amount","po_amount"],["AIR / FAR Reference","air_far_reference"],["IAR No.","iar_no"],["PAR No.","par_no"],["ICS No.","ics_no"],["IRS / RIS Reference","ris_no"],["Procurement Status","po_status"],["Procurement Remarks","procurement_remarks"]].map(([label,key])=><Field key={key} label={label}>{key === "po_status" ? <Select disabled={!isProcurementRole} required={isProcurementRole} value={form[key] || ""} onChange={e=>set(key,e.target.value)}><option value="">Select</option><option value="PENDING">PENDING</option><option value="APPROVED">APPROVED</option><option value="ISSUED">ISSUED</option><option value="PARTIALLY DELIVERED">PARTIALLY DELIVERED</option><option value="COMPLETED">COMPLETED</option><option value="CANCELLED">CANCELLED</option></Select> : <Input disabled={!isProcurementRole} required={isProcurementRole && ["po_no", "po_date", "supplier_payee", "po_amount", "po_status", "procurement_remarks"].includes(key)} min={key === "po_amount" ? "0" : undefined} step={key === "po_amount" ? "0.01" : undefined} type={key==="po_date"?"date":key==="po_amount"?"number":"text"} value={form[key]||""} onChange={e=>set(key,e.target.value)}/>}</Field>)}
           </div></fieldset></div>
-          <div className="office-fields accounting-fields md:col-span-3 rounded-lg border border-violet-200 bg-violet-50/50 p-3"><p className="mb-2 text-[10px] font-extrabold uppercase text-violet-800">Accounting / Disbursement Review</p><fieldset disabled={!(isAccountantRole || isAdminRole)} className="contents igp-role-locked"><div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+          <div className={`office-fields accounting-fields md:col-span-3 rounded-lg border border-violet-200 bg-violet-50/50 p-3 ${!isAccountantRole ? "role-locked-section" : ""}`}><p className="mb-2 text-[10px] font-extrabold uppercase text-violet-800">Accounting / Disbursement Review</p><fieldset disabled={!(isAccountantRole || isAdminRole)} className="contents igp-role-locked"><div className="grid grid-cols-1 gap-3 md:grid-cols-3">
             {[["DB No.","db_no"],["DV / Payroll No.","dv_payroll_no"],["BURS Serial No.","burs_serial_no"],["Disbursement Date","disbursement_date"],["Disbursement Amount","disbursement_amount"],["Notice of Adjustment","notice_of_adjustment"],["Adjustment Reason","adjustment_reason"],["Accounting Status","accounting_status"],["Reviewed By","reviewed_by"],["Review Date and Time","review_datetime"],["Accounting Remarks","accounting_remarks"]].map(([label,key])=><Field key={key} label={label}>{key === "accounting_status" ? <Select disabled={!isAccountantRole} required={isAccountantRole} value={form[key] || ""} onChange={e=>set(key,e.target.value)}><option value="">Select status</option><option value="Pending">Pending</option><option value="Reviewed">Reviewed</option><option value="Approved">Approved</option><option value="Returned">Returned</option></Select> : <Input disabled={!isAccountantRole} required={isAccountantRole && !["burs_serial_no", "notice_of_adjustment", "adjustment_reason"].includes(key)} min={key === "disbursement_amount" ? "0" : undefined} step={key === "disbursement_amount" ? "0.01" : undefined} type={key==="disbursement_date"?"date":key==="review_datetime"?"datetime-local":key==="disbursement_amount"?"number":"text"} value={form[key]||""} onChange={e=>set(key,e.target.value)}/>}</Field>)}
           </div></fieldset></div>
         </div>
