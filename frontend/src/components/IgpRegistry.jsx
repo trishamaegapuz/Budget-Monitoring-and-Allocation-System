@@ -734,16 +734,10 @@ function TransactionForm({ form, setForm, programs, references, saving, onSubmit
           -webkit-text-fill-color: #475569 !important;
         }
         /* Explicit role-locked section styling: red border and pale red background. */
-        form .office-fields.role-locked-section input:disabled,
-        form .office-fields.role-locked-section select:disabled,
-        form .office-fields.role-locked-section textarea:disabled,
-        form .office-fields.role-locked-section button:disabled,
-        form .igp-role-locked[disabled] input:disabled,
-        form .igp-role-locked[disabled] select:disabled,
-        form .igp-role-locked[disabled] textarea:disabled,
         form fieldset.igp-role-locked[disabled] input:disabled,
         form fieldset.igp-role-locked[disabled] select:disabled,
-        form fieldset.igp-role-locked[disabled] textarea:disabled {
+        form fieldset.igp-role-locked[disabled] textarea:disabled,
+        form fieldset.igp-role-locked[disabled] button:disabled {
           border: 2px solid #ef4444 !important;
           background: #fef2f2 !important;
           color: #334155 !important;
@@ -752,7 +746,8 @@ function TransactionForm({ form, setForm, programs, references, saving, onSubmit
           box-shadow: 0 0 0 1px rgba(239,68,68,.18) !important;
           -webkit-text-fill-color: #334155 !important;
         }
-        form .office-fields.role-locked-section { border-color: #ef4444 !important; }
+        /* Keep section/container borders in their normal colors; only locked controls are red. */
+        form .office-fields.role-locked-section { border-color: inherit; }
         fieldset[disabled] { pointer-events: none !important; }
         fieldset[disabled] * { cursor: not-allowed !important; }
         .igp-role-locked input:disabled:focus,
@@ -930,10 +925,10 @@ function TransactionForm({ form, setForm, programs, references, saving, onSubmit
             <Input value={form.remarks} onChange={(e) => set("remarks", e.target.value)} />
           </Field>
           </fieldset>
-          <div className={`office-fields procurement-fields md:col-span-3 rounded-lg border border-blue-200 bg-blue-50/50 p-3 ${!isProcurementRole ? "role-locked-section" : ""}`}><p className="mb-2 text-[10px] font-extrabold uppercase text-blue-800">Procurement Details</p><fieldset disabled={!(isProcurementRole || isAdminRole)} className="contents igp-role-locked"><div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+          <div className="office-fields procurement-fields md:col-span-3 rounded-lg border border-blue-200 bg-blue-50/50 p-3"><p className="mb-2 text-[10px] font-extrabold uppercase text-blue-800">Procurement Details</p><fieldset disabled={!(isProcurementRole || isAdminRole)} className="contents igp-role-locked"><div className="grid grid-cols-1 gap-3 md:grid-cols-3">
             {[["PO No.","po_no"],["PO Date","po_date"],["Supplier / Payee","supplier_payee"],["PO Amount","po_amount"],["AIR / FAR Reference","air_far_reference"],["IAR No.","iar_no"],["PAR No.","par_no"],["ICS No.","ics_no"],["IRS / RIS Reference","ris_no"],["Procurement Status","po_status"],["Procurement Remarks","procurement_remarks"]].map(([label,key])=><Field key={key} label={label}>{key === "po_status" ? <Select disabled={!isProcurementRole} required={isProcurementRole} value={form[key] || ""} onChange={e=>set(key,e.target.value)}><option value="">Select</option><option value="PENDING">PENDING</option><option value="APPROVED">APPROVED</option><option value="ISSUED">ISSUED</option><option value="PARTIALLY DELIVERED">PARTIALLY DELIVERED</option><option value="COMPLETED">COMPLETED</option><option value="CANCELLED">CANCELLED</option></Select> : <Input disabled={!isProcurementRole} required={isProcurementRole && ["po_no", "po_date", "supplier_payee", "po_amount", "po_status", "procurement_remarks"].includes(key)} min={key === "po_amount" ? "0" : undefined} step={key === "po_amount" ? "0.01" : undefined} type={key==="po_date"?"date":key==="po_amount"?"number":"text"} value={form[key]||""} onChange={e=>set(key,e.target.value)}/>}</Field>)}
           </div></fieldset></div>
-          <div className={`office-fields accounting-fields md:col-span-3 rounded-lg border border-violet-200 bg-violet-50/50 p-3 ${!isAccountantRole ? "role-locked-section" : ""}`}><p className="mb-2 text-[10px] font-extrabold uppercase text-violet-800">Accounting / Disbursement Review</p><fieldset disabled={!(isAccountantRole || isAdminRole)} className="contents igp-role-locked"><div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+          <div className="office-fields accounting-fields md:col-span-3 rounded-lg border border-violet-200 bg-violet-50/50 p-3"><p className="mb-2 text-[10px] font-extrabold uppercase text-violet-800">Accounting / Disbursement Review</p><fieldset disabled={!(isAccountantRole || isAdminRole)} className="contents igp-role-locked"><div className="grid grid-cols-1 gap-3 md:grid-cols-3">
             {[["DB No.","db_no"],["DV / Payroll No.","dv_payroll_no"],["BURS Serial No.","burs_serial_no"],["Disbursement Date","disbursement_date"],["Disbursement Amount","disbursement_amount"],["Notice of Adjustment","notice_of_adjustment"],["Adjustment Reason","adjustment_reason"],["Accounting Status","accounting_status"],["Reviewed By","reviewed_by"],["Review Date and Time","review_datetime"],["Accounting Remarks","accounting_remarks"]].map(([label,key])=><Field key={key} label={label}>{key === "accounting_status" ? <Select disabled={!isAccountantRole} required={isAccountantRole} value={form[key] || ""} onChange={e=>set(key,e.target.value)}><option value="">Select status</option><option value="Pending">Pending</option><option value="Reviewed">Reviewed</option><option value="Approved">Approved</option><option value="Returned">Returned</option></Select> : <Input disabled={!isAccountantRole} required={isAccountantRole && !["burs_serial_no", "notice_of_adjustment", "adjustment_reason"].includes(key)} min={key === "disbursement_amount" ? "0" : undefined} step={key === "disbursement_amount" ? "0.01" : undefined} type={key==="disbursement_date"?"date":key==="review_datetime"?"datetime-local":key==="disbursement_amount"?"number":"text"} value={form[key]||""} onChange={e=>set(key,e.target.value)}/>}</Field>)}
           </div></fieldset></div>
         </div>
