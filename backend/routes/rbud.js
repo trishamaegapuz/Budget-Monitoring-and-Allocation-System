@@ -3610,7 +3610,20 @@ router.post("/", async (req, res) => {
       });
     }
 
-    const values = RBUD_FIELDS.map((field) => fieldValue(field, body));
+    const values = RBUD_FIELDS.map((field) => {
+      const value = fieldValue(field, body);
+
+      // Final database-boundary safeguard: optional date columns must never
+      // receive an empty string, even if a frontend submits "".
+      if (
+        (field === "po_date" || field === "disbursement_date") &&
+        (value === undefined || value === null || String(value).trim() === "")
+      ) {
+        return null;
+      }
+
+      return value;
+    });
     const actor = auditActor(req);
     const actorValues = [actor.name, actor.role];
     const placeholders = RBUD_FIELDS.map((_, i) => `$${i + 1}`);
@@ -3797,7 +3810,20 @@ router.put("/:id", async (req, res) => {
       });
     }
 
-    const values = RBUD_FIELDS.map((field) => fieldValue(field, body));
+    const values = RBUD_FIELDS.map((field) => {
+      const value = fieldValue(field, body);
+
+      // Final database-boundary safeguard: optional date columns must never
+      // receive an empty string, even if a frontend submits "".
+      if (
+        (field === "po_date" || field === "disbursement_date") &&
+        (value === undefined || value === null || String(value).trim() === "")
+      ) {
+        return null;
+      }
+
+      return value;
+    });
     const actor = auditActor(req);
 
     const sets = RBUD_FIELDS.map(
