@@ -3287,8 +3287,15 @@ function rbudRole(req) {
 
 function rbudEditableFields(role) {
   if (role === "Administration") {
+    // Administration can maintain general RBUD fields, but office-owned
+    // Procurement and Accounting fields must only be edited by their owners.
     return new Set(
-      RBUD_FIELDS.filter((field) => !RBUD_SYSTEM_FIELDS.has(field))
+      RBUD_FIELDS.filter(
+        (field) =>
+          !RBUD_SYSTEM_FIELDS.has(field) &&
+          !RBUD_PROCUREMENT_EDIT_FIELDS.has(field) &&
+          !RBUD_ACCOUNTING_EDIT_FIELDS.has(field)
+      )
     );
   }
 

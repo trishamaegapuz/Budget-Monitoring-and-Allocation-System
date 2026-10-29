@@ -405,8 +405,7 @@ const RBUD_BUDGET_FIELDS = [
 ];
 
 const RBUD_EDITABLE_FIELDS = {
-  // Administration and Budget have the same editable RBUD fields.
-  // Procurement and Accountant remain restricted to their own office fields.
+  // Office-owned fields are deliberately excluded from Administration/Budget.
   Administration: RBUD_BUDGET_FIELDS,
   Budget: RBUD_BUDGET_FIELDS,
   Procurement: ["po_no", "po_date", "supplier_payee", "po_amount", "air_far_reference", "iar_no", "par_no", "ics_no", "ris_no", "po_status", "procurement_remarks"],
@@ -5622,7 +5621,7 @@ function RecordModal({ mode, record, form, setForm, references, role, onClose, o
           <SelectField label="Responsibility Center" value={form.responsibility_center_id} disabled={!isEditable("responsibility_center_id")} onChange={v=>update("responsibility_center_id",v)} options={selectOptions(references.responsibility_centers)}/>
           <SelectField label="PAP" value={form.pap_id} disabled={!isEditable("pap_id")} onChange={v=>update("pap_id",v)} options={selectOptions(references.pap)}/>
           <SelectField label="UACS Code" value={form.uacs_code_id} disabled={!isEditable("uacs_code_id")} onChange={v=>update("uacs_code_id",v)} options={selectOptions(references.uacs_codes,"account_title","name")}/>
-          <InputField label="Ref. No." value={form.ref_no} disabled={!isEditable("ref_no")} onChange={v=>update("ref_no",v)}/>
+          <InputField label="Ref. No." value={form.ref_no} disabled={!isEditable("ref_no")} onChange={v=>update("ref_no",v)} placeholder="Enter reference number"/>
           <SelectField label="Allotment Class" value={form.allotment_class_id} disabled={!isEditable("allotment_class_id")} onChange={v=>update("allotment_class_id",v)} options={selectOptions(references.allotment_classes,"name","name")}/>
           <InputField label="Series" value={form.series || ""} disabled={!isEditable("series")} onChange={v=>update("series",v)}/>
           <InputField label="Series2" value={form.series2 || ""} disabled={!isEditable("series2")} onChange={v=>update("series2",v)}/>
@@ -5637,27 +5636,33 @@ function RecordModal({ mode, record, form, setForm, references, role, onClose, o
           <InputField label="MOOE" type="number" value={form.mooe_utilization} disabled={!isEditable("mooe_utilization")} onChange={v=>update("mooe_utilization",v)}/>
           <InputField label="CO" type="number" value={form.co_utilization} disabled={!isEditable("co_utilization")} onChange={v=>update("co_utilization",v)}/>
           <SelectField label="WFP Source" value={form.wfp_source_id} disabled={!isEditable("wfp_source_id")} onChange={v=>update("wfp_source_id",v)} options={selectOptions(references.wfp_sources,"name","name")}/>
-          <InputField label="Disbursement Amount" type="number" value={form.disbursement_amount} disabled={!isEditable("disbursement_amount")} onChange={v=>update("disbursement_amount",v)}/>
-          <InputField label="PO No." value={form.po_no || ""} disabled={!isEditable("po_no")} onChange={v=>update("po_no",v)}/>
-          <InputField label="PO Date" type="date" value={form.po_date || ""} disabled={!isEditable("po_date")} onChange={v=>update("po_date",v)}/>
-          <InputField label="Supplier / Payee" value={form.supplier_payee || ""} disabled={!isEditable("supplier_payee")} onChange={v=>update("supplier_payee",v)}/>
-          <InputField label="PO Amount" type="number" value={form.po_amount || ""} disabled={!isEditable("po_amount")} onChange={v=>update("po_amount",v)}/>
-          <InputField label="AIR / FAR Reference" value={form.air_far_reference || ""} disabled={!isEditable("air_far_reference")} onChange={v=>update("air_far_reference",v)}/>
-          <InputField label="IAR No." value={form.iar_no || ""} disabled={!isEditable("iar_no")} onChange={v=>update("iar_no",v)}/>
-          <InputField label="PAR No." value={form.par_no || ""} disabled={!isEditable("par_no")} onChange={v=>update("par_no",v)}/>
-          <InputField label="ICS No." value={form.ics_no || ""} disabled={!isEditable("ics_no")} onChange={v=>update("ics_no",v)}/>
-          <InputField label="IRS / RIS Reference" value={form.ris_no || ""} disabled={!isEditable("ris_no")} onChange={v=>update("ris_no",v)}/>
-          <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Procurement Status</label><select value={form.po_status || ""} disabled={!isEditable("po_status")} onChange={e=>update("po_status",e.target.value)} className={`box-border block w-full min-w-0 max-w-full h-10 border border-gray-200 rounded-lg px-3 text-xs outline-none ${!isEditable("po_status") ? "!border-2 !border-red-500 !bg-red-50/50 !text-red-900 cursor-not-allowed shadow-inner" : "bg-white focus:border-[#211b79]"}`}><option value="">Select</option><option value="PENDING">PENDING</option><option value="APPROVED">APPROVED</option><option value="ISSUED">ISSUED</option><option value="PARTIALLY DELIVERED">PARTIALLY DELIVERED</option><option value="COMPLETED">COMPLETED</option><option value="CANCELLED">CANCELLED</option></select></div>
-          <InputField label="DB No." value={form.db_no || ""} disabled={!isEditable("db_no")} onChange={v=>update("db_no",v)}/>
-          <InputField label="DV / Payroll No." value={form.dv_payroll_no || ""} disabled={!isEditable("dv_payroll_no")} onChange={v=>update("dv_payroll_no",v)}/>
-          <InputField label="Disbursement Date" type="date" value={form.disbursement_date || ""} disabled={!isEditable("disbursement_date")} onChange={v=>update("disbursement_date",v)}/>
-          <InputField label="Notice of Adjustment" value={form.notice_of_adjustment || ""} disabled={!isEditable("notice_of_adjustment")} onChange={v=>update("notice_of_adjustment",v)}/>
-          <InputField label="Adjustment Reason" value={form.adjustment_reason || ""} disabled={!isEditable("adjustment_reason")} onChange={v=>update("adjustment_reason",v)}/>
-          <SelectField label="Accounting Status" value={form.accounting_status || "Pending"} disabled={!isEditable("accounting_status")} onChange={v=>update("accounting_status",v)} options={["Pending", "For Review", "Reviewed", "Approved", "For Payment", "Partially Paid", "Paid", "Returned", "Cancelled"]} />
-          <InputField label="Reviewed By" value={form.reviewed_by || ""} disabled={!isEditable("reviewed_by")} onChange={v=>update("reviewed_by",v)}/>
-          <InputField label="Review Date and Time" type="datetime-local" value={form.review_datetime || ""} disabled={!isEditable("review_datetime")} onChange={v=>update("review_datetime",v)}/>
-          <InputField label="Procurement Remarks" value={form.procurement_remarks || ""} disabled={!isEditable("procurement_remarks")} onChange={v=>update("procurement_remarks",v)}/>
-          <InputField label="Accounting Remarks" value={form.accounting_remarks || ""} disabled={!isEditable("accounting_remarks")} onChange={v=>update("accounting_remarks",v)}/>
+          {role === "Procurement" && <>
+            <div className="md:col-span-3"><h4 className="text-xs font-bold text-[#17135f]">Procurement Details</h4></div>
+            <InputField label="PO No." value={form.po_no || ""} disabled={!isEditable("po_no")} onChange={v=>update("po_no",v)}/>
+            <InputField label="PO Date" type="date" value={form.po_date || ""} disabled={!isEditable("po_date")} onChange={v=>update("po_date",v)}/>
+            <InputField label="Supplier / Payee" value={form.supplier_payee || ""} disabled={!isEditable("supplier_payee")} onChange={v=>update("supplier_payee",v)}/>
+            <InputField label="PO Amount" type="number" value={form.po_amount || ""} disabled={!isEditable("po_amount")} onChange={v=>update("po_amount",v)}/>
+            <InputField label="AIR / FAR Reference" value={form.air_far_reference || ""} disabled={!isEditable("air_far_reference")} onChange={v=>update("air_far_reference",v)}/>
+            <InputField label="IAR No." value={form.iar_no || ""} disabled={!isEditable("iar_no")} onChange={v=>update("iar_no",v)}/>
+            <InputField label="PAR No." value={form.par_no || ""} disabled={!isEditable("par_no")} onChange={v=>update("par_no",v)}/>
+            <InputField label="ICS No." value={form.ics_no || ""} disabled={!isEditable("ics_no")} onChange={v=>update("ics_no",v)}/>
+            <InputField label="IRS / RIS Reference" value={form.ris_no || ""} disabled={!isEditable("ris_no")} onChange={v=>update("ris_no",v)}/>
+            <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Procurement Status</label><select value={form.po_status || ""} disabled={!isEditable("po_status")} onChange={e=>update("po_status",e.target.value)} className={`box-border block w-full min-w-0 max-w-full h-10 border border-gray-200 rounded-lg px-3 text-xs outline-none ${!isEditable("po_status") ? "!border-2 !border-red-500 !bg-red-50/50 !text-red-900 cursor-not-allowed shadow-inner" : "bg-white focus:border-[#211b79]"}`}><option value="">Select</option><option value="PENDING">PENDING</option><option value="APPROVED">APPROVED</option><option value="ISSUED">ISSUED</option><option value="PARTIALLY DELIVERED">PARTIALLY DELIVERED</option><option value="COMPLETED">COMPLETED</option><option value="CANCELLED">CANCELLED</option></select></div>
+            <InputField label="Procurement Remarks" value={form.procurement_remarks || ""} disabled={!isEditable("procurement_remarks")} onChange={v=>update("procurement_remarks",v)}/>
+          </>}
+          {role === "Accountant" && <>
+            <div className="md:col-span-3"><h4 className="text-xs font-bold text-[#17135f]">Accounting Details</h4></div>
+            <InputField label="Disbursement Amount" type="number" value={form.disbursement_amount} disabled={!isEditable("disbursement_amount")} onChange={v=>update("disbursement_amount",v)}/>
+            <InputField label="DB No." value={form.db_no || ""} disabled={!isEditable("db_no")} onChange={v=>update("db_no",v)}/>
+            <InputField label="DV / Payroll No." value={form.dv_payroll_no || ""} disabled={!isEditable("dv_payroll_no")} onChange={v=>update("dv_payroll_no",v)}/>
+            <InputField label="Disbursement Date" type="date" value={form.disbursement_date || ""} disabled={!isEditable("disbursement_date")} onChange={v=>update("disbursement_date",v)}/>
+            <InputField label="Notice of Adjustment" value={form.notice_of_adjustment || ""} disabled={!isEditable("notice_of_adjustment")} onChange={v=>update("notice_of_adjustment",v)}/>
+            <InputField label="Adjustment Reason" value={form.adjustment_reason || ""} disabled={!isEditable("adjustment_reason")} onChange={v=>update("adjustment_reason",v)}/>
+            <SelectField label="Accounting Status" value={form.accounting_status || "Pending"} disabled={!isEditable("accounting_status")} onChange={v=>update("accounting_status",v)} options={["Pending", "For Review", "Reviewed", "Approved", "For Payment", "Partially Paid", "Paid", "Returned", "Cancelled"]} />
+            <InputField label="Reviewed By" value={form.reviewed_by || ""} disabled={!isEditable("reviewed_by")} onChange={v=>update("reviewed_by",v)}/>
+            <InputField label="Review Date and Time" type="datetime-local" value={form.review_datetime || ""} disabled={!isEditable("review_datetime")} onChange={v=>update("review_datetime",v)}/>
+            <InputField label="Accounting Remarks" value={form.accounting_remarks || ""} disabled={!isEditable("accounting_remarks")} onChange={v=>update("accounting_remarks",v)}/>
+          </>}
           <div className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2"><div className="text-[10px] font-semibold text-blue-700">Running Balance</div><div className="mt-1 text-sm font-extrabold text-[#17135f]">{mode==="edit"?money(record?.running_balance):"Calculated after saving"}</div></div>
           <div className="md:col-span-2"><TextAreaField label="Remarks" value={form.remarks} disabled={!isEditable("remarks")} onChange={v=>update("remarks",v)}/></div>
           <div className="rounded-lg border border-amber-100 bg-amber-50 px-3 py-2">
