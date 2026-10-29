@@ -3494,13 +3494,26 @@ async function validateFundClusterCode(fundClusterId, fundCode) {
 
 function fieldValue(field, body) {
   // Normalize optional date/time inputs before sending them to PostgreSQL.
-  // Browsers submit an empty string for an unfilled <input type="date">;
-  // PostgreSQL DATE/TIMESTAMP columns reject "", so persist these as NULL.
+  // When a row is read from PostgreSQL, DATE columns may be returned as JS Date
+  // objects. String(date).slice(0, 10) produces values like "Thu Oct 29" and
+  // incorrectly rejects an untouched date belonging to another office.
   const dateFields = new Set(["po_date", "disbursement_date"]);
   if (dateFields.has(field)) {
     const raw = body[field];
     if (raw === undefined || raw === null || String(raw).trim() === "") return null;
-    const value = String(raw).trim().slice(0, 10);
+
+    let value;
+    if (raw instanceof Date) {
+      if (Number.isNaN(raw.getTime())) {
+        throw new Error(`${field.replaceAll("_", " ")} must be a valid date.`);
+      }
+      value = raw.toISOString().slice(0, 10);
+    } else {
+      const textValue = String(raw).trim();
+      // Accept ISO dates and ISO timestamps; normalize to YYYY-MM-DD.
+      value = textValue.slice(0, 10);
+    }
+
     if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || Number.isNaN(Date.parse(`${value}T00:00:00Z`))) {
       throw new Error(`${field.replaceAll("_", " ")} must be a valid date.`);
     }
@@ -3618,19 +3631,6 @@ router.post("/", async (req, res) => {
     }
 
     const values = RBUD_FIELDS.map((field) => {
-      // Procurement and Accounting own different date fields. When a role
-      // updates a record, do not re-validate or transform the other office's
-      // date field: preserve the database value exactly as it was loaded.
-      // This prevents an Accountant update from failing because of PO Date,
-      // and prevents a Procurement update from failing because of Disbursement Date.
-      const officeOwnedDate =
-        (field === "po_date" && role !== "Procurement") ||
-        (field === "disbursement_date" && role !== "Accountant");
-
-      if (officeOwnedDate) {
-        return existing[field] ?? null;
-      }
-
       const value = fieldValue(field, body);
 
       // Final database-boundary safeguard: optional date columns must never
