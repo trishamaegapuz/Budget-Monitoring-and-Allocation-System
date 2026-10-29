@@ -337,9 +337,10 @@ function Field({ label, children, className = "", required = false }) {
 function Input(props) {
   // Disabled/read-only fields are shown in neutral grey. Red is reserved for
   // required fields that fail validation after the user submits the form.
-  const disabledStyle = props.disabled || props.readOnly
+  const isRoleLockedField = String(props.className || "").split(/\s+/).includes("role-locked-field");
+  const disabledStyle = (props.disabled || props.readOnly) && !isRoleLockedField
     ? "!border-slate-200 !bg-slate-50 !ring-0 disabled:cursor-not-allowed disabled:opacity-100"
-    : "";
+    : "disabled:cursor-not-allowed disabled:opacity-100";
   return (
     <input
       {...props}
@@ -350,9 +351,10 @@ function Input(props) {
 
 function Select({ children, ...props }) {
   // A locked dropdown should not look like a validation error.
-  const disabledStyle = props.disabled
+  const isRoleLockedField = String(props.className || "").split(/\s+/).includes("role-locked-field");
+  const disabledStyle = props.disabled && !isRoleLockedField
     ? "!border-slate-200 !bg-slate-50 !ring-0 disabled:cursor-not-allowed disabled:opacity-100"
-    : "";
+    : "disabled:cursor-not-allowed disabled:opacity-100";
   return (
     <select
       {...props}
@@ -713,16 +715,10 @@ function TransactionForm({ form, setForm, programs, references, saving, onSubmit
         fieldset[disabled] input,
         fieldset[disabled] select,
         fieldset[disabled] textarea,
-        input:disabled,
-        select:disabled,
-        textarea:disabled,
-        .procurement-fields input:disabled,
-        .procurement-fields select:disabled,
-        .procurement-fields textarea:disabled,
-        .accounting-fields input:disabled,
-        .accounting-fields select:disabled,
-        .accounting-fields textarea:disabled,
-        input[readonly],
+        input:disabled:not(.role-locked-field),
+        select:disabled:not(.role-locked-field),
+        textarea:disabled:not(.role-locked-field),
+        input[readonly]:not(.role-locked-field),
         select[readonly],
         textarea[readonly] {
           border: 1px solid #cbd5e1 !important;
@@ -733,13 +729,18 @@ function TransactionForm({ form, setForm, programs, references, saving, onSubmit
           box-shadow: none !important;
           -webkit-text-fill-color: #475569 !important;
         }
-        /* Red styling is attached to each field locked by role, never the section container. */
-        form .office-fields .role-locked-field,
+        /* Role-locked controls: red outline on EACH individual field, not its section container. */
+        form .office-fields.procurement-fields fieldset[disabled] input.role-locked-field:disabled,
+        form .office-fields.procurement-fields fieldset[disabled] select.role-locked-field:disabled,
+        form .office-fields.procurement-fields fieldset[disabled] textarea.role-locked-field:disabled,
+        form .office-fields.accounting-fields fieldset[disabled] input.role-locked-field:disabled,
+        form .office-fields.accounting-fields fieldset[disabled] select.role-locked-field:disabled,
+        form .office-fields.accounting-fields fieldset[disabled] textarea.role-locked-field:disabled,
         form .office-fields input.role-locked-field:disabled,
         form .office-fields select.role-locked-field:disabled,
         form .office-fields textarea.role-locked-field:disabled {
           border: 2px solid #ef4444 !important;
-          background: #fef2f2 !important;
+          background-color: #fef2f2 !important;
           color: #334155 !important;
           cursor: not-allowed !important;
           opacity: 1 !important;
