@@ -577,7 +577,20 @@ function TransactionForm({ form, setForm, programs, references, saving, onSubmit
 
     // These reference fields are optional for every role, even when they are editable.
     // Do not block submission if they are blank.
-    const optionalLabels = ["uacs funding source code", "series", "series 2", "series2"];
+    const optionalLabels = [
+      "uacs funding source code",
+      "series",
+      "series 2",
+      "series2",
+      "serial no. transferred from / to",
+      "serial no transferred from / to",
+      "serial transferred from / to",
+      "ps",
+      "mooe",
+      "co",
+      "running balance",
+      "unpaid utilization",
+    ];
     if (optionalLabels.some((name) => label === name || label.includes(name))) {
       return false;
     }
@@ -703,6 +716,18 @@ function TransactionForm({ form, setForm, programs, references, saving, onSubmit
     <form noValidate onSubmit={handleValidatedSubmit} onChange={clearFieldValidation} onInput={clearFieldValidation} className="space-y-5">
       <style>{`
         .igp-role-locked[disabled] { opacity: 1 !important; }
+        /* Fields owned by another role remain disabled and visibly red outlined. */
+        .igp-role-locked[disabled] input:disabled,
+        .igp-role-locked[disabled] select:disabled,
+        .igp-role-locked[disabled] textarea:disabled,
+        fieldset[disabled] input:disabled,
+        fieldset[disabled] select:disabled,
+        fieldset[disabled] textarea:disabled { 
+          border: 2px solid #ef4444 !important;
+          background: #fef2f2 !important;
+          cursor: not-allowed !important;
+          opacity: 1 !important;
+        }
         .igp-role-locked[disabled] input,
         .igp-role-locked[disabled] select,
         .igp-role-locked[disabled] textarea,
