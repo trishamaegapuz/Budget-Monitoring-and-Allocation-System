@@ -3618,6 +3618,19 @@ router.post("/", async (req, res) => {
     }
 
     const values = RBUD_FIELDS.map((field) => {
+      // Procurement and Accounting own different date fields. When a role
+      // updates a record, do not re-validate or transform the other office's
+      // date field: preserve the database value exactly as it was loaded.
+      // This prevents an Accountant update from failing because of PO Date,
+      // and prevents a Procurement update from failing because of Disbursement Date.
+      const officeOwnedDate =
+        (field === "po_date" && role !== "Procurement") ||
+        (field === "disbursement_date" && role !== "Accountant");
+
+      if (officeOwnedDate) {
+        return existing[field] ?? null;
+      }
+
       const value = fieldValue(field, body);
 
       // Final database-boundary safeguard: optional date columns must never
