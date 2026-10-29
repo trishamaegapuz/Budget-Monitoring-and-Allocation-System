@@ -423,8 +423,19 @@ function TransactionForm({ refs, form, setForm, budgetInfo, editing, role, onSub
   const [formValidationError, setFormValidationError] = useState("");
   const handleValidatedSubmit = (event) => {
     const formElement = event.currentTarget;
+    const currentRole = normalizeRaodRole(role);
     const fields = Array.from(formElement.querySelectorAll("input, select, textarea"))
-      .filter((field) => !field.disabled && !field.readOnly && !field.type?.includes("button"));
+      .filter((field) => !field.disabled && !field.readOnly && !field.type?.includes("button"))
+      // Office-owned fields must never block another role's submission, even if
+      // a browser/custom component does not expose the disabled state as expected.
+      .filter((field) => {
+        const wrapper = field.closest("label") || field.parentElement;
+        const labelText = (wrapper?.innerText || wrapper?.textContent || "").replace(/\s+/g, " ").trim().toLowerCase();
+        if (currentRole !== "Procurement" && (labelText.includes("status of po") || labelText.includes("po status"))) return false;
+        if (currentRole !== "Accountant" && (labelText.includes("accounting status") || labelText.includes("reviewed by") || labelText.includes("review date and time") || labelText.includes("accounting remarks") || labelText.includes("disbursement date") || labelText.includes("db no."))) return false;
+        if (currentRole !== "Procurement" && (labelText.includes("po no.") || labelText.includes("po date") || labelText.includes("supplier / payee") || labelText.includes("po amount") || labelText.includes("air / far reference") || labelText.includes("iar no.") || labelText.includes("par no.") || labelText.includes("ics no.") || labelText.includes("ris no.") || labelText.includes("procurement remarks"))) return false;
+        return true;
+      });
     // These RAOD reference/serial fields are optional and must not block submission.
     const optionalLabels = new Set([
       "Notice of Adjustment",

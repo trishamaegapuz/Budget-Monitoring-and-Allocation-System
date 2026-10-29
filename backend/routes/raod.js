@@ -200,7 +200,9 @@ function requireRaodDelete(req, res, next) {
 
 function editableRaodFields(role) {
 
-  if (role === "Administration") return new Set(RAOD_FIELDS.filter(f => !RAOD_SYSTEM_FIELDS.has(f)));
+  // Procurement and Accounting fields are owned by their respective offices.
+  // Administration may manage general RAOD fields but cannot edit either office's fields.
+  if (role === "Administration") return new Set(RAOD_FIELDS.filter(f => !RAOD_SYSTEM_FIELDS.has(f) && !RAOD_PROCUREMENT_FIELDS.has(f) && !RAOD_ACCOUNTING_FIELDS.has(f)));
 
   if (role === "Budget") return RAOD_BUDGET_FIELDS;
 
