@@ -733,21 +733,30 @@ function TransactionForm({ form, setForm, programs, references, saving, onSubmit
           box-shadow: none !important;
           -webkit-text-fill-color: #475569 !important;
         }
-        /* Explicit role-locked section styling: red border and pale red background. */
-        form fieldset.igp-role-locked[disabled] input:disabled,
-        form fieldset.igp-role-locked[disabled] select:disabled,
-        form fieldset.igp-role-locked[disabled] textarea:disabled,
-        form fieldset.igp-role-locked[disabled] button:disabled {
+        /* Red outline the actual disabled form controls, not their section containers. */
+        form input:disabled,
+        form select:disabled,
+        form textarea:disabled,
+        form .procurement-fields input:disabled,
+        form .procurement-fields select:disabled,
+        form .procurement-fields textarea:disabled,
+        form .accounting-fields input:disabled,
+        form .accounting-fields select:disabled,
+        form .accounting-fields textarea:disabled,
+        form fieldset[disabled] input,
+        form fieldset[disabled] select,
+        form fieldset[disabled] textarea {
           border: 2px solid #ef4444 !important;
-          background: #fef2f2 !important;
+          background-color: #fef2f2 !important;
           color: #334155 !important;
           cursor: not-allowed !important;
           opacity: 1 !important;
           box-shadow: 0 0 0 1px rgba(239,68,68,.18) !important;
           -webkit-text-fill-color: #334155 !important;
         }
-        /* Keep section/container borders in their normal colors; only locked controls are red. */
-        form .office-fields.role-locked-section { border-color: inherit; }
+        /* Do not color the Procurement/Accounting container boxes red. */
+        form .office-fields.procurement-fields,
+        form .office-fields.accounting-fields { box-shadow: none; }
         fieldset[disabled] { pointer-events: none !important; }
         fieldset[disabled] * { cursor: not-allowed !important; }
         .igp-role-locked input:disabled:focus,
