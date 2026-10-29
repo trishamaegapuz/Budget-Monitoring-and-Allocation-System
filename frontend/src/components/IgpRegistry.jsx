@@ -842,7 +842,7 @@ function TransactionForm({ form, setForm, programs, references, saving, onSubmit
             <Input
               value={form.registry_no || "Will be generated on save"}
               readOnly
-              className={`font-mono font-extrabold text-[#17135f] ring-0 read-only:cursor-not-allowed ${["procurement", "accountant"].includes(normalizedRole) ? "role-locked-field" : ""}`}
+              className={`font-mono font-extrabold text-[#17135f] ring-0 read-only:cursor-not-allowed ${["procurement", "accountant", "account", "budget", "administration", "administrator", "admin"].includes(normalizedRole) ? "role-locked-field" : ""}`}
               title="System-generated and locked. This number is assigned when the transaction is saved."
             />
             <p className="mt-1 text-[10px] text-amber-700">System-generated • locked</p>
@@ -869,14 +869,14 @@ function TransactionForm({ form, setForm, programs, references, saving, onSubmit
           </Field>
           <RefSelect label="Fund Cluster" value={form.fund_cluster_id} onChange={(e) => set("fund_cluster_id", e.target.value)} items={references.fund_clusters} required />
           <Field label="Fund Code">
-            <Input value="161" readOnly className={`bg-slate-50 font-bold ${["procurement", "accountant"].includes(normalizedRole) ? "role-locked-field" : ""}`} />
+            <Input value="161" readOnly className={`bg-slate-50 font-bold ${["procurement", "accountant", "account", "budget", "administration", "administrator", "admin"].includes(normalizedRole) ? "role-locked-field" : ""}`} />
           </Field>
           <RefSelect label="Campus" value={form.campus_id} onChange={(e) => set("campus_id", e.target.value)} items={references.campuses} />
           <Field label="BURS Serial No.">
             <Input
               value={form.burs_serial_no || "Will be generated on save"}
               readOnly
-              className={`bg-slate-50 font-bold text-slate-500 ${["procurement", "accountant"].includes(normalizedRole) ? "role-locked-field" : ""}`}
+              className={`bg-slate-50 font-bold text-slate-500 ${["procurement", "accountant", "account", "budget", "administration", "administrator", "admin"].includes(normalizedRole) ? "role-locked-field" : ""}`}
             />
           </Field>
           <Field label="Serial No. Transferred From / To" className="md:col-span-2">
@@ -928,7 +928,7 @@ function TransactionForm({ form, setForm, programs, references, saving, onSubmit
               value={form.month ? new Date(2000, Number(form.month) - 1, 1).toLocaleString("en-US", { month: "long" }) : "—"}
               readOnly
               disabled
-              className={`!font-extrabold !text-[#17135f] ${["procurement", "accountant"].includes(normalizedRole) ? "role-locked-field" : ""}`}
+              className={`!font-extrabold !text-[#17135f] ${["procurement", "accountant", "account", "budget", "administration", "administrator", "admin"].includes(normalizedRole) ? "role-locked-field" : ""}`}
               title="Automatically determined by the transaction date above"
             />
           </Field>
@@ -943,7 +943,7 @@ function TransactionForm({ form, setForm, programs, references, saving, onSubmit
               value={form.quarter ? `Q${form.quarter}` : "—"}
               readOnly
               disabled
-              className={`!font-extrabold !text-[#17135f] ${["procurement", "accountant"].includes(normalizedRole) ? "role-locked-field" : ""}`}
+              className={`!font-extrabold !text-[#17135f] ${["procurement", "accountant", "account", "budget", "administration", "administrator", "admin"].includes(normalizedRole) ? "role-locked-field" : ""}`}
               title="Automatically determined by the transaction date above"
             />
           </Field>
