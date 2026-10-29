@@ -2470,13 +2470,13 @@ function FilterBar({
             <label className="block text-[10px] font-semibold text-gray-500 mb-1">
               Search
             </label>
-            <div className="h-9 border border-gray-200 rounded-lg flex items-center px-3 gap-2">
-              <Search className="w-3.5 h-3.5 text-gray-400" />
+            <div className="h-9 min-w-0 border border-gray-200 rounded-lg bg-white flex items-center px-3 gap-2 focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-50">
+              <Search className="w-3.5 h-3.5 shrink-0 text-gray-400" />
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Registry no., payee, fund, particulars..."
-                className="w-full outline-none text-xs"
+                className="!h-full !w-full !min-w-0 !border-0 !rounded-none !bg-transparent !p-0 !text-xs !text-slate-700 !shadow-none !outline-none focus:!border-0 focus:!ring-0 focus:!shadow-none"
               />
             </div>
           </div>
