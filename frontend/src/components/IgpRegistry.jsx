@@ -904,7 +904,7 @@ function TransactionForm({ form, setForm, programs, references, saving, onSubmit
       <div className="rounded-xl border border-emerald-100 bg-emerald-50/40 p-4">
         <p className="mb-3 text-[10px] font-extrabold uppercase tracking-wide text-emerald-700">Utilization / Accounting</p>
         <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-          <fieldset disabled={["procurement", "accountant"].includes(normalizedRole)} className="contents igp-role-locked">
+          <fieldset disabled={["procurement", "accountant", "account"].includes(normalizedRole)} className={`contents igp-role-locked ${["procurement", "accountant", "account"].includes(normalizedRole) ? "role-lock-budget-fields" : ""}`}>
           <Field label="Income / Collection">
             <Input type="number" min="0" step="0.01" value={form.income_amount} onChange={(e) => set("income_amount", e.target.value)} disabled={!allowedTransactionTypes.includes("Income")} />
           </Field>
