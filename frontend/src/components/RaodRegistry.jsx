@@ -1422,7 +1422,7 @@ function RaodRegistry({ user, onLogout, onNavigate, activePath }) {
     { key: "particulars", label: "PARTICULARS / DESCRIPTION", render: r => displayField(r, "particulars") },
     { key: "responsibility_center", label: "RESPONSIBILITY CENTER", render: r => displayField(r, "responsibility_center_name", "responsibility_center_code", "responsibility_center_id") },
     { key: "pap", label: "PAP / DEPARTMENT", render: r => displayField(r, "pap_name", "pap_code", "pap_id") },
-    { key: "uacs_code", label: "UACS CODE", render: r => displayField(r, "uacs_code_name", "uacs_code_value", "account_title", "uacs_code", "uacs_code_id") },
+    { key: "uacs_code", label: "UACS CODE", render: r => displayField(r, "uacs_title", "uacs_code_name", "uacs_code_value", "uacs_code", "uacs_code_id") },
     { key: "ref_no", label: "REF. NO.", render: r => displayField(r, "ref_no") },
     { key: "allotment_class", label: "ALLOTMENT CLASS", render: r => displayField(r, "allotment_class_name", "allotment_class_code", "allotment_class_id") },
     { key: "fiscal_year", label: "FISCAL YEAR", render: r => displayField(r, "fiscal_year") },
