@@ -578,18 +578,9 @@ function TransactionForm({ form, setForm, programs, references, saving, onSubmit
     // These reference fields are optional for every role, even when they are editable.
     // Do not block submission if they are blank.
     const optionalLabels = [
-      "uacs funding source code",
-      "series",
-      "series 2",
-      "series2",
-      "serial no. transferred from / to",
-      "serial no transferred from / to",
-      "serial transferred from / to",
-      "ps",
-      "mooe",
-      "co",
-      "running balance",
-      "unpaid utilization",
+      "uacs funding source code", "series", "series 2", "series2",
+      "serial no. transferred from / to", "serial no transferred from / to",
+      "ps", "mooe", "co", "running balance", "unpaid utilization"
     ];
     if (optionalLabels.some((name) => label === name || label.includes(name))) {
       return false;
@@ -716,18 +707,6 @@ function TransactionForm({ form, setForm, programs, references, saving, onSubmit
     <form noValidate onSubmit={handleValidatedSubmit} onChange={clearFieldValidation} onInput={clearFieldValidation} className="space-y-5">
       <style>{`
         .igp-role-locked[disabled] { opacity: 1 !important; }
-        /* Fields owned by another role remain disabled and visibly red outlined. */
-        .igp-role-locked[disabled] input:disabled,
-        .igp-role-locked[disabled] select:disabled,
-        .igp-role-locked[disabled] textarea:disabled,
-        fieldset[disabled] input:disabled,
-        fieldset[disabled] select:disabled,
-        fieldset[disabled] textarea:disabled { 
-          border: 2px solid #ef4444 !important;
-          background: #fef2f2 !important;
-          cursor: not-allowed !important;
-          opacity: 1 !important;
-        }
         .igp-role-locked[disabled] input,
         .igp-role-locked[disabled] select,
         .igp-role-locked[disabled] textarea,
@@ -746,6 +725,24 @@ function TransactionForm({ form, setForm, programs, references, saving, onSubmit
         input[readonly],
         select[readonly],
         textarea[readonly] {
+          border: 1px solid #cbd5e1 !important;
+          background: #f8fafc !important;
+          color: #475569 !important;
+          cursor: not-allowed !important;
+          opacity: 1 !important;
+          box-shadow: none !important;
+          -webkit-text-fill-color: #475569 !important;
+        }
+        /* Red outlines indicate fields locked for the current office role. */
+        .igp-role-locked input:disabled,
+        .igp-role-locked select:disabled,
+        .igp-role-locked textarea:disabled,
+        .procurement-fields input:disabled,
+        .procurement-fields select:disabled,
+        .procurement-fields textarea:disabled,
+        .accounting-fields input:disabled,
+        .accounting-fields select:disabled,
+        .accounting-fields textarea:disabled {
           border: 2px solid #ef4444 !important;
           background: #fef2f2 !important;
           color: #334155 !important;
@@ -765,7 +762,7 @@ function TransactionForm({ form, setForm, programs, references, saving, onSubmit
       `}</style>
       {formValidationError && <div role="alert" className="sticky top-0 z-20 rounded-lg border-2 border-red-400 bg-red-50 px-4 py-3 text-xs font-bold text-red-800 shadow-sm"><div className="flex items-start gap-2"><span aria-hidden="true">⚠</span><span>{formValidationError}</span></div></div>}
       {error && <div role="alert" className="rounded-lg border-2 border-red-400 bg-red-50 px-4 py-3 text-xs font-bold text-red-800"><span aria-hidden="true">⚠ </span>{error}</div>}
-      <div role="note" className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-[10px] leading-4 text-blue-900"><b>Field access guide:</b> {isProcurementRole ? "Only procurement fields are editable for your role." : isAccountantRole ? "Only accounting and disbursement fields are editable for your role." : (isBudgetRole || ["administration", "administrator", "admin"].includes(normalizedRole)) ? "Budget fields are editable; procurement and accounting fields are locked, including for Administrator." : "Fields outside your assigned permissions are locked."} Locked and system-generated fields use a neutral grey style. Red outlines appear only on missing or invalid required fields after submission.</div>
+      <div role="note" className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-[10px] leading-4 text-blue-900"><b>Field access guide:</b> {isProcurementRole ? "Only procurement fields are editable for your role." : isAccountantRole ? "Only accounting and disbursement fields are editable for your role." : (isBudgetRole || ["administration", "administrator", "admin"].includes(normalizedRole)) ? "Budget fields are editable; procurement and accounting fields are locked, including for Administrator." : "Fields outside your assigned permissions are locked."} Fields locked for your role have a red outline and cannot be clicked or edited. Read-only system-generated fields stay neutral. Missing required fields are highlighted after submission.</div>
       <fieldset disabled={["procurement", "accountant"].includes(normalizedRole)} className="igp-role-locked rounded-xl border border-blue-100 bg-blue-50/40 p-4">
         <p className="mb-3 text-[10px] font-extrabold uppercase tracking-wide text-blue-700">
           Registry Information
