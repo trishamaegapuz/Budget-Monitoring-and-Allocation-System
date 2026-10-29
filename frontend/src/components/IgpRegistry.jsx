@@ -512,7 +512,7 @@ function ProgramForm({ form, setForm, references, saving, onSubmit, onClose, err
             <Input
               value={form.wfp_source_code || "Auto-filled from WFP Source"}
               readOnly
-              className="bg-slate-50 font-bold text-slate-500"
+              className={`bg-slate-50 font-bold text-slate-500 ${["procurement", "accountant"].includes(normalizedRole) ? "role-locked-field" : ""}`}
             />
           </Field>
           <Field label="Start Date">
@@ -770,25 +770,6 @@ function TransactionForm({ form, setForm, programs, references, saving, onSubmit
         .igp-role-locked select:not(:disabled),
         .igp-role-locked textarea:not(:disabled) { pointer-events: auto; }
 
-        /* Procurement and Accountant: every individually locked field in their
-           disabled Registry/Transaction sections must have a red outline. This
-           explicitly includes Registry No., Fund Code, BURS Serial No., Month,
-           Quarter, Income / Collection, and Utilization. Section borders stay unchanged. */
-        form fieldset.igp-role-locked[disabled] input,
-        form fieldset.igp-role-locked[disabled] select,
-        form fieldset.igp-role-locked[disabled] textarea,
-        form fieldset.role-lock-budget-fields[disabled] input,
-        form fieldset.role-lock-budget-fields[disabled] select,
-        form fieldset.role-lock-budget-fields[disabled] textarea {
-          border: 2px solid #ef4444 !important;
-          background-color: #fef2f2 !important;
-          color: #334155 !important;
-          cursor: not-allowed !important;
-          opacity: 1 !important;
-          box-shadow: 0 0 0 1px rgba(239,68,68,.18) !important;
-          -webkit-text-fill-color: #334155 !important;
-        }
-
         /* Universal rule: every non-clickable form field gets its own red outline,
            regardless of role or which section it belongs to. Containers are untouched. */
         form input:disabled,
@@ -805,6 +786,19 @@ function TransactionForm({ form, setForm, programs, references, saving, onSubmit
           box-shadow: 0 0 0 1px rgba(239,68,68,.18) !important;
           -webkit-text-fill-color: #334155 !important;
         }
+
+        /* Explicit role-based styling for the seven requested fields.
+           This wins over Tailwind important border/background utility classes. */
+        form input.role-locked-field,
+        form select.role-locked-field,
+        form textarea.role-locked-field {
+          border: 2px solid #ef4444 !important;
+          background-color: #fef2f2 !important;
+          color: #334155 !important;
+          box-shadow: 0 0 0 1px rgba(239,68,68,.22) !important;
+          opacity: 1 !important;
+          -webkit-text-fill-color: #334155 !important;
+        }
       `}</style>
       {formValidationError && <div role="alert" className="sticky top-0 z-20 rounded-lg border-2 border-red-400 bg-red-50 px-4 py-3 text-xs font-bold text-red-800 shadow-sm"><div className="flex items-start gap-2"><span aria-hidden="true">⚠</span><span>{formValidationError}</span></div></div>}
       {error && <div role="alert" className="rounded-lg border-2 border-red-400 bg-red-50 px-4 py-3 text-xs font-bold text-red-800"><span aria-hidden="true">⚠ </span>{error}</div>}
@@ -818,7 +812,7 @@ function TransactionForm({ form, setForm, programs, references, saving, onSubmit
             <Input
               value={form.registry_no || "Will be generated on save"}
               readOnly
-              className="!border-slate-200 !bg-slate-50 !font-mono !font-extrabold !text-[#17135f] !ring-0 read-only:cursor-not-allowed"
+              className={`!border-slate-200 !bg-slate-50 !font-mono !font-extrabold !text-[#17135f] !ring-0 read-only:cursor-not-allowed ${["procurement", "accountant"].includes(normalizedRole) ? "role-locked-field" : ""}`}
               title="System-generated and locked. This number is assigned when the transaction is saved."
             />
             <p className="mt-1 text-[10px] text-amber-700">System-generated • locked</p>
@@ -845,7 +839,7 @@ function TransactionForm({ form, setForm, programs, references, saving, onSubmit
           </Field>
           <RefSelect label="Fund Cluster" value={form.fund_cluster_id} onChange={(e) => set("fund_cluster_id", e.target.value)} items={references.fund_clusters} required />
           <Field label="Fund Code">
-            <Input value="161" readOnly className="bg-slate-50 font-bold" />
+            <Input value="161" readOnly className={`bg-slate-50 font-bold ${["procurement", "accountant"].includes(normalizedRole) ? "role-locked-field" : ""}`} />
           </Field>
           <RefSelect label="Campus" value={form.campus_id} onChange={(e) => set("campus_id", e.target.value)} items={references.campuses} />
           <Field label="BURS Serial No.">
@@ -899,12 +893,12 @@ function TransactionForm({ form, setForm, programs, references, saving, onSubmit
             set("account_title", item?.account_title || "");
           }} items={references.uacs_codes} displayKey="name" />
           <RefSelect label="Allotment Class" value={form.allotment_class_id} onChange={(e) => set("allotment_class_id", e.target.value)} items={references.allotment_classes} displayKey="name" />
-          <Field label="Month">
+          <Field label="Month (Automatic from Date)">
             <Input
               value={form.month ? new Date(2000, Number(form.month) - 1, 1).toLocaleString("en-US", { month: "long" }) : "—"}
               readOnly
               disabled
-              className="!font-extrabold !text-[#17135f]"
+              className={`!font-extrabold !text-[#17135f] ${["procurement", "accountant"].includes(normalizedRole) ? "role-locked-field" : ""}`}
               title="Automatically determined by the transaction date above"
             />
           </Field>
@@ -914,12 +908,12 @@ function TransactionForm({ form, setForm, programs, references, saving, onSubmit
           <Field label="Series2">
             <Input value={form.series2} onChange={(e) => set("series2", e.target.value)} />
           </Field>
-          <Field label="Quarter">
+          <Field label="Quarter (Automatic from Date)">
             <Input
               value={form.quarter ? `Q${form.quarter}` : "—"}
               readOnly
               disabled
-              className="!font-extrabold !text-[#17135f]"
+              className={`!font-extrabold !text-[#17135f] ${["procurement", "accountant"].includes(normalizedRole) ? "role-locked-field" : ""}`}
               title="Automatically determined by the transaction date above"
             />
           </Field>
@@ -942,10 +936,10 @@ function TransactionForm({ form, setForm, programs, references, saving, onSubmit
         <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
           <fieldset disabled={["procurement", "accountant", "account"].includes(normalizedRole)} className={`contents igp-role-locked ${["procurement", "accountant", "account"].includes(normalizedRole) ? "role-lock-budget-fields" : ""}`}>
           <Field label="Income / Collection">
-            <Input type="number" min="0" step="0.01" value={form.income_amount} onChange={(e) => set("income_amount", e.target.value)} disabled={!allowedTransactionTypes.includes("Income")} />
+            <Input type="number" min="0" step="0.01" value={form.income_amount} onChange={(e) => set("income_amount", e.target.value)} disabled={!allowedTransactionTypes.includes("Income")} className={["procurement", "accountant"].includes(normalizedRole) ? "role-locked-field" : ""} />
           </Field>
           <Field label="Utilization">
-            <Input type="number" min="0" step="0.01" value={form.utilization_amount} onChange={(e) => set("utilization_amount", e.target.value)} disabled={!(allowedTransactionTypes.includes("Utilization") || isBudgetRole || ["administration", "administrator", "admin"].includes(normalizedRole))} />
+            <Input type="number" min="0" step="0.01" value={form.utilization_amount} onChange={(e) => set("utilization_amount", e.target.value)} disabled={!(allowedTransactionTypes.includes("Utilization") || isBudgetRole || ["administration", "administrator", "admin"].includes(normalizedRole))} className={["procurement", "accountant"].includes(normalizedRole) ? "role-locked-field" : ""} />
           </Field>
           <Field label="PS">
             <Input type="number" min="0" step="0.01" value={form.ps_utilization} onChange={(e) => set("ps_utilization", e.target.value)} />
