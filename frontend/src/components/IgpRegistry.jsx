@@ -729,6 +729,18 @@ function TransactionForm({ form, setForm, programs, references, saving, onSubmit
           box-shadow: none !important;
           -webkit-text-fill-color: #475569 !important;
         }
+        /* Budget/Registry fields locked for Procurement and Accountant: outline each control individually. */
+        form fieldset.role-lock-budget-fields[disabled] input:disabled:not([readonly]),
+        form fieldset.role-lock-budget-fields[disabled] select:disabled,
+        form fieldset.role-lock-budget-fields[disabled] textarea:disabled {
+          border: 2px solid #ef4444 !important;
+          background-color: #fef2f2 !important;
+          color: #334155 !important;
+          cursor: not-allowed !important;
+          opacity: 1 !important;
+          box-shadow: 0 0 0 1px rgba(239,68,68,.18) !important;
+          -webkit-text-fill-color: #334155 !important;
+        }
         /* Role-locked controls: red outline on EACH individual field, not its section container. */
         form .office-fields.procurement-fields fieldset[disabled] input.role-locked-field:disabled,
         form .office-fields.procurement-fields fieldset[disabled] select.role-locked-field:disabled,
@@ -761,7 +773,7 @@ function TransactionForm({ form, setForm, programs, references, saving, onSubmit
       {formValidationError && <div role="alert" className="sticky top-0 z-20 rounded-lg border-2 border-red-400 bg-red-50 px-4 py-3 text-xs font-bold text-red-800 shadow-sm"><div className="flex items-start gap-2"><span aria-hidden="true">⚠</span><span>{formValidationError}</span></div></div>}
       {error && <div role="alert" className="rounded-lg border-2 border-red-400 bg-red-50 px-4 py-3 text-xs font-bold text-red-800"><span aria-hidden="true">⚠ </span>{error}</div>}
       <div role="note" className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-[10px] leading-4 text-blue-900"><b>Field access guide:</b> {isProcurementRole ? "Only procurement fields are editable for your role." : isAccountantRole ? "Only accounting and disbursement fields are editable for your role." : (isBudgetRole || ["administration", "administrator", "admin"].includes(normalizedRole)) ? "Budget fields are editable; procurement and accounting fields are locked, including for Administrator." : "Fields outside your assigned permissions are locked."} Procurement and Accounting sections that are locked for your role have red-outlined, non-clickable fields. Read-only system-generated fields outside those locked sections stay neutral. Missing required fields are highlighted after submission.</div>
-      <fieldset disabled={["procurement", "accountant"].includes(normalizedRole)} className="igp-role-locked rounded-xl border border-blue-100 bg-blue-50/40 p-4">
+      <fieldset disabled={["procurement", "accountant"].includes(normalizedRole)} className={`igp-role-locked rounded-xl border border-blue-100 bg-blue-50/40 p-4 ${["procurement", "accountant", "account"].includes(normalizedRole) ? "role-lock-budget-fields" : ""}`}>
         <p className="mb-3 text-[10px] font-extrabold uppercase tracking-wide text-blue-700">
           Registry Information
         </p>
@@ -821,7 +833,7 @@ function TransactionForm({ form, setForm, programs, references, saving, onSubmit
         </div>
       </fieldset>
 
-      <fieldset disabled={["procurement", "accountant"].includes(normalizedRole)} className="igp-role-locked rounded-xl border border-slate-200 bg-white p-4">
+      <fieldset disabled={["procurement", "accountant"].includes(normalizedRole)} className={`igp-role-locked rounded-xl border border-slate-200 bg-white p-4 ${["procurement", "accountant", "account"].includes(normalizedRole) ? "role-lock-budget-fields" : ""}`}>
         <p className="mb-3 text-[10px] font-extrabold uppercase tracking-wide text-slate-600">Transaction / Classification</p>
         <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
           <Field label="Transaction Type" required>
