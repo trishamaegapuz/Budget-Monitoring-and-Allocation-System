@@ -335,8 +335,10 @@ function Field({ label, children, className = "", required = false }) {
 }
 
 function Input(props) {
+  // Disabled/read-only fields are shown in neutral grey. Red is reserved for
+  // required fields that fail validation after the user submits the form.
   const disabledStyle = props.disabled || props.readOnly
-    ? "!border-2 !border-red-500 !bg-red-50/50 !ring-1 !ring-red-200 disabled:cursor-not-allowed disabled:opacity-100"
+    ? "!border-slate-200 !bg-slate-50 !ring-0 disabled:cursor-not-allowed disabled:opacity-100"
     : "";
   return (
     <input
@@ -347,8 +349,9 @@ function Input(props) {
 }
 
 function Select({ children, ...props }) {
+  // A locked dropdown should not look like a validation error.
   const disabledStyle = props.disabled
-    ? "!border-2 !border-red-500 !bg-red-50/50 !ring-1 !ring-red-200 disabled:cursor-not-allowed disabled:opacity-100"
+    ? "!border-slate-200 !bg-slate-50 !ring-0 disabled:cursor-not-allowed disabled:opacity-100"
     : "";
   return (
     <select
@@ -395,7 +398,9 @@ function RefSelect({
 
 function ProgramForm({ form, setForm, references, saving, onSubmit, onClose, error = "" }) {
   const [formValidationError, setFormValidationError] = useState("");
+  const [validationAttempted, setValidationAttempted] = useState(false);
   const handleValidatedSubmit = (event) => {
+    setValidationAttempted(true);
     const formElement = event.currentTarget;
     event.preventDefault();
     const fields = Array.from(formElement.querySelectorAll("input, select, textarea"))
@@ -455,6 +460,8 @@ function ProgramForm({ form, setForm, references, saving, onSubmit, onClose, err
   const clearFieldValidation = (event) => {
     const field = event.target;
     if (!field || !field.matches?.("input, select, textarea")) return;
+    // Do not show validation styling until the user has attempted submission.
+    if (!validationAttempted) return;
     if (field.checkValidity()) {
       field.classList.remove("!border-2", "!border-red-500", "!bg-red-50", "ring-1", "ring-red-200", "focus:!border-red-500");
       field.removeAttribute("aria-invalid");
@@ -469,7 +476,7 @@ function ProgramForm({ form, setForm, references, saving, onSubmit, onClose, err
     <form noValidate onSubmit={handleValidatedSubmit} onChange={clearFieldValidation} onInput={clearFieldValidation} className="space-y-5">
       {formValidationError && <div role="alert" className="sticky top-0 z-20 rounded-lg border-2 border-red-400 bg-red-50 px-4 py-3 text-xs font-bold text-red-800 shadow-sm"><div className="flex items-start gap-2"><span aria-hidden="true">⚠</span><span>{formValidationError}</span></div></div>}
       {error && <div role="alert" className="rounded-lg border-2 border-red-400 bg-red-50 px-4 py-3 text-xs font-bold text-red-800"><span aria-hidden="true">⚠ </span>{error}</div>}
-      <div role="note" className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-[10px] leading-4 text-blue-900"><b>Field access guide:</b> Red-outlined fields are locked, system-generated, or unavailable for editing under your role. Missing or invalid required values will be outlined in red when you save.</div>
+      <div role="note" className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-[10px] leading-4 text-blue-900"><b>Field access guide:</b> Locked and system-generated fields use a neutral grey style. Missing or invalid required values will be outlined in red only after you submit.</div>
       <div className="rounded-xl border border-blue-100 bg-blue-50/50 p-4">
         <p className="mb-3 text-[10px] font-extrabold uppercase tracking-wide text-blue-700">
           IGP Program / Project — Fund 161
@@ -547,6 +554,7 @@ function ProgramForm({ form, setForm, references, saving, onSubmit, onClose, err
 
 function TransactionForm({ form, setForm, programs, references, saving, onSubmit, onClose, allowedTransactionTypes = ["Income", "Utilization", "Adjustment"], role = "", error = "" }) {
   const [formValidationError, setFormValidationError] = useState("");
+  const [validationAttempted, setValidationAttempted] = useState(false);
   // Normalize role names so casing/spacing differences never unlock the wrong fields.
   const normalizedRole = String(role || "").trim().toLowerCase();
   // In the transaction form, Administrator follows the same field permissions as Budget.
@@ -595,6 +603,7 @@ function TransactionForm({ form, setForm, programs, references, saving, onSubmit
   const validationClasses = ["!border-2", "!border-red-600", "!bg-red-50", "!ring-2", "!ring-red-300", "focus:!border-red-600"];
   const handleValidatedSubmit = (event) => {
     event.preventDefault();
+    setValidationAttempted(true);
     const formElement = event.currentTarget;
     const fields = Array.from(formElement.querySelectorAll("input, select, textarea")).filter(isEditableControl);
     const invalidFields = fields.filter((field) =>
@@ -641,6 +650,8 @@ function TransactionForm({ form, setForm, programs, references, saving, onSubmit
   const clearFieldValidation = (event) => {
     const field = event.target;
     if (!field || !field.matches?.("input, select, textarea")) return;
+    // Only re-check and highlight fields after the first submit attempt.
+    if (!validationAttempted) return;
     const formElement = event.currentTarget;
     const fields = Array.from(formElement.querySelectorAll("input, select, textarea")).filter(isEditableControl);
     fields.forEach((item) => {
@@ -729,7 +740,7 @@ function TransactionForm({ form, setForm, programs, references, saving, onSubmit
       `}</style>
       {formValidationError && <div role="alert" className="sticky top-0 z-20 rounded-lg border-2 border-red-400 bg-red-50 px-4 py-3 text-xs font-bold text-red-800 shadow-sm"><div className="flex items-start gap-2"><span aria-hidden="true">⚠</span><span>{formValidationError}</span></div></div>}
       {error && <div role="alert" className="rounded-lg border-2 border-red-400 bg-red-50 px-4 py-3 text-xs font-bold text-red-800"><span aria-hidden="true">⚠ </span>{error}</div>}
-      <div role="note" className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-[10px] leading-4 text-blue-900"><b>Field access guide:</b> {isProcurementRole ? "Only procurement fields are editable for your role." : isAccountantRole ? "Only accounting and disbursement fields are editable for your role." : (isBudgetRole || ["administration", "administrator", "admin"].includes(normalizedRole)) ? "Budget fields are editable; procurement and accounting fields are locked, including for Administrator." : "Fields outside your assigned permissions are locked."} Red outlines indicate locked/system-generated fields or missing/invalid required values.</div>
+      <div role="note" className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-[10px] leading-4 text-blue-900"><b>Field access guide:</b> {isProcurementRole ? "Only procurement fields are editable for your role." : isAccountantRole ? "Only accounting and disbursement fields are editable for your role." : (isBudgetRole || ["administration", "administrator", "admin"].includes(normalizedRole)) ? "Budget fields are editable; procurement and accounting fields are locked, including for Administrator." : "Fields outside your assigned permissions are locked."} Locked and system-generated fields use a neutral grey style. Red outlines appear only on missing or invalid required fields after submission.</div>
       <fieldset disabled={["procurement", "accountant"].includes(normalizedRole)} className="igp-role-locked rounded-xl border border-blue-100 bg-blue-50/40 p-4">
         <p className="mb-3 text-[10px] font-extrabold uppercase tracking-wide text-blue-700">
           Registry Information
@@ -739,7 +750,7 @@ function TransactionForm({ form, setForm, programs, references, saving, onSubmit
             <Input
               value={form.registry_no || "Will be generated on save"}
               readOnly
-              className="!border-2 !border-red-500 !bg-red-50/50 !font-mono !font-extrabold !text-[#17135f] !ring-1 !ring-red-200 read-only:cursor-not-allowed"
+              className="!border-slate-200 !bg-slate-50 !font-mono !font-extrabold !text-[#17135f] !ring-0 read-only:cursor-not-allowed"
               title="System-generated and locked. This number is assigned when the transaction is saved."
             />
             <p className="mt-1 text-[10px] text-amber-700">System-generated • locked</p>
