@@ -814,8 +814,8 @@ function TransactionForm({ form, setForm, programs, references, saving, onSubmit
         }
 
         /* FINAL OVERRIDE: when the Registry/Transaction fieldset is disabled for
-           Procurement or Accountant, force the five system/read-only fields red
-           even if their role class is missing or Tailwind adds !border-slate-200.
+           Procurement or Accountant, force each system/read-only field red. Avoid
+           conflicting Tailwind !border-slate-200 utilities on Registry No.
            The fieldset itself is not styled; each input gets its own outline. */
         form fieldset.igp-role-locked[disabled] input[readonly],
         form fieldset.igp-role-locked[disabled] input:disabled,
@@ -842,7 +842,7 @@ function TransactionForm({ form, setForm, programs, references, saving, onSubmit
             <Input
               value={form.registry_no || "Will be generated on save"}
               readOnly
-              className={`!border-slate-200 !bg-slate-50 !font-mono !font-extrabold !text-[#17135f] !ring-0 read-only:cursor-not-allowed ${["procurement", "accountant"].includes(normalizedRole) ? "role-locked-field" : ""}`}
+              className={`font-mono font-extrabold text-[#17135f] ring-0 read-only:cursor-not-allowed ${["procurement", "accountant"].includes(normalizedRole) ? "role-locked-field" : ""}`}
               title="System-generated and locked. This number is assigned when the transaction is saved."
             />
             <p className="mt-1 text-[10px] text-amber-700">System-generated • locked</p>
