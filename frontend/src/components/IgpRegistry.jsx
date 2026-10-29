@@ -770,6 +770,25 @@ function TransactionForm({ form, setForm, programs, references, saving, onSubmit
         .igp-role-locked select:not(:disabled),
         .igp-role-locked textarea:not(:disabled) { pointer-events: auto; }
 
+        /* Procurement and Accountant: every individually locked field in their
+           disabled Registry/Transaction sections must have a red outline. This
+           explicitly includes Registry No., Fund Code, BURS Serial No., Month,
+           Quarter, Income / Collection, and Utilization. Section borders stay unchanged. */
+        form fieldset.igp-role-locked[disabled] input,
+        form fieldset.igp-role-locked[disabled] select,
+        form fieldset.igp-role-locked[disabled] textarea,
+        form fieldset.role-lock-budget-fields[disabled] input,
+        form fieldset.role-lock-budget-fields[disabled] select,
+        form fieldset.role-lock-budget-fields[disabled] textarea {
+          border: 2px solid #ef4444 !important;
+          background-color: #fef2f2 !important;
+          color: #334155 !important;
+          cursor: not-allowed !important;
+          opacity: 1 !important;
+          box-shadow: 0 0 0 1px rgba(239,68,68,.18) !important;
+          -webkit-text-fill-color: #334155 !important;
+        }
+
         /* Universal rule: every non-clickable form field gets its own red outline,
            regardless of role or which section it belongs to. Containers are untouched. */
         form input:disabled,
@@ -880,7 +899,7 @@ function TransactionForm({ form, setForm, programs, references, saving, onSubmit
             set("account_title", item?.account_title || "");
           }} items={references.uacs_codes} displayKey="name" />
           <RefSelect label="Allotment Class" value={form.allotment_class_id} onChange={(e) => set("allotment_class_id", e.target.value)} items={references.allotment_classes} displayKey="name" />
-          <Field label="Month (Automatic from Date)">
+          <Field label="Month">
             <Input
               value={form.month ? new Date(2000, Number(form.month) - 1, 1).toLocaleString("en-US", { month: "long" }) : "—"}
               readOnly
@@ -895,7 +914,7 @@ function TransactionForm({ form, setForm, programs, references, saving, onSubmit
           <Field label="Series2">
             <Input value={form.series2} onChange={(e) => set("series2", e.target.value)} />
           </Field>
-          <Field label="Quarter (Automatic from Date)">
+          <Field label="Quarter">
             <Input
               value={form.quarter ? `Q${form.quarter}` : "—"}
               readOnly
