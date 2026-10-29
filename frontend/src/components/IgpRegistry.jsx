@@ -559,9 +559,9 @@ function TransactionForm({ form, setForm, programs, references, saving, onSubmit
   const [validationAttempted, setValidationAttempted] = useState(false);
   // Normalize role names so casing/spacing differences never unlock the wrong fields.
   const normalizedRole = String(role || "").trim().toLowerCase();
-  // In the transaction form, Administrator follows the same field permissions as Budget.
-  // Administrator does not receive Procurement or Accounting edit access here.
-  const isAdminRole = false;
+  // Administrator and Budget can edit Utilization / Accounting transaction fields.
+  // Procurement and Accountant remain locked out of that section.
+  const isAdminRole = ["administration", "administrator", "admin"].includes(normalizedRole);
   const isBudgetRole = normalizedRole === "budget";
   const isProcurementRole = normalizedRole === "procurement";
   const isAccountantRole = ["accountant", "account"].includes(normalizedRole);
@@ -966,10 +966,10 @@ function TransactionForm({ form, setForm, programs, references, saving, onSubmit
         <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
           <fieldset disabled={["procurement", "accountant", "account"].includes(normalizedRole)} className={`contents igp-role-locked ${["procurement", "accountant", "account"].includes(normalizedRole) ? "role-lock-budget-fields" : ""}`}>
           <Field label="Income / Collection">
-            <Input type="number" min="0" step="0.01" value={form.income_amount} onChange={(e) => set("income_amount", e.target.value)} disabled={!allowedTransactionTypes.includes("Income")} className={["procurement", "accountant"].includes(normalizedRole) ? "role-locked-field" : ""} />
+            <Input type="number" min="0" step="0.01" value={form.income_amount} onChange={(e) => set("income_amount", e.target.value)} disabled={!(allowedTransactionTypes.includes("Income") || isAdminRole || isBudgetRole)} className={["procurement", "accountant"].includes(normalizedRole) ? "role-locked-field" : ""} />
           </Field>
           <Field label="Utilization">
-            <Input type="number" min="0" step="0.01" value={form.utilization_amount} onChange={(e) => set("utilization_amount", e.target.value)} disabled={!(allowedTransactionTypes.includes("Utilization") || isBudgetRole || ["administration", "administrator", "admin"].includes(normalizedRole))} className={["procurement", "accountant"].includes(normalizedRole) ? "role-locked-field" : ""} />
+            <Input type="number" min="0" step="0.01" value={form.utilization_amount} onChange={(e) => set("utilization_amount", e.target.value)} disabled={!(allowedTransactionTypes.includes("Utilization") || isBudgetRole || isAdminRole)} className={["procurement", "accountant"].includes(normalizedRole) ? "role-locked-field" : ""} />
           </Field>
           <Field label="PS">
             <Input type="number" min="0" step="0.01" value={form.ps_utilization} onChange={(e) => set("ps_utilization", e.target.value)} />
