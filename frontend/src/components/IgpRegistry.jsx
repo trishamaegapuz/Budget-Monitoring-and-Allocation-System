@@ -398,7 +398,9 @@ function RefSelect({
   );
 }
 
-function ProgramForm({ form, setForm, references, saving, onSubmit, onClose, error = "" }) {
+function ProgramForm({ form, setForm, references, saving, onSubmit, onClose, role = "", error = "" }) {
+  // Program / WFP setup is managed only by Administrator and Budget.
+  const normalizedRole = String(role || "").trim().toLowerCase();
   const [formValidationError, setFormValidationError] = useState("");
   const [validationAttempted, setValidationAttempted] = useState(false);
   const handleValidatedSubmit = (event) => {
@@ -1043,10 +1045,11 @@ function BalancePanel({ title, beginning, projected, income, utilization, unpaid
 
 export default function IGPRegistry({ user, onLogout, onNavigate, activePath }) {
   const role = user?.role || "";
-  const isAdmin = ["Administration", "Administrator", "Admin"].includes(role);
-  const isBudget = role === "Budget";
-  const isProcurement = role === "Procurement";
-  const isAccountant = role === "Accountant";
+  const normalizedRole = String(role).trim().toLowerCase();
+  const isAdmin = ["administration", "administrator", "admin"].includes(normalizedRole);
+  const isBudget = normalizedRole === "budget";
+  const isProcurement = normalizedRole === "procurement";
+  const isAccountant = ["accountant", "account"].includes(normalizedRole);
   const canEditOfficeTransactions = isProcurement || isAccountant;
   // Procurement and Accountant can view transactions to update only their office fields.
   const canViewIgp = isAdmin || isBudget || canEditOfficeTransactions;
@@ -2259,7 +2262,7 @@ export default function IGPRegistry({ user, onLogout, onNavigate, activePath }) 
 
         {programModal && (
           <Modal title={programModal === "edit" ? "Edit IGP Program / Project" : "Add IGP Program / Project"} onClose={() => setProgramModal(null)} wide>
-            <ProgramForm form={programForm} setForm={setProgramForm} references={references} saving={saving} onSubmit={submitProgram} onClose={() => setProgramModal(null)} error={error} />
+            <ProgramForm form={programForm} setForm={setProgramForm} references={references} saving={saving} onSubmit={submitProgram} onClose={() => setProgramModal(null)} role={role} error={error} />
           </Modal>
         )}
 
