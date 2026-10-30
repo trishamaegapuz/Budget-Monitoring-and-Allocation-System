@@ -407,26 +407,20 @@ function ProgramForm({ form, setForm, references, saving, onSubmit, onClose, rol
     setValidationAttempted(true);
     const formElement = event.currentTarget;
     event.preventDefault();
+    // Every data field in this form is mandatory. Include the read-only WFP Source
+    // Code because it must be auto-populated from the selected WFP Source.
     const fields = Array.from(formElement.querySelectorAll("input, select, textarea"))
-      .filter((field) => !field.disabled && !field.readOnly && field.type !== "button" && field.type !== "submit" && field.type !== "reset");
+      .filter((field) => !field.disabled && !["button", "submit", "reset", "hidden"].includes(field.type));
     const getFieldName = (field) => {
       const label = field.closest("label") || (field.id ? formElement.querySelector(`label[for="${field.id}"]`) : null) || field.parentElement;
       const text = (label?.innerText || label?.textContent || field.getAttribute("aria-label") || field.getAttribute("placeholder") || field.name || field.id || "Required field").replace(/\*/g, "").replace(/\s+/g, " ").trim();
       return text.split("\n")[0].replace(/\s+/g, " ").trim() || "Required field";
     };
-    const requiredLabels = ["Program / Project Code", "Program / Project Name", "Fund Cluster", "WFP Source"];
-    const isRequiredByLabel = (field) => {
-      const label = field.closest("label") || field.parentElement;
-      const text = (label?.innerText || label?.textContent || "").replace(/\\*/g, "").replace(/\\s+/g, " ").trim().toLowerCase();
-      return requiredLabels.some((name) => text.includes(name.toLowerCase()));
-    };
     const isEmpty = (field) => {
       if (field.type === "checkbox" || field.type === "radio") return !field.checked;
       return String(field.value ?? "").trim() === "";
     };
-    const invalidFields = fields.filter((field) =>
-      ((field.required || isRequiredByLabel(field)) && isEmpty(field)) || !field.checkValidity()
-    );
+    const invalidFields = fields.filter((field) => isEmpty(field) || !field.checkValidity());
     const redClasses = ["!border-2", "!border-red-600", "!bg-red-50", "!ring-2", "!ring-red-300", "focus:!border-red-600"];
     fields.forEach((field) => {
       const invalid = invalidFields.includes(field);
@@ -472,7 +466,8 @@ function ProgramForm({ form, setForm, references, saving, onSubmit, onClose, rol
     }
     const formElement = event.currentTarget;
     const remainingInvalid = Array.from(formElement.querySelectorAll("input, select, textarea"))
-      .some((item) => !item.disabled && !item.readOnly && !item.checkValidity());
+      .filter((item) => !item.disabled && !["button", "submit", "reset", "hidden"].includes(item.type))
+      .some((item) => String(item.value ?? "").trim() === "" || !item.checkValidity());
     if (!remainingInvalid) setFormValidationError("");
   };
   const set = (key, value) => setForm((current) => ({ ...current, [key]: value }));
@@ -480,7 +475,7 @@ function ProgramForm({ form, setForm, references, saving, onSubmit, onClose, rol
     <form noValidate onSubmit={handleValidatedSubmit} onChange={clearFieldValidation} onInput={clearFieldValidation} className="space-y-5">
       {formValidationError && <div role="alert" className="sticky top-0 z-20 rounded-lg border-2 border-red-400 bg-red-50 px-4 py-3 text-xs font-bold text-red-800 shadow-sm"><div className="flex items-start gap-2"><span aria-hidden="true">⚠</span><span>{formValidationError}</span></div></div>}
       {error && <div role="alert" className="rounded-lg border-2 border-red-400 bg-red-50 px-4 py-3 text-xs font-bold text-red-800"><span aria-hidden="true">⚠ </span>{error}</div>}
-      <div role="note" className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-[10px] leading-4 text-blue-900"><b>Field access guide:</b> Locked and system-generated fields use a neutral grey style. Missing or invalid required values will be outlined in red only after you submit.</div>
+      <div role="note" className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-[10px] leading-4 text-blue-900"><b>Access and validation:</b> Administrator and Budget only. All fields are required; WFP Source Code must be auto-filled from the selected WFP Source. Missing or invalid values will be outlined in red after submission is attempted.</div>
       <div className="rounded-xl border border-blue-100 bg-blue-50/50 p-4">
         <p className="mb-3 text-[10px] font-extrabold uppercase tracking-wide text-blue-700">
           IGP Program / Project — Fund 161
@@ -1286,6 +1281,10 @@ export default function IGPRegistry({ user, onLogout, onNavigate, activePath }) 
 
   const submitProgram = async (event) => {
     event.preventDefault();
+    if (!canManagePrograms) {
+      setError("Access denied. Only Administrator and Budget can manage IGP Programs / Projects.");
+      return;
+    }
     setSaving(true);
     setError("");
     try {
@@ -2260,7 +2259,7 @@ export default function IGPRegistry({ user, onLogout, onNavigate, activePath }) 
           </Modal>
         )}
 
-        {programModal && (
+        {programModal && canManagePrograms && (
           <Modal title={programModal === "edit" ? "Edit IGP Program / Project" : "Add IGP Program / Project"} onClose={() => setProgramModal(null)} wide>
             <ProgramForm form={programForm} setForm={setProgramForm} references={references} saving={saving} onSubmit={submitProgram} onClose={() => setProgramModal(null)} role={role} error={error} />
           </Modal>
